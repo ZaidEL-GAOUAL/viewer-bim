@@ -5,6 +5,7 @@ import { hexToRgb } from '../data/palette.ts';
 import { buildModel } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
+import { convertIfc, isIfcFile } from '../ifc/convertIfc.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
@@ -64,6 +65,10 @@ export class App {
   private isolation: Uint8Array | null = null;
   private isolateButton!: HTMLButtonElement;
   private metadataInput!: HTMLInputElement;
+  private conversionEl!: HTMLElement;
+  private conversionText!: HTMLElement;
+  /** Fichiers produits par la dernière conversion d'IFC, proposés au téléchargement. */
+  private conversion: { name: string; glb: Blob; json: string } | null = null;
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   private matched = 0;
   private fileName = '';
@@ -81,7 +86,7 @@ export class App {
 
     // ------------------------------------------------------------ barre d'outils
     const fileInput = h('input', {
-      attrs: { type: 'file', multiple: '', accept: '.glb,.gltf,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
+      attrs: { type: 'file', multiple: '', accept: '.ifc,.glb,.gltf,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
     });
     // Un .gltf vient souvent avec un .bin et un dossier de textures : on peut ouvrir le dossier entier.
     const folderInput = h('input', { attrs: { type: 'file', webkitdirectory: '', hidden: '' } });
@@ -98,6 +103,7 @@ export class App {
       h('option', { text: 'Exemples…', attrs: { value: '' } }),
       h('option', { text: 'Petit bâtiment (220 éléments)', attrs: { value: 'demo' } }),
       h('option', { text: 'Tour (22 500 éléments)', attrs: { value: 'demo-large' } }),
+      h('option', { text: 'Maquette IFC (convertie dans le navigateur)', attrs: { value: 'ifc' } }),
     );
     samples.addEventListener('change', () => {
       if (samples.value) void this.loadSample(samples.value);
@@ -155,7 +161,7 @@ export class App {
     this.emptyEl = h('div', { class: 'empty' },
       h('div', { class: 'empty-card' },
         h('h1', { text: 'Déposez un modèle' }),
-        h('p', { text: 'Un fichier .glb, ou le dossier d’un .gltf (avec son .bin et ses textures), et le fichier .json de métadonnées.' }),
+        h('p', { text: 'Un fichier .ifc (converti sur place), ou un .glb avec son .json de métadonnées, ou le dossier d’un .gltf (avec son .bin et ses textures).' }),
         h('div', { class: 'empty-actions' },
           button('Choisir des fichiers…', () => fileInput.click(), { class: 'primary' }),
           button('Choisir un dossier…', () => folderInput.click()),
@@ -165,8 +171,21 @@ export class App {
     );
     this.viewport = h('main', { class: 'viewport' }, canvasHost, overlayRoot, this.emptyEl, this.stats, this.toastEl, this.busyEl);
 
+    // Après la conversion d'un IFC : rappel du résultat et téléchargement des deux fichiers produits.
+    this.conversionText = h('p', { class: 'hint' });
+    this.conversionEl = h('section', { class: 'card conversion-card', attrs: { hidden: '' } },
+      h('div', { class: 'card-head' },
+        h('h2', { class: 'card-title', text: 'IFC converti' }),
+        button('×', () => (this.conversionEl.hidden = true), { class: 'measure-remove', title: 'Fermer' }),
+      ),
+      this.conversionText,
+      h('div', { class: 'conversion-actions' },
+        button('Télécharger le GLB', () => this.downloadConversion('glb')),
+        button('Télécharger le JSON', () => this.downloadConversion('json')),
+      ),
+    );
     const measurePanel = new MeasurePanel(this);
-    this.viewport.append(h('div', { class: 'cards' }, sectionPanel.el, measurePanel.el));
+    this.viewport.append(h('div', { class: 'cards' }, sectionPanel.el, measurePanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -372,13 +391,16 @@ export class App {
     const modelFiles = byDepth(inputs.filter((input) => isModelFile(input.file.name)));
     const modelFile = modelFiles[0] as InputFile | undefined;
     const jsonFiles = byDepth(inputs.filter((input) => /\.json$/i.test(input.file.name)));
-    if (!modelFile && jsonFiles.length === 0) {
-      this.toast('Déposez un fichier .glb ou .gltf, avec éventuellement son .json de métadonnées.', true);
+    const ifcFile = byDepth(inputs.filter((input) => isIfcFile(input.file.name)))[0] as InputFile | undefined;
+    if (!modelFile && !ifcFile && jsonFiles.length === 0) {
+      this.toast('Déposez un fichier .ifc, .glb ou .gltf, avec éventuellement un .json de métadonnées.', true);
       return;
     }
     const ticket = this.beginLoad('Lecture des fichiers…');
     try {
-      if (modelFile) {
+      if (!modelFile && ifcFile) {
+        await this.loadIfc(ticket, ifcFile.file);
+      } else if (modelFile) {
         // Un dossier peut contenir des .json sans rapport : on lit tous ceux qui ont la forme d'un
         // fichier de métadonnées, et on retiendra celui qui correspond le mieux au modèle.
         // Un JSON illisible n'empêche pas d'afficher le modèle.
@@ -433,7 +455,51 @@ export class App {
     }
   }
 
+  /**
+   * Convertit un IFC dans le navigateur (même script que pipeline/ifc_to_glb.py), puis charge le
+   * GLB et les métadonnées obtenus comme s'ils avaient été déposés.
+   */
+  private async loadIfc(ticket: number, file: File): Promise<void> {
+    const base = file.name.replace(/\.ifc$/i, '');
+    const result = await convertIfc(file, (message) => {
+      if (ticket === this.loadTicket) this.busy(message);
+    }).catch((error: unknown) => {
+      // Une erreur Python arrive avec toute sa trace : seule la dernière ligne parle à l'utilisateur.
+      const lines = (error instanceof Error ? error.message : String(error)).trim().split('\n');
+      throw new Error(`Impossible de convertir « ${file.name} » : ${lines[lines.length - 1]}`);
+    });
+    if (ticket !== this.loadTicket) return;
+    if (!result.report.elements) throw new Error(`« ${file.name} » ne contient aucun élément avec une géométrie.`);
+
+    const glb = new File([result.glb], `${base}.glb`, { type: 'model/gltf-binary' });
+    const metadata = this.readMetadata(result.metadata, `${base}.json`);
+    const { gltf } = await loadModelFiles({ file: glb, path: glb.name }, []);
+    if (!(await this.installModel(ticket, gltf, [metadata], file.name))) return;
+
+    this.conversion = { name: base, glb, json: result.metadata };
+    const { elements = 0, seconds = 0, without_geometry: failed = 0 } = result.report;
+    this.conversionText.textContent =
+      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s, reliés à leurs propriétés par leur identifiant IFC.` +
+      (failed > 0 ? ` ${integer.format(failed)} éléments n’ont pas pu être convertis en géométrie.` : '');
+    this.conversionEl.hidden = false;
+  }
+
+  private downloadConversion(kind: 'glb' | 'json'): void {
+    const conversion = this.conversion;
+    if (!conversion) return;
+    const blob = kind === 'glb' ? conversion.glb : new Blob([conversion.json], { type: 'application/json' });
+    const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${conversion.name}.${kind}` } });
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+  }
+
   async loadSample(name: string): Promise<void> {
+    if (name === 'ifc') {
+      // L'exemple IFC passe par le vrai convertisseur, comme un fichier déposé.
+      const response = await fetch(`${import.meta.env.BASE_URL}samples/ifc-demo.ifc`);
+      await this.loadFiles([{ file: new File([await response.blob()], 'ifc-demo.ifc'), path: 'ifc-demo.ifc' }]);
+      return;
+    }
     const ticket = this.beginLoad('Chargement de l’exemple…');
     try {
       const base = `${import.meta.env.BASE_URL}samples/${name}`;
@@ -489,6 +555,8 @@ export class App {
     this.measure.clear();
     this.selection.clear();
     this.isolation = null;
+    this.conversion = null;
+    this.conversionEl.hidden = true;
     this.model = model;
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;

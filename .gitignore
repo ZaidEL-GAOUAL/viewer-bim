@@ -3,3 +3,5 @@ dist
 .DS_Store
 ._*
 .claude
+__pycache__
+.pytest_cache

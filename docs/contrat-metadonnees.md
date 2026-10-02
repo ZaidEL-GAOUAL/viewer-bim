@@ -111,7 +111,13 @@ Le champ `version` permet d'ajouter plus tard des sections optionnelles à côt�
 (vues enregistrées, regroupements prédéfinis, unités) sans casser les fichiers existants : un
 viewer en version 1 ignore les sections qu'il ne connaît pas.
 
-## 5. Vérifier un export
+## 5. Le convertisseur IFC fourni
+
+`pipeline/ifc_to_glb.py` produit ce format à partir d'un IFC : `extras.id` et les clés du JSON
+sont les `GlobalId` des éléments, et la structure spatiale (site, bâtiment, niveau, local) est
+écrite comme propriétés. Voir [pipeline/README.md](../pipeline/README.md).
+
+## 6. Vérifier un export
 
 `scripts/make-sample.mjs` génère un GLB et un JSON conformes, à comparer avec la sortie du
 pipeline. Au chargement, le viewer indique combien d'éléments ont trouvé leurs métadonnées ;

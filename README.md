@@ -1,8 +1,12 @@
 # Viewer BIM
 
 Viewer 3D pour maquettes au format GLB ou glTF, accompagnées d'un fichier JSON de métadonnées.
-La seule bibliothèque utilisée à l'exécution est three.js : pas d'ifc.js, de xeokit ni d'OpenIFC.
-Les coupes, les mesures, le picking, l'arborescence et les filtres sont écrits dans ce dépôt.
+L'affichage ne repose que sur three.js : pas d'ifc.js, de xeokit ni d'OpenIFC. Les coupes, les
+mesures, le picking, l'arborescence et les filtres sont écrits dans ce dépôt.
+
+Un fichier **IFC** peut aussi être déposé directement : il est converti en GLB + JSON par le
+convertisseur du dossier [pipeline/](pipeline/README.md), qui s'appuie sur IfcOpenShell et
+conserve l'identifiant de chaque élément pour relier la géométrie aux métadonnées.
 
 Le viewer est générique : il ne connaît aucun standard BIM et découvre les propriétés dans le
 JSON. Le format attendu est décrit dans [docs/contrat-metadonnees.md](docs/contrat-metadonnees.md).
@@ -37,6 +41,9 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 
 ## Fonctions
 
+- **Ouverture d'un IFC** : converti sur place dans le navigateur, sans serveur. Le convertisseur
+  (Python et IfcOpenShell en WebAssembly, environ 30 Mo) n'est téléchargé qu'au premier IFC
+  ouvert. Le GLB et le JSON produits peuvent être téléchargés.
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
   y compris compressés (Draco, Meshopt).
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
@@ -73,7 +80,9 @@ serveur ni base de données.
 src/
   data/      métadonnées : lecture du JSON, index des propriétés, regroupements, palette
   engine/    moteur 3D : chargement, fusion de la géométrie, rendu, picking, coupes, mesures
+  ifc/       lancement du convertisseur IFC dans le navigateur (fil d'exécution séparé)
   ui/        interface : barre d'outils et panneaux, en DOM natif
+pipeline/    convertisseur IFC → GLB + JSON (Python, IfcOpenShell) et ses tests
 tests/       tests des modules de données et du moteur
 scripts/     générateur du modèle de démonstration
 ```
