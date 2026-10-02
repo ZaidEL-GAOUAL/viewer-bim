@@ -1,0 +1,4699 @@
+{
+  "version": 1,
+  "elements": {
+    "RMpIvF5jLado8i5KMrQscB": {
+      "label": "Dalle RDC",
+      "properties": {
+        "Catégorie": "Dalle",
+        "Type": "Dallage",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Existant",
+        "Dimensions": {
+          "Longueur (m)": 20.2,
+          "Hauteur (m)": 0.25,
+          "Épaisseur (m)": 0.25
+        },
+        "Quantités": {
+          "Volume (m³)": 61.61,
+          "Surface (m²)": 509.08
+        }
+      }
+    },
+    "$OFyB0tnL9$1l0uelyUrBR": {
+      "label": "Poteau 1-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "nCug0xeWAoEEwhoycgC05k": {
+      "label": "Poteau 1-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "Tbi0WDGxL4BVyJ6yAcYGRf": {
+      "label": "Poteau 2-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "GJBkleJyw8uGZI44YM4Dl3": {
+      "label": "Poteau 2-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "Je7VHoCE_uP1SQeR5UwMvw": {
+      "label": "Poteau 2-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "NAWPhEljihH0wrR$Ci7yTP": {
+      "label": "Poteau 3-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "l8qTIJzM2$pWjr$3qPOrZ2": {
+      "label": "Poteau 3-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "vAgeGuxZTPL$0m$UQ0MQEK": {
+      "label": "Poteau 3-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "RlmnrBQe8etZbgt5HHONX8": {
+      "label": "Poteau 4-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "BzdG35XegmCJCgPybqLy5z": {
+      "label": "Poteau 4-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "OYAnvND4kjRQuC9Gmeu5PQ": {
+      "label": "Poteau 4-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "TRDbtlpQJGsF0aLvpfQu93": {
+      "label": "Mur façade sud 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "u4N3ttLlFoiA03VTXjh9JF": {
+      "label": "Mur façade sud 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "_Czh2c8rtU00uxGNDIot_K": {
+      "label": "Allège façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "gGrdpqrJjaJZ_KjuZmMwzJ": {
+      "label": "Linteau façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "JDvdMRvsLm6AXXJxuEZk$g": {
+      "label": "Fenêtre façade sud 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "Q9boMtYFpbi6KfL0FmmmKm": {
+      "label": "Mur façade sud 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "M7yZKLxmii9HO0LPc_xjZk": {
+      "label": "Mur façade sud 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "f2R1NKBzP0L$3SByVDnztd": {
+      "label": "Allège façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "mfObvH2rs5bpdce3VOVxhO": {
+      "label": "Linteau façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "GduFUALu3oKBRj$x9L14RZ": {
+      "label": "Fenêtre façade sud 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "b0CFZTrXq8UMKLjC956DgV": {
+      "label": "Mur façade sud 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "W0gNfwwT0Njf5x91mrMm0D": {
+      "label": "Mur façade sud 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "sAcQiH85JqjquhDTtxos44": {
+      "label": "Allège façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "8x2Gew8PT$He7RAKCLjrEQ": {
+      "label": "Linteau façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "pbtEg2m8T_$rwnzrAtmorU": {
+      "label": "Fenêtre façade sud 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "oNRG5hKbL7rRzeYGXsNCAz": {
+      "label": "Mur façade sud 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "TaGfhaAzHMnt7DTcXVLIYE": {
+      "label": "Mur façade sud 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "BRAwFA$h_SG1BU7bH6jpn7": {
+      "label": "Allège façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "WVqLgOhGjdWchFikEaZ9uv": {
+      "label": "Linteau façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "QQ7e06oG5nbXUu0VsQLtIR": {
+      "label": "Fenêtre façade sud 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "hNBlh6wjsMlbW2c6a2a14t": {
+      "label": "Mur façade sud 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "Z1qPQ8cvCRDKcvfhqYfx2A": {
+      "label": "Mur façade sud 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "LpfXbNfcNG3JH71pwHCPn0": {
+      "label": "Allège façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "SQ9qxpgcFHsa21nKOkbYl1": {
+      "label": "Linteau façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "Z2QtrDdOKDo2uDiTJhN7Wc": {
+      "label": "Fenêtre façade sud 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "$ZcwL7YkGFlxOlDY6kFeG$": {
+      "label": "Mur façade nord 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "HgQBvvWsyq5Kx2j3lw3pvz": {
+      "label": "Mur façade nord 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "ru1le$Ps43Q9DTjMsj0nDo": {
+      "label": "Allège façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "6RGIPQQL1ijkUzV47L1WAl": {
+      "label": "Linteau façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "0X$aevofajvpJ7SeRA654o": {
+      "label": "Fenêtre façade nord 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "$xK38RV90ibNxSBfXIj4Zh": {
+      "label": "Mur façade nord 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "nMV84R1U1XA45MiQQHCNZn": {
+      "label": "Mur façade nord 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "fFxFiAWAnW9Jvc53gbnUqS": {
+      "label": "Allège façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "3cSPMkfJMGHgLwyP9XieVp": {
+      "label": "Linteau façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "gu4htYbA_jsjXSOr09E7rm": {
+      "label": "Fenêtre façade nord 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "$zAmBwwIUDXzSmOtq7tDQu": {
+      "label": "Mur façade nord 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "WTCTbjGQK$WhQdSSVbJNxy": {
+      "label": "Mur façade nord 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "TTySwvvw1aQG5$SwO_kDfO": {
+      "label": "Allège façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "$18RxYni16DmFbO5kQGUjZ": {
+      "label": "Linteau façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "sIKsKQwgBQMglTC2I2eraO": {
+      "label": "Fenêtre façade nord 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "v_oG9_4bNxynglf4n_$6Cs": {
+      "label": "Mur façade nord 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "9QhupsKiJqWhr1DVh8mtMM": {
+      "label": "Mur façade nord 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "cyn47A1qPYUQHlr3KM_LcA": {
+      "label": "Allège façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "E$BVjfkmfV$_wJjeLx3LGt": {
+      "label": "Linteau façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "HCX4ceyyiIqqS72vZt$7QT": {
+      "label": "Fenêtre façade nord 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "7SGC2rTVJPTjZupWTREJW8": {
+      "label": "Mur façade nord 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "iExx$L7i5DJvS2Iy6tmz3e": {
+      "label": "Mur façade nord 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "DyJ3aNbsGdmEx2GFLD078t": {
+      "label": "Allège façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "vmPii$7mlCKH9Z837y8yiG": {
+      "label": "Linteau façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "xr$VYBqHCHCKhV73BDfZKL": {
+      "label": "Fenêtre façade nord 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "6OscA1Hql0B7JwBbutqtu4": {
+      "label": "Mur pignon ouest",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "aqVq54MkDCf3HrytuyNtD0": {
+      "label": "Mur pignon est",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "RDC",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "lGK$IFD8Roa98mJKuccNyF": {
+      "label": "Cloison 6 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "mOijH3EtwuM7bQpwQIHdGy": {
+      "label": "Cloison 6 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "YyeCm1dwumUeb7ouCfVOa$": {
+      "label": "Imposte 6",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "ARuUGOq5JkQ7BFvh2O0YTl": {
+      "label": "Porte 6",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant droit",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "k5uDKWUPKIr6kkRCP7S0id": {
+      "label": "Cloison 14 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "QFi8AueiZcB$6otOk6$G_2": {
+      "label": "Cloison 14 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "EZSFK1UKVU5E1vu$kRQv_a": {
+      "label": "Imposte 14",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "RDC",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "1SLsSwO6WLy0etrYJD8KKX": {
+      "label": "Porte 14",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant droit",
+        "Niveau": "RDC",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "AJis$8Z560MyO89ZptxeBJ": {
+      "label": "Dalle R+1",
+      "properties": {
+        "Catégorie": "Dalle",
+        "Type": "Plancher",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 20.2,
+          "Hauteur (m)": 0.25,
+          "Épaisseur (m)": 0.25
+        },
+        "Quantités": {
+          "Volume (m³)": 61.61,
+          "Surface (m²)": 509.08
+        }
+      }
+    },
+    "A99lwF9TZkuee4pJJNUqq8": {
+      "label": "Poteau 1-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "v4i$zXN2xl1wQ8K0HqZgO2": {
+      "label": "Poteau 1-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "KqFcqk0zJryCFR3vUEtq1n": {
+      "label": "Poteau 1-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "lbh6QyOSKZ$k8q5wVmiwqd": {
+      "label": "Poteau 2-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "KOklWOR8r6DNC7l4UUq6R$": {
+      "label": "Poteau 2-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "zuwQmw$F18kd2hHAhRx3p8": {
+      "label": "Poteau 2-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "8ia3cPSW_JyuxWYYGjD9f9": {
+      "label": "Poteau 3-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "aDCnSecYXzuUTMo5EVduz0": {
+      "label": "Poteau 3-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "eFX8gCKlaHJmGyDl$DIHs7": {
+      "label": "Poteau 3-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "88UmefrRedJRObReQdJaid": {
+      "label": "Poteau 4-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "0wDz4WzvbJa9PrbUlCIE4d": {
+      "label": "Poteau 4-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "hBtyp6$qf_cPMaceO4givq": {
+      "label": "Poteau 4-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "b1TN1ywSuA0ZM50B79Wwki": {
+      "label": "Mur façade sud 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "F4FbLQm2UCRI6ayyF4X9tq": {
+      "label": "Mur façade sud 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "N0jVUv6PkaE1P3Zwf0t_hv": {
+      "label": "Allège façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "pHK$j0cTjOQiqIDihJRKIB": {
+      "label": "Linteau façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "Mak_8OrVLKIXZNQKakz6A9": {
+      "label": "Fenêtre façade sud 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "UVlRzMJlBQEPVO8vMjpMmG": {
+      "label": "Mur façade sud 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "hvCDhK_DHO_dvF8DOBLmyZ": {
+      "label": "Mur façade sud 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "SJfJZHm1sLExb01S6KYPru": {
+      "label": "Allège façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "nZoQIUtMGr9LkQsQFdhUMI": {
+      "label": "Linteau façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "qCY0cTpGo6p31MB_eWlq5P": {
+      "label": "Fenêtre façade sud 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "X0o2dkoHoNrPzjh111mlnh": {
+      "label": "Mur façade sud 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "MOqa9grrktFwAhZACHr1HN": {
+      "label": "Mur façade sud 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "u1ZoBltvngnhbdgOnzTUCy": {
+      "label": "Allège façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "xX42LtNhT0i9M_NWSMEUjL": {
+      "label": "Linteau façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "N39Rd3gMmzJPVi8KtETNf6": {
+      "label": "Fenêtre façade sud 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "88mS2Uvu3MgIDdHmf0Pqfl": {
+      "label": "Mur façade sud 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "WozrL51dod_FdgNIss9daF": {
+      "label": "Mur façade sud 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "E$UShNePZg7CdVREc61Fsf": {
+      "label": "Allège façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "EIPUXjoskPFgmJ_k4aqwe5": {
+      "label": "Linteau façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "OEJ5LG3Gj60UGMezEmNi0x": {
+      "label": "Fenêtre façade sud 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "YDjnQHStiu$vmg6jSjSlTP": {
+      "label": "Mur façade sud 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "IsGR9tJd0E$u0cRRdZKHdH": {
+      "label": "Mur façade sud 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "8QTDaSx66E3boCjdyBO6Bn": {
+      "label": "Allège façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "zhzzmdoEuzMNgde0y5bAJo": {
+      "label": "Linteau façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "ycYMEu0Hy5buxqSOlyuVx3": {
+      "label": "Fenêtre façade sud 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "i_foH1fR$KoFhGjmSa1quS": {
+      "label": "Mur façade nord 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "M0XnAx8HzUESVudb2EHji$": {
+      "label": "Mur façade nord 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "fUXM$0wkn1IUzPKyfe4EdL": {
+      "label": "Allège façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "tBevfrX6N_P$Nkci_JAfwF": {
+      "label": "Linteau façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "$Us$smYMy6GLyRRVJIrdNi": {
+      "label": "Fenêtre façade nord 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "WTzwOrwmTL3tjNfkBR0L1l": {
+      "label": "Mur façade nord 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "92QUOjUbRPqfS39OoAFml4": {
+      "label": "Mur façade nord 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "AcOXNbIlLcl0h5kT$ovkku": {
+      "label": "Allège façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "9h6mZ4ecuGpYt05QzECsC_": {
+      "label": "Linteau façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "ReWFNSZIFJsUwYw59uWBcG": {
+      "label": "Fenêtre façade nord 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "Mzv2xnRD_$xQ8Q_1eW_Y3H": {
+      "label": "Mur façade nord 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "53YBJksJo5Z0x8nYi8SWVo": {
+      "label": "Mur façade nord 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "9_VFqk5lz3wR1mkCLi_gdi": {
+      "label": "Allège façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "vroqVuxJZ7Maw5GDKbSwbX": {
+      "label": "Linteau façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "xb8Qc24rAT5r$36TlfcllT": {
+      "label": "Fenêtre façade nord 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "bsY40G872$opKXViKoGeML": {
+      "label": "Mur façade nord 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "4pif77D4VcA3iJ3TJ46F4_": {
+      "label": "Mur façade nord 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "7e3gJvSP81RoEzFj2V1YdT": {
+      "label": "Allège façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "EsyQ_HPRC3VxYbwsguU8Cs": {
+      "label": "Linteau façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "WkIqpQvTIA5VkrtRPWXNSb": {
+      "label": "Fenêtre façade nord 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "NiPcN4_QA090LEKJyEqUhw": {
+      "label": "Mur façade nord 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "4$PLOBQe5nDyJLQro6sOcf": {
+      "label": "Mur façade nord 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "T5Ua9KA_ui9ffzUv7zbjxu": {
+      "label": "Allège façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "XYA_i$VGAFg$EiksfX_Kp3": {
+      "label": "Linteau façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "UQdwvtCcZhHyO81M$3x9ws": {
+      "label": "Fenêtre façade nord 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "d95cuGk8N2PvbExFFjOC5Z": {
+      "label": "Mur pignon ouest",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "Kug$zJrX72nRr_rZNPqvdq": {
+      "label": "Mur pignon est",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "R+1",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "$cMO8Htvrfhg9FnlhF8Gt3": {
+      "label": "Cloison 6 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "p$o3ZFhS5hFZHyNZgvlmap": {
+      "label": "Cloison 6 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "XwQA0_pfDY$ONhQj43S9dP": {
+      "label": "Imposte 6",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "l1WsfzJheYROecIAvk9ReR": {
+      "label": "Porte 6",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant gauche",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "VeXjfZ$2CCl3BSvTQVv$6U": {
+      "label": "Cloison 14 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "t8l$9P5I98SLw5iLpGumFu": {
+      "label": "Cloison 14 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "7giUDWuALdH2TQExagB5rY": {
+      "label": "Imposte 14",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "R+1",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "4W4HcwSi9n8rVfFLYzXhhj": {
+      "label": "Porte 14",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant gauche",
+        "Niveau": "R+1",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "LBn2ABYYZBwbAnqDRNKL4I": {
+      "label": "Dalle R+2",
+      "properties": {
+        "Catégorie": "Dalle",
+        "Type": "Plancher",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 20.2,
+          "Hauteur (m)": 0.25,
+          "Épaisseur (m)": 0.25
+        },
+        "Quantités": {
+          "Volume (m³)": 61.61,
+          "Surface (m²)": 509.08
+        }
+      }
+    },
+    "0LLrGAd5di7mNnZQHPvYsp": {
+      "label": "Poteau 1-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "_nfXFvabwQ7Tg9yT9mNhNR": {
+      "label": "Poteau 1-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "ZeT_dAR7iY7ivM7Bhziawe": {
+      "label": "Poteau 1-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "jfvRG8sUUCrRkY013hn4jV": {
+      "label": "Poteau 2-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "8L7sLFXAg6K0uWdBm4gsfS": {
+      "label": "Poteau 2-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "Fk6p1IqXVeeG6MFdaavmeA": {
+      "label": "Poteau 2-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "75WNQY_zPK$ClxvF1_o5K3": {
+      "label": "Poteau 3-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "ot1i8GI68IJNniv9IrS32g": {
+      "label": "Poteau 3-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "zWa84MUNvolMFQYemKerZW": {
+      "label": "Poteau 3-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "rf$HJa45Wo2HHm1U1VigIW": {
+      "label": "Poteau 4-3",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "SBEAOCHZTXkH8RY0ZDdJQb": {
+      "label": "Poteau 4-6",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "ZHU5Uzp0gs7jhKWBVQ3M06": {
+      "label": "Poteau 4-9",
+      "properties": {
+        "Catégorie": "Poteau",
+        "Type": "Circulaire Ø40",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Béton",
+        "Porteur": true,
+        "Résistance au feu": "R 90",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Diamètre (m)": 0.4,
+          "Hauteur (m)": 2.75
+        },
+        "Quantités": {
+          "Volume (m³)": 0.346
+        }
+      }
+    },
+    "WKOn6fgylVH0RoUt0LtchA": {
+      "label": "Mur façade sud 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "UcdN7grnsB_k0Fv$$Swdge": {
+      "label": "Mur façade sud 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "M4CkmHnoZ5JUSUGrkU$49b": {
+      "label": "Allège façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "Sa1C5azGG1ALRfGa1C4PuV": {
+      "label": "Linteau façade sud 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "utNj95mtH1WgbgS5BNwNFt": {
+      "label": "Fenêtre façade sud 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "YCNAANXQ1B5ZDMx22AMFvC": {
+      "label": "Mur façade sud 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "b8io1Xq5QqSVh4XcAre4MB": {
+      "label": "Mur façade sud 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "w3OlJ54c6e1mVUBwWuxHiA": {
+      "label": "Allège façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "UWG0DoglD2uPGQdGqfSBp6": {
+      "label": "Linteau façade sud 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "d$XSqkZCLLnoMPpkBnP4wG": {
+      "label": "Fenêtre façade sud 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "nFdrh06pr5vA8awrUP4hFO": {
+      "label": "Mur façade sud 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "fP4ZJmsq4kbFVTSU2Fy2Gr": {
+      "label": "Mur façade sud 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "JTLkJf9MJxnP4YFKiWnCpM": {
+      "label": "Allège façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "3Kf051xhiuWuu89YN31AEW": {
+      "label": "Linteau façade sud 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "pLH3H_oI0Pf7TetQX7GDSG": {
+      "label": "Fenêtre façade sud 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "k7ZdAzF_JfH$ne9lBxD4F3": {
+      "label": "Mur façade sud 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "ocsSRr8h0fMyWHWqSP8VNz": {
+      "label": "Mur façade sud 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "Aj2wMJu0KsHGMxIkXFJmbC": {
+      "label": "Allège façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "UqzrsdhT$4_zvG1szh1lB5": {
+      "label": "Linteau façade sud 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "VRj5mpdxagMRgoOylozZp3": {
+      "label": "Fenêtre façade sud 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "uEHGpT$WZlEIGZCLT9nUVC": {
+      "label": "Mur façade sud 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "LveswR30KkMqUWIfXP7$Kc": {
+      "label": "Mur façade sud 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "RDKoY2$zj4G$yvh61SIgso": {
+      "label": "Allège façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "MsgQQEHmOFjWg8msNlGxKK": {
+      "label": "Linteau façade sud 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "KsHLYHWeAQynhn6GA5urUH": {
+      "label": "Fenêtre façade sud 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "sNFXMjuX_kWaqOGGxNFjd3": {
+      "label": "Mur façade nord 1 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "XjaLcB3p8laXIal2kUFYx5": {
+      "label": "Mur façade nord 1 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "FGmbWfFH5kt3Oo7O0H_Ydb": {
+      "label": "Allège façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "RCe7QMkajZJodrKFZON6nX": {
+      "label": "Linteau façade nord 1",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "iTzAgDJiqePDUe2YeChIbW": {
+      "label": "Fenêtre façade nord 1",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "JyW_kwpkqlDk3AnHKa8j56": {
+      "label": "Mur façade nord 2 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "3Z6NjIPjWnJHIeaP7T0DHT": {
+      "label": "Mur façade nord 2 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "27wzE0augzS4d3JF6PKf$Z": {
+      "label": "Allège façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "z322INoLk4HyVU99CFRZ4h": {
+      "label": "Linteau façade nord 2",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "$hLyj641mxx6Lfgr5Q3Soi": {
+      "label": "Fenêtre façade nord 2",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "lqBcBvxGj88DJrvfhVwwcd": {
+      "label": "Mur façade nord 3 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "rhxUFdI2LXkmMKozw6RRNa": {
+      "label": "Mur façade nord 3 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "Ir13sUiRZU7E3D612oOnLo": {
+      "label": "Allège façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "gfKaJnfrWUyP7UA7NlOb$3": {
+      "label": "Linteau façade nord 3",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "OAxbV83vJE4MDtFa5xodWW": {
+      "label": "Fenêtre façade nord 3",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "yC0K4bnsSXZoR9S4FX96Sa": {
+      "label": "Mur façade nord 4 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "v26SrVwYnd_dZpx1VBhhan": {
+      "label": "Mur façade nord 4 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "pVE5VNHGgpzFQ$Ic2g8lML": {
+      "label": "Allège façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "u03XPY69k4gDmB4LtHY01i": {
+      "label": "Linteau façade nord 4",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "xS9cmLaPz1s8SzQsJHfv7s": {
+      "label": "Fenêtre façade nord 4",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "buySzWpUqcdhU59medNZ8C": {
+      "label": "Mur façade nord 5 gauche",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "7bX76_KlhqlDpsR3Cv8CeD": {
+      "label": "Mur façade nord 5 droit",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Trumeau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 1,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.55,
+          "Surface (m²)": 7
+        }
+      }
+    },
+    "gzk4RxsvIx$3rKWr2OLRxl": {
+      "label": "Allège façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Allège",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.9,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.36,
+          "Surface (m²)": 4.76
+        }
+      }
+    },
+    "$uyqNOqjLCPKRFfQNCfszP": {
+      "label": "Linteau façade nord 5",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Linteau",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 0.35,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 0.14,
+          "Surface (m²)": 2.34
+        }
+      }
+    },
+    "VSl6QpZtOYd$1SyPrQIRlc": {
+      "label": "Fenêtre façade nord 5",
+      "properties": {
+        "Catégorie": "Fenêtre",
+        "Type": "Châssis fixe",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries extérieures",
+        "Matériau": "Aluminium / verre",
+        "Porteur": false,
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 2,
+          "Hauteur (m)": 1.5,
+          "Épaisseur (m)": 0.12
+        },
+        "Thermique": {
+          "Uw (W/m²K)": 1.3,
+          "Facteur solaire": 0.42
+        }
+      }
+    },
+    "jBcedkOGt1kWDePJDDvBRl": {
+      "label": "Mur pignon ouest",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "1LVqDbHM1SRg8h_tXAXntZ": {
+      "label": "Mur pignon est",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Mur",
+        "Niveau": "R+2",
+        "Lot": "Gros œuvre",
+        "Matériau": "Enduit",
+        "Porteur": true,
+        "Résistance au feu": "REI 120",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 11.8,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.2
+        },
+        "Quantités": {
+          "Volume (m³)": 6.49,
+          "Surface (m²)": 70.72
+        }
+      }
+    },
+    "YxGSgUvmxu6hYx3WF1zpwN": {
+      "label": "Cloison 6 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "hAXCvPhsIfZ8d2jVLvKIHR": {
+      "label": "Cloison 6 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "ZMXUPBatxtGD3OAZ1sUqH2": {
+      "label": "Imposte 6",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "QAd2okTyNI$8ws5AC6kbTT": {
+      "label": "Porte 6",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant droit",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "3HrzEn_Bx5uA4mNvz11kDk": {
+      "label": "Cloison 14 A",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "Yxw$XF$vS4krCjv_Rp_Kff": {
+      "label": "Cloison 14 B",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Cloison",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 5.45,
+          "Hauteur (m)": 2.75,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 1.499,
+          "Surface (m²)": 31.615
+        }
+      }
+    },
+    "FBoa8pl0azq5gIYHr2_i_A": {
+      "label": "Imposte 14",
+      "properties": {
+        "Catégorie": "Mur",
+        "Type": "Imposte",
+        "Niveau": "R+2",
+        "Lot": "Cloisons",
+        "Matériau": "Plâtre",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 0.65,
+          "Épaisseur (m)": 0.1
+        },
+        "Quantités": {
+          "Volume (m³)": 0.058,
+          "Surface (m²)": 1.48
+        }
+      }
+    },
+    "RjcFWp1UcXmmMRylq6L1Gi": {
+      "label": "Porte 14",
+      "properties": {
+        "Catégorie": "Porte",
+        "Type": "Poussant droit",
+        "Niveau": "R+2",
+        "Lot": "Menuiseries intérieures",
+        "Matériau": "Bois",
+        "Porteur": false,
+        "Résistance au feu": "EI 30",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 0.9,
+          "Hauteur (m)": 2.1,
+          "Épaisseur (m)": 0.04
+        }
+      }
+    },
+    "KMbUu6NYOZWbsk2Kwv0vhp": {
+      "label": "Toiture-terrasse",
+      "properties": {
+        "Catégorie": "Toiture",
+        "Type": "Terrasse inaccessible",
+        "Niveau": "Toiture",
+        "Lot": "Étanchéité",
+        "Matériau": "Béton + étanchéité",
+        "Porteur": true,
+        "Résistance au feu": "REI 60",
+        "Phase": "Neuf",
+        "Dimensions": {
+          "Longueur (m)": 20.6,
+          "Hauteur (m)": 0.3,
+          "Épaisseur (m)": 0.3
+        },
+        "Quantités": {
+          "Volume (m³)": 77.868,
+          "Surface (m²)": 539.04
+        }
+      }
+    }
+  }
+}
