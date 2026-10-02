@@ -80,10 +80,16 @@ Pour simplifier les premiers essais, le viewer accepte aussi :
 { "2O2Fr$t4X7Zf8NOew3FLOH": { "Catégorie": "Mur", "Niveau": "R+1" } }
 ```
 
-### Sans fichier JSON
+### Propriétés déjà présentes dans le GLB
 
-Si aucun JSON n'est chargé, le viewer utilise comme propriétés les autres champs `extras` du nœud
-glTF, quand il y en a.
+Les autres champs `extras` d'un nœud glTF (hors `id`) sont aussi des propriétés de l'élément.
+Le viewer les réunit avec celles du JSON :
+
+- les propriétés du GLB viennent en premier, celles du JSON à la suite ;
+- pour une propriété de même nom des deux côtés, la valeur du JSON l'emporte ;
+- sans fichier JSON, ou pour un élément absent du JSON, seules les propriétés du GLB s'affichent.
+
+Le fichier GLB lui-même n'est jamais modifié.
 
 ## 3. Groupes et sous-groupes
 

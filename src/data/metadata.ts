@@ -12,6 +12,8 @@ export interface MetadataEntry {
 export interface Metadata {
   version: number;
   elements: Map<string, MetadataEntry>;
+  /** Nom du fichier d'origine, pour l'affichage. */
+  source?: string;
 }
 
 export const SUPPORTED_VERSION = 1;
@@ -42,6 +44,16 @@ export function flattenProperties(input: Record<string, unknown>, prefix = '', o
     }
   }
   return out;
+}
+
+/**
+ * Réunit les propriétés déjà présentes dans le GLB et celles du JSON : celles du GLB d'abord,
+ * celles du JSON ensuite. Pour une propriété de même nom, la valeur du JSON l'emporte.
+ */
+export function mergeProperties(fromModel: FlatProps | undefined, fromMetadata: FlatProps | undefined): FlatProps | undefined {
+  if (!fromModel) return fromMetadata;
+  if (!fromMetadata) return fromModel;
+  return { ...fromModel, ...fromMetadata };
 }
 
 /** Valeur d'une propriété propre à l'objet (jamais une méthode héritée comme `toString`). */

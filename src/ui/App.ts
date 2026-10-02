@@ -1,6 +1,6 @@
 import { Box3 } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { PropertyStore, flattenProperties, parseMetadata, type Metadata } from '../data/metadata.ts';
+import { PropertyStore, flattenProperties, mergeProperties, parseMetadata, type Metadata } from '../data/metadata.ts';
 import { hexToRgb } from '../data/palette.ts';
 import { buildModel } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
@@ -63,6 +63,9 @@ export class App {
   /** Visibilité de chaque élément avant l'isolement en cours (1 = visible), ou null. */
   private isolation: Uint8Array | null = null;
   private isolateButton!: HTMLButtonElement;
+  private metadataInput!: HTMLInputElement;
+  /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
+  private matched = 0;
   private fileName = '';
 
   constructor(root: HTMLElement) {
@@ -82,7 +85,9 @@ export class App {
     });
     // Un .gltf vient souvent avec un .bin et un dossier de textures : on peut ouvrir le dossier entier.
     const folderInput = h('input', { attrs: { type: 'file', webkitdirectory: '', hidden: '' } });
-    for (const input of [fileInput, folderInput]) {
+    // Le JSON de métadonnées peut aussi être ajouté (ou remplacé) après coup, sur le modèle affiché.
+    this.metadataInput = h('input', { attrs: { type: 'file', accept: '.json,application/json', hidden: '' } });
+    for (const input of [fileInput, folderInput, this.metadataInput]) {
       input.addEventListener('change', () => {
         if (input.files?.length) void this.loadFiles(filesFromList(input.files));
         input.value = '';
@@ -131,7 +136,8 @@ export class App {
       h('div', { class: 'bar-group' },
         button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .glb ou .gltf et son .json de métadonnées' }),
         button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
-        samples, fileInput, folderInput,
+        button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
+        samples, fileInput, folderInput, this.metadataInput,
       ),
       tools,
       h('div', { class: 'bar-group' },
@@ -454,6 +460,11 @@ export class App {
     if (ticket === this.loadTicket) this.busy(null);
   }
 
+  /** Ouvre le sélecteur de fichier pour ajouter un JSON de métadonnées au modèle affiché. */
+  chooseMetadata(): void {
+    this.metadataInput.click();
+  }
+
   private readMetadata(text: string, name: string): Metadata {
     let json: unknown;
     try {
@@ -461,7 +472,9 @@ export class App {
     } catch {
       throw new Error(`« ${name} » n’est pas un fichier JSON valide.`);
     }
-    return parseMetadata(json);
+    const metadata = parseMetadata(json);
+    metadata.source = name;
+    return metadata;
   }
 
   /** Renvoie faux si le chargement a été abandonné au profit d'un plus récent. */
@@ -500,7 +513,7 @@ export class App {
     return true;
   }
 
-  /** Associe à chaque élément ses propriétés : le JSON en priorité, sinon les `extras` du nœud glTF. */
+  /** Associe à chaque élément ses propriétés : les `extras` du nœud glTF, complétés par le JSON. */
   private rebuildStore(): void {
     const model = this.model;
     if (!model) return;
@@ -508,11 +521,12 @@ export class App {
     for (let i = 0; i < model.count; i++) {
       const entry = this.metadata?.elements.get(model.keys[i]);
       const extras = model.extras[i];
-      if (entry) store.set(i, entry.props, entry.label);
-      else if (extras) store.set(i, flattenProperties(extras));
+      const props = mergeProperties(extras ? flattenProperties(extras) : undefined, entry?.props);
+      if (props) store.set(i, props, entry?.label);
     }
     store.finalize();
     this.store = store;
+    this.matched = this.metadata ? this.countMatches(this.metadata) : 0;
     for (let i = 0; i < model.count; i++) model.state.clearColor(i);
     model.state.commit();
     this.viewer.invalidate();
@@ -567,6 +581,11 @@ export class App {
       `${integer.format(model.triangleCount)} triangles`,
       `${model.chunks.length} lots`,
     ];
+    parts.push(
+      this.metadata
+        ? `métadonnées : ${this.metadata.source ?? 'JSON'} (${integer.format(this.matched)} sur ${integer.format(model.count)})`
+        : 'sans fichier de métadonnées',
+    );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
     this.stats.textContent = parts.join(' · ');
   }

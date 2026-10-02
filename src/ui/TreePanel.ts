@@ -104,7 +104,10 @@ export class TreePanel {
 
     this.header.append(h('div', { class: 'field-label', text: 'Grouper par' }), chips, add);
     if (store.paths.length === 0) {
-      this.header.append(h('p', { class: 'hint', text: 'Aucune propriété disponible : chargez le fichier JSON de métadonnées pour regrouper les éléments.' }));
+      this.header.append(
+        h('p', { class: 'hint', text: 'Ce modèle n’a aucune propriété. Ajoutez son fichier JSON de métadonnées pour regrouper, colorer et filtrer les éléments.' }),
+        button('Ajouter un fichier JSON…', () => this.app.chooseMetadata(), { class: 'primary' }),
+      );
     }
   }
 

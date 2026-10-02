@@ -13,6 +13,8 @@ export class PropertiesPanel {
   private readonly app: App;
   private readonly body: HTMLElement;
   private readonly isolateButton: HTMLButtonElement;
+  /** Catégories repliées par l'utilisateur. */
+  private readonly folded = new Set<string>();
 
   constructor(app: App) {
     this.app = app;
@@ -111,6 +113,13 @@ export class PropertiesPanel {
     for (const [name, value] of rows) {
       list.append(h('dt', { text: name, title: name }), h('dd', { text: value, title: value, class: value === MIXED ? 'mixed' : '' }));
     }
-    return h('div', { class: 'props-section' }, h('h4', { text: title }), list);
+    // Chaque catégorie se plie et se déplie ; son état est conservé d'un élément à l'autre.
+    const section = h('details', { class: 'props-section' }, h('summary', { text: title }), list);
+    section.open = !this.folded.has(title);
+    section.addEventListener('toggle', () => {
+      if (section.open) this.folded.delete(title);
+      else this.folded.add(title);
+    });
+    return section;
   }
 }

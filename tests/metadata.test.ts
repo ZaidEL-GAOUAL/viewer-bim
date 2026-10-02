@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildTree, suggestGrouping } from '../src/data/grouping.ts';
-import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, parseMetadata } from '../src/data/metadata.ts';
+import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, mergeProperties, parseMetadata } from '../src/data/metadata.ts';
 
 test('flattenProperties aplatit les objets imbriqués et les tableaux', () => {
   const flat = flattenProperties({ Type: 'Mur', Dimensions: { Longueur: 4.2, Détail: { Unité: 'm' } }, Tags: ['a', 'b'], Vide: null });
@@ -136,4 +136,13 @@ test('distinctCount s’arrête dès que la limite est dépassée', () => {
   assert.equal(store.distinctCount('Id', 50).count, 51);
   assert.deepEqual(store.distinctCount('Niveau', 50), { count: 4, undefinedCount: 0 });
   assert.deepEqual(store.distinctCount('Lot', 50), { count: 1, undefinedCount: 100 });
+});
+
+test('mergeProperties place les propriétés du GLB avant celles du JSON, le JSON l’emportant', () => {
+  const merged = mergeProperties({ Source: 'GLB', Niveau: 'RDC' }, { Niveau: 'R+1', Type: 'Mur' });
+  assert.deepEqual(merged, { Source: 'GLB', Niveau: 'R+1', Type: 'Mur' });
+  assert.deepEqual(Object.keys(merged!), ['Source', 'Niveau', 'Type']);
+  assert.deepEqual(mergeProperties({ A: 1 }, undefined), { A: 1 });
+  assert.deepEqual(mergeProperties(undefined, { B: 2 }), { B: 2 });
+  assert.equal(mergeProperties(undefined, undefined), undefined);
 });

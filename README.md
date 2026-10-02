@@ -40,7 +40,10 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
   y compris compressés (Draco, Meshopt).
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
-  l'arborescence. La fiche à droite affiche les métadonnées, regroupées par catégorie.
+  l'arborescence. La fiche à droite affiche les propriétés du GLB puis celles du JSON, regroupées
+  par catégories repliables.
+- **Métadonnées** : le JSON peut être fourni avec le modèle, dans son dossier, ou ajouté après
+  coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
 - **Arborescence** calculée à partir d'une ou plusieurs propriétés choisies dans « Grouper par » :
   la première donne les groupes, les suivantes les sous-groupes.
 - **Couleurs et filtres** : pour une propriété, chaque valeur distincte reçoit une couleur

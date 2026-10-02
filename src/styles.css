@@ -575,12 +575,43 @@ button[aria-pressed='true'] {
   padding: 10px 12px 4px;
 }
 
-.props-section h4 {
-  margin: 14px 12px 4px;
+.props-section {
+  margin-top: 8px;
+}
+
+.props-section summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
   color: var(--muted);
   font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.props-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.props-section summary::before {
+  content: '';
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--muted);
+  transition: transform 0.12s;
+}
+
+.props-section[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.props-section summary:hover {
+  color: var(--text);
 }
 
 .props {
