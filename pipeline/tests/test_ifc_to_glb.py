@@ -60,6 +60,27 @@ def test_spaces_and_openings_are_not_exported(result):
     assert classes == {"IfcSlab", "IfcWall", "IfcWindow", "IfcColumn", "IfcDoor"}
 
 
+def test_grid_lines_are_set_aside_without_counting_as_failures(result):
+    # La trame d'axes n'a pas de volume : ni convertie, ni signalée comme un échec.
+    assert result.report["linework"] == 1
+    assert result.report["without_geometry"] == 0
+    assert result.report["failed"] == []
+    assert "IfcGrid" not in {entry["properties"]["Classe IFC"] for entry in result.metadata["elements"].values()}
+
+
+def test_elements_whose_geometry_fails_are_listed():
+    model = build()
+    wall = model.by_type("IfcWall")[0]
+    # Géométrie volontairement cassée : une extrusion de hauteur nulle.
+    solid = next(item for representation in wall.Representation.Representations for item in representation.Items)
+    solid.Depth = 0.0
+    broken = ifc_to_glb.convert(model)
+    assert broken.report["without_geometry"] == 1
+    assert broken.report["failed"] == [{"id": wall.GlobalId, "class": "IfcWall", "name": wall.Name}]
+    assert wall.GlobalId not in broken.metadata["elements"]
+    assert len(broken.metadata["elements"]) == 25
+
+
 def test_metadata_carries_spatial_structure_type_and_property_sets(result):
     by_label = {entry["label"]: entry["properties"] for entry in result.metadata["elements"].values()}
     wall = by_label["Mur sud RDC"]
@@ -147,6 +168,23 @@ def test_filters_keep_identifiers_and_metadata():
     assert one.metadata["elements"][slab.GlobalId]["properties"]["Qto_SlabBaseQuantities"]["NetArea"] == 60.0
     document, _ = parse_glb(one.glb)
     assert [node["extras"]["id"] for node in element_nodes(document)] == [slab.GlobalId]
+
+
+def test_shards_split_the_model_without_losing_or_duplicating_elements():
+    model = build()
+    whole = ifc_to_glb.convert(model)
+    parts = [ifc_to_glb.convert(model, shard=(index, 3)) for index in range(3)]
+    ids = [guid for part in parts for guid in part.metadata["elements"]]
+    assert len(ids) == len(set(ids)) == 26
+    assert set(ids) == set(whole.metadata["elements"])
+    assert sum(part.report["triangles"] for part in parts) == whole.report["triangles"]
+    # Les compteurs s'additionnent d'une tranche à l'autre sans rien compter deux fois.
+    assert sum(part.report["linework"] for part in parts) == whole.report["linework"] == 1
+    assert sum(part.report["without_geometry"] for part in parts) == 0
+    # Chaque tranche reste un GLB valide dont les nœuds portent leurs identifiants.
+    for part in parts:
+        document, _ = parse_glb(part.glb)
+        assert {node["extras"]["id"] for node in element_nodes(document)} == set(part.metadata["elements"])
 
 
 def test_spaces_can_be_included():

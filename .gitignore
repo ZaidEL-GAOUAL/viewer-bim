@@ -5,3 +5,4 @@ dist
 .claude
 __pycache__
 .pytest_cache
+public/_tmp

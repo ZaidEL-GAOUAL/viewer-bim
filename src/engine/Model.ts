@@ -1,5 +1,5 @@
 import { Vector3, type Box3, type Group, type Material, type Mesh, type Ray, type Texture } from 'three';
-import { FLAG_OPEN, type ElementState } from './elementState.ts';
+import { FLAG_OPEN, depthPriority, type ElementState } from './elementState.ts';
 import type { IndexArray, MeshPart } from './meshMath.ts';
 import { BLOCK_TRIANGLES } from './triangleBlocks.ts';
 
@@ -226,6 +226,7 @@ export class Model {
 
     let best = Infinity;
     let bestElement = -1, bestChunk = -1, bestTri = -1;
+    let bestPriority = 0;
     for (let c = 0; c < used; c++) {
       const candidate = sorted[c];
       if (candidate.t > best) break;
@@ -264,8 +265,20 @@ export class Model {
           const v = (dx * qx + dy * qy + dz * qz) * inv;
           if (v < 0 || u + v > 1) continue;
           const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
-          if (t <= minDistance || t >= best) continue;
+          if (t <= minDistance) continue;
+          let priority = bestPriority;
+          if (bestElement >= 0) {
+            const tolerance = best * 2e-6 + 1e-6;
+            if (t > best + tolerance) continue;
+            if (t > best - tolerance) {
+              // Faces confondues de deux éléments : celui que l'affichage met devant l'emporte.
+              if (candidate.element === bestElement) continue;
+              priority = depthPriority(flags[candidate.element * 4 + 3], candidate.element);
+              if (priority <= bestPriority) continue;
+            }
+          }
           if (clipped && clipped(ox + dx * t, oy + dy * t, oz + dz * t)) continue;
+          if (candidate.element !== bestElement) bestPriority = depthPriority(flags[candidate.element * 4 + 3], candidate.element);
           best = t;
           bestElement = candidate.element;
           bestChunk = range.chunk;

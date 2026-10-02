@@ -72,10 +72,28 @@ puis `Classe IFC` reconstruit l'arborescence voulue.
 - Les valeurs des propriétés et des quantités sont recopiées telles qu'elles sont dans l'IFC,
   donc dans l'unité du projet (une longueur peut être en millimètres). Seule la géométrie est
   convertie en mètres.
+- Les axes de trame (`IfcGrid`), les annotations et tout ce qui n'est dessiné qu'en lignes n'ont
+  pas de volume : ils sont laissés de côté et comptés à part, sans être signalés comme des échecs.
 - Un élément dont IfcOpenShell ne parvient pas à calculer la géométrie est absent du GLB et du
-  JSON ; le convertisseur en indique le nombre.
-- Dans le navigateur, la conversion utilise un seul cœur : elle est environ six fois plus lente
-  qu'en ligne de commande, et limitée par la mémoire du navigateur pour les très gros fichiers.
+  JSON ; le convertisseur donne alors sa classe, son nom et son identifiant.
+- Dans le navigateur, un IFC de plus de 100 Mo est refusé avec un message qui propose un fichier
+  plus léger ou la ligne de commande. Si la mémoire manque en cours de route, la conversion est
+  retentée sur un seul cœur avant d'abandonner.
+- Dans le navigateur, la conversion est répartie sur un à quatre cœurs, mais reste deux à cinq
+  fois plus lente qu'en ligne de commande. Elle est aussi limitée par la mémoire : chaque
+  convertisseur occupe environ quinze fois la taille de l'IFC, et le navigateur ne lui accorde pas
+  plus de quelques gigaoctets. Au-delà d'une centaine de mégaoctets d'IFC, préférer la ligne de
+  commande.
+
+## Version d'IfcOpenShell dans le navigateur
+
+Le viewer embarque le paquet 0.8.5. À partir de la 0.8.6, le paquet pour navigateur publié par
+IfcOpenShell est « modulaire » : un noyau, auquel les schémas IFC et le moteur géométrique
+s'ajoutent comme modules séparés. Le paquet 0.9.0 ne contient que le noyau (son binaire fait
+5,8 Mo contre 53,6 Mo) et ses modules ne sont pas publiés : lire un IFC le fait planter (« memory
+access out of bounds »). Le jeu de modules 0.8.6 lit bien un IFC une fois son dossier déclaré avec
+`ifcopenshell.set_plugin_search_paths`, mais le calcul de la géométrie y échoue encore. Avant de
+changer de version, vérifier qu'un IFC4 et un IFC2x3 se convertissent entièrement.
 
 ## Tests
 

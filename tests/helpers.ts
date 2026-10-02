@@ -36,6 +36,17 @@ export async function loadTestModel(
   mesh: TestMesh = TRIANGLE,
   patch?: (gltf: GltfDraft) => void,
 ): Promise<{ model: Model; warnings: string[] }> {
+  return loadGlb(makeGlb(nodes, roots, mesh, patch));
+}
+
+/** Charge un GLB par le même chemin que l'application : lecture, préparation du glTF, fusion. */
+export async function loadGlb(glb: ArrayBuffer): Promise<{ model: Model; warnings: string[] }> {
+  const file = new File([glb], 'test.glb');
+  const { gltf: parsed, warnings } = await loadModelFiles({ file, path: file.name }, []);
+  return { model: buildModel(parsed, { value: new Color() }), warnings };
+}
+
+export function makeGlb(nodes: object[], roots: number[], mesh: TestMesh = TRIANGLE, patch?: (gltf: GltfDraft) => void): ArrayBuffer {
   const positions = pad(Buffer.from(mesh.positions.buffer, mesh.positions.byteOffset, mesh.positions.byteLength));
   const indices = mesh.indices ? pad(Buffer.from(mesh.indices.buffer, mesh.indices.byteOffset, mesh.indices.byteLength)) : null;
   const min = [Infinity, Infinity, Infinity];
@@ -73,8 +84,5 @@ export async function loadTestModel(
   binHeader.writeUInt32LE(bin.length, 0);
   binHeader.writeUInt32LE(0x004e4942, 4);
   const glb = Buffer.concat([header, json, binHeader, bin]);
-  // Même chemin que l'application : lecture du fichier, préparation du glTF, puis fusion.
-  const file = new File([glb], 'test.glb');
-  const { gltf: parsed, warnings } = await loadModelFiles({ file, path: file.name }, []);
-  return { model: buildModel(parsed, { value: new Color() }), warnings };
+  return glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength) as ArrayBuffer;
 }

@@ -146,3 +146,12 @@ test('mergeProperties place les propriétés du GLB avant celles du JSON, le JSO
   assert.deepEqual(mergeProperties(undefined, { B: 2 }), { B: 2 });
   assert.equal(mergeProperties(undefined, undefined), undefined);
 });
+
+test('suggestGrouping préfère une propriété générale à une propriété rangée dans une catégorie', () => {
+  const store = new PropertyStore(12);
+  for (let i = 0; i < 12; i++) {
+    store.set(i, flattenProperties({ 'Classe IFC': ['IfcWall', 'IfcSlab', 'IfcBeam', 'IfcColumn'][i % 4], Identification: { Mode: ['A', 'B', 'C'][i % 3] } }));
+  }
+  store.finalize();
+  assert.equal(suggestGrouping(store), 'Classe IFC');
+});

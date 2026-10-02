@@ -43,7 +43,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 
 - **Ouverture d'un IFC** : converti sur place dans le navigateur, sans serveur. Le convertisseur
   (Python et IfcOpenShell en WebAssembly, environ 30 Mo) n'est téléchargé qu'au premier IFC
-  ouvert. Le GLB et le JSON produits peuvent être téléchargés.
+  ouvert. La conversion est répartie sur plusieurs cœurs (jusqu'à quatre, selon la machine et la
+  taille du fichier). Le GLB et le JSON produits peuvent être téléchargés.
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
   y compris compressés (Draco, Meshopt).
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
@@ -61,11 +62,15 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   volume et surface totale d'un élément.
 
 - **Isoler** : n'affiche que la sélection ; un second clic sur le même bouton rétablit
-  l'affichage d'avant. **Tout afficher** réaffiche tous les éléments et recadre le modèle entier.
+  l'affichage d'avant. **Masquer** cache la sélection ; le même bouton devient « Démasquer » et
+  la fait revenir, même après avoir désélectionné. **Tout afficher** réaffiche tous les éléments
+  et recadre le modèle entier.
+- **Téléchargement** : après la conversion d'un IFC, les boutons « GLB ↓ » et « JSON ↓ » de la
+  barre d'outils restent disponibles tant que ce modèle est affiché.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
 
-Raccourcis : `F` cadrer, `H` masquer la sélection, `I` isoler ou ne plus isoler, `A` tout
+Raccourcis : `F` cadrer, `H` masquer ou démasquer, `I` isoler ou ne plus isoler, `A` tout
 afficher, `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.
 
 ## Mise en ligne
@@ -122,6 +127,31 @@ Mesures relevées sur un Apple M4 Pro :
 
 Masquer ou colorer plusieurs milliers d'éléments prend moins de 1 ms.
 
+### Sur une machine moins puissante
+
+- **Résolution adaptative** (`engine/AdaptiveResolution.ts`). Si la carte graphique ne tient pas
+  environ 30 images par seconde pendant un mouvement de caméra, la vue est calculée avec moins de
+  pixels (jusqu'à moitié moins dans chaque direction), puis en pleine résolution dès que la caméra
+  s'arrête. Une machine rapide n'est jamais concernée.
+- **Fluidité affichée**. La barre d'état en bas de la vue 3D indique le nombre d'images par
+  seconde mesuré pendant le dernier mouvement, et signale une résolution réduite. C'est le moyen
+  le plus simple de vérifier le comportement sur un autre ordinateur.
+
+### Conversion d'un IFC : mesures
+
+Maquette de structure exportée de Revit (IFC2x3, 21 Mo, 3 179 éléments, 226 000 triangles),
+sur un Apple M4 Pro :
+
+| Mode | Durée |
+| --- | --- |
+| Ligne de commande, tous les cœurs | 2 s |
+| Navigateur, 4 cœurs, premier IFC de la session | 11,5 s (dont 6 s de mise en route du convertisseur) |
+| Navigateur, 4 cœurs, IFC suivants | 5 s |
+| Navigateur, 1 cœur volontairement bridé (cœurs économes en basse priorité) | 108 s |
+
+Chaque convertisseur occupe en mémoire environ quinze fois la taille de l'IFC (320 Mo pour ce
+fichier). Le viewer en lance d'autant moins que le fichier est gros et la mémoire limitée.
+
 ### Précautions d'affichage
 
 - Le modèle est **recentré sur l'origine** au chargement, en double précision : un modèle
@@ -135,6 +165,10 @@ Masquer ou colorer plusieurs milliers d'éléments prend moins de 1 ms.
 - Un clic ne touche que ce qui est réellement affiché : ni l'envers d'une face à simple face, ni
   l'intérieur d'un solide coupé quand le remplissage des sections est désactivé.
 - Un maillage sans normales est ombré à facettes, comme le demande le format glTF.
+- Deux éléments dont des faces sont exactement dans le même plan (une poutre noyée dans une dalle
+  de même épaisseur, par exemple) ne scintillent pas : chaque élément reçoit une légère avance en
+  profondeur, d'autant plus grande qu'il est petit. Le plus petit des deux est donc affiché, et
+  c'est aussi lui que l'on clique.
 
 ## Limites connues
 

@@ -46,6 +46,9 @@ SPATIAL_LABELS = {
     "IfcSpace": "Local",
 }
 
+# Représentations faites de lignes ou de points : elles ne donnent aucun triangle.
+LINEWORK_TYPES = {"Curve", "Curve2D", "Curve3D", "GeometricCurveSet", "Annotation2D", "Point", "PointCloud", "Text"}
+
 ARRAY_BUFFER = 34962
 ELEMENT_ARRAY_BUFFER = 34963
 
@@ -129,6 +132,14 @@ def describe(element: Any) -> dict[str, Any]:
 
     label = element.Name or f"{ifc_class} {getattr(element, 'Tag', None) or element.GlobalId}"
     return {"label": label, "properties": properties}
+
+
+def _has_volume(product: Any) -> bool:
+    """Faux pour les axes de trame, les annotations et tout ce qui n'est dessiné qu'en lignes."""
+    if product.is_a("IfcGrid") or product.is_a("IfcAnnotation"):
+        return False
+    representations = product.Representation.Representations or ()
+    return any((representation.RepresentationType or "") not in LINEWORK_TYPES for representation in representations)
 
 
 # -------------------------------------------------------------------- géométrie
@@ -315,6 +326,7 @@ def convert(
     include_spaces: bool = False,
     classes: list[str] | None = None,
     ids: list[str] | None = None,
+    shard: tuple[int, int] | None = None,
     threads: int | None = None,
     progress: Callable[[int], None] | None = None,
 ) -> Conversion:
@@ -322,6 +334,8 @@ def convert(
 
     `classes` et `ids` restreignent la conversion à certaines classes IFC (sous-classes comprises)
     ou à certains GlobalId. Les éléments conservés gardent leur identifiant et leurs propriétés.
+    `shard=(i, n)` ne convertit que la tranche i sur n des éléments : le viewer s'en sert pour
+    répartir un IFC sur plusieurs cœurs, puis réunit les résultats.
     """
     started = time.perf_counter()
     if threads is None:
@@ -334,16 +348,30 @@ def convert(
     # Matériaux nommés d'après le matériau IFC plutôt que d'après le style de surface.
     settings.set("use-material-names", True)
 
-    excluded = list(model.by_type("IfcOpeningElement"))
-    if not include_spaces:
-        excluded += list(model.by_type("IfcSpace"))
+    # Éléments à convertir : tout produit qui porte une représentation, hors ouvertures (elles
+    # sont soustraites des murs et dalles par IfcOpenShell) et, par défaut, hors locaux.
+    skipped = ("IfcOpeningElement",) if include_spaces else ("IfcOpeningElement", "IfcSpace")
+    candidates = [product for product in model.by_type("IfcProduct") if getattr(product, "Representation", None) is not None]
+    products = [product for product in candidates if not any(product.is_a(name) for name in skipped)]
+    excluded = len(candidates) - len(products)
 
-    # Filtre facultatif : seuls les éléments demandés sont convertis.
-    wanted: set[str] | None = None
-    if classes or ids:
-        wanted = set(ids or [])
-        for ifc_class in classes or []:
-            wanted.update(product.GlobalId for product in model.by_type(ifc_class) if hasattr(product, "GlobalId"))
+    # Filtres facultatifs : seuls les éléments demandés sont calculés.
+    if classes:
+        products = [product for product in products if any(product.is_a(name) for name in classes)]
+    if ids:
+        wanted = set(ids)
+        products = [product for product in products if product.GlobalId in wanted]
+    if shard is not None:
+        # Conversion répartie sur plusieurs processus : celui-ci traite une tranche des éléments.
+        index, count = shard
+        products = sorted(products, key=lambda product: product.id())[index::count]
+
+    # Les axes de trame et les annotations n'ont pas de volume : ils sont laissés de côté, sans
+    # être comptés comme des échecs. (Après le découpage en tranches, pour que la somme des
+    # tranches donne le bon total.)
+    volumes = [product for product in products if _has_volume(product)]
+    linework = len(products) - len(volumes)
+    products = volumes
 
     writer = _GlbWriter()
     mesh_by_geometry: dict[str, tuple[int, int] | None] = {}
@@ -352,14 +380,10 @@ def convert(
     triangle_count = 0
     last_progress = -1
 
-    iterator = ifcopenshell.geom.iterator(settings, model, threads, exclude=excluded) if excluded else ifcopenshell.geom.iterator(settings, model, threads)
-    if iterator.initialize():
+    iterator = ifcopenshell.geom.iterator(settings, model, threads, include=products) if products else None
+    if iterator is not None and iterator.initialize():
         while True:
             shape = iterator.get()
-            if wanted is not None and shape.guid not in wanted:
-                if not iterator.next():
-                    break
-                continue
             geometry = shape.geometry
             # Les éléments qui partagent une même représentation (même type) partagent un maillage.
             if geometry.id not in mesh_by_geometry:
@@ -384,15 +408,22 @@ def convert(
         writer.element(guid, names[guid], shapes)
         elements[guid] = describe(model.by_guid(guid))
 
-    with_geometry = sum(1 for product in model.by_type("IfcProduct") if getattr(product, "Representation", None))
+    # Éléments attendus mais absents : IfcOpenShell n'a pas pu calculer leur géométrie.
+    failed = [
+        {"id": product.GlobalId, "class": product.is_a(), "name": product.Name or ""}
+        for product in products
+        if product.GlobalId not in elements
+    ]
     report = {
         "schema": model.schema,
         "elements": len(elements),
         "triangles": triangle_count,
         "meshes": len(writer.meshes),
         "materials": len(writer.materials),
-        "excluded": len(excluded),
-        "without_geometry": max(0, with_geometry - len(excluded) - len(elements)),
+        "excluded": excluded,
+        "linework": linework,
+        "without_geometry": len(failed),
+        "failed": failed[:50],
         "seconds": round(time.perf_counter() - started, 2),
     }
     glb = writer.to_bytes(f"viewer-bim ifc_to_glb (IfcOpenShell {ifcopenshell.version})")
@@ -439,8 +470,12 @@ def main(argv: list[str] | None = None) -> int:
 
     report = result.report
     print(f"{report['elements']} éléments, {report['triangles']} triangles, {report['meshes']} maillages, en {report['seconds']} s")
+    if report["linework"]:
+        print(f"{report['linework']} éléments sans volume (axes de trame, annotations) laissés de côté.")
     if report["without_geometry"]:
-        print(f"{report['without_geometry']} éléments n'ont pas pu être convertis en géométrie.")
+        print(f"{report['without_geometry']} éléments n'ont pas pu être convertis en géométrie :")
+        for item in report["failed"]:
+            print(f"  - {item['class']} « {item['name']} » ({item['id']})")
     print(f"→ {glb_path}\n→ {json_path}")
     return 0
 

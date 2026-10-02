@@ -5,7 +5,7 @@ import { hexToRgb } from '../data/palette.ts';
 import { buildModel } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
-import { convertIfc, isIfcFile } from '../ifc/convertIfc.ts';
+import { IfcTooLargeError, convertIfc, isIfcFile } from '../ifc/convertIfc.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
@@ -28,6 +28,18 @@ const TOOLS: { id: Tool; label: string; hint: string }[] = [
 
 // Laisse le navigateur afficher le message d'attente avant un calcul long. Le délai de secours
 // évite de rester bloqué quand l'onglet est en arrière-plan (les images y sont suspendues).
+/** Taille de fichier 3D au-delà de laquelle l'ouverture est refusée d'emblée. */
+const MAX_MODEL_BYTES = 1500e6;
+
+/** Vrai si l'erreur traduit un manque de mémoire du navigateur. */
+function isOutOfMemory(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /rangeerror|out of memory|allocation failed|invalid (typed )?array length|array buffer/i.test(message);
+}
+
+const tooHeavyMessage = (name: string) =>
+  `« ${name} » est trop lourd pour la mémoire dont dispose le navigateur. Fermez d’autres onglets et réessayez, ou ouvrez un modèle plus léger (découpé par bâtiment ou par lot, par exemple).`;
+
 const NO_MATCH =
   'Aucun identifiant du fichier JSON ne correspond aux éléments du modèle. Vérifiez le champ « extras.id » ou le nom des nœuds.';
 
@@ -64,6 +76,10 @@ export class App {
   /** Visibilité de chaque élément avant l'isolement en cours (1 = visible), ou null. */
   private isolation: Uint8Array | null = null;
   private isolateButton!: HTMLButtonElement;
+  private maskButton!: HTMLButtonElement;
+  private downloads!: HTMLElement;
+  /** Éléments masqués par le bouton « Masquer », que « Démasquer » fait revenir. */
+  private readonly masked = new Set<number>();
   private metadataInput!: HTMLInputElement;
   private conversionEl!: HTMLElement;
   private conversionText!: HTMLElement;
@@ -124,6 +140,12 @@ export class App {
     }, { title: 'Plans de coupe', attrs: { 'aria-pressed': 'false' } });
 
     this.isolateButton = button('Isoler', () => this.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
+    this.maskButton = button('Masquer', () => this.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
+    // Fichiers produits par la conversion d'un IFC : téléchargeables tant que ce modèle est affiché.
+    this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
+      button('GLB ↓', () => this.downloadConversion('glb'), { title: 'Télécharger le fichier GLB (géométrie) issu de la conversion de l’IFC' }),
+      button('JSON ↓', () => this.downloadConversion('json'), { title: 'Télécharger le fichier JSON (métadonnées) issu de la conversion de l’IFC' }),
+    );
 
     // Boutons de repli des panneaux latéraux, aux deux extrémités de la barre.
     const panelToggle = (side: 'left' | 'right', label: string) => {
@@ -149,9 +171,11 @@ export class App {
       h('div', { class: 'bar-group' },
         sectionToggle,
         button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
+        this.maskButton,
         this.isolateButton,
         button('Tout afficher', () => this.showWholeModel(), { title: 'Réafficher tous les éléments et cadrer le modèle entier (A)' }),
       ),
+      this.downloads,
       h('div', { class: 'spacer' }),
       panelToggle('right', 'le panneau de droite (propriétés)'),
     );
@@ -215,8 +239,10 @@ export class App {
     this.setTool('select');
     this.updateStats();
     this.on('visibility', () => this.updateStats());
+    this.viewer.onMotionEnd = () => this.updateStats();
     this.on('visibility', () => this.syncIsolateButton());
     this.on('selection', () => this.syncIsolateButton());
+    this.on('model', () => this.syncIsolateButton());
     this.syncIsolateButton();
   }
 
@@ -277,8 +303,40 @@ export class App {
     const model = this.model;
     if (!model) return;
     this.isolation = null;
+    this.masked.clear();
     for (let i = 0; i < model.count; i++) model.state.setVisible(i, true);
     this.visibilityChanged();
+  }
+
+  /**
+   * Ce que fera le bouton « Masquer » : masquer la sélection tant qu'elle a des éléments visibles ;
+   * sinon démasquer (la sélection si elle est masquée, à défaut tout ce que ce bouton a masqué).
+   */
+  get maskAction(): 'mask' | 'unmask' | 'none' {
+    const state = this.model?.state;
+    if (!state) return 'none';
+    let hiddenInSelection = false;
+    for (const index of this.selection) {
+      if (state.isVisible(index)) return 'mask';
+      hiddenInSelection = true;
+    }
+    return hiddenInSelection || this.masked.size > 0 ? 'unmask' : 'none';
+  }
+
+  /** Masque la sélection, ou fait revenir ce qui a été masqué : un seul bouton pour les deux. */
+  toggleMask(): void {
+    const state = this.model?.state;
+    const action = this.maskAction;
+    if (!state || action === 'none') return;
+    if (action === 'mask') {
+      const targets = [...this.selection].filter((index) => state.isVisible(index));
+      for (const index of targets) this.masked.add(index);
+      this.setVisible(targets, false);
+    } else {
+      const targets = this.selection.size > 0 ? [...this.selection] : [...this.masked];
+      for (const index of targets) this.masked.delete(index);
+      this.setVisible(targets, true);
+    }
   }
 
   /** Vue d'ensemble : tout réafficher et cadrer le modèle entier. */
@@ -325,9 +383,20 @@ export class App {
     element.title = this.isolated
       ? 'Revenir à l’affichage d’avant l’isolement (I)'
       : 'N’afficher que la sélection (I). Un second clic rétablit l’affichage.';
+
+    const action = this.maskAction;
+    this.maskButton.textContent = action === 'unmask' ? 'Démasquer' : 'Masquer';
+    this.maskButton.setAttribute('aria-pressed', String(action === 'unmask'));
+    this.maskButton.disabled = action === 'none';
+    this.maskButton.title = action === 'unmask'
+      ? 'Réafficher ce qui a été masqué (H)'
+      : 'Masquer la sélection (H). Un second clic la réaffiche.';
   }
 
   private visibilityChanged(): void {
+    // Un élément redevenu visible par un autre moyen (arbre, filtres) n'est plus « à démasquer ».
+    const state = this.model?.state;
+    if (state) for (const index of this.masked) if (state.isVisible(index)) this.masked.delete(index);
     this.model?.state.commit();
     this.viewer.invalidate();
     this.emit('visibility');
@@ -413,10 +482,18 @@ export class App {
             metadataError ||= `« ${candidate.file.name} » : ${error instanceof Error ? error.message : String(error)}`;
           }
         }
+        // Au-delà de cette taille, le navigateur ne peut plus lire le fichier d'un seul bloc.
+        const heavy = inputs.find((input) => input.file.size > MAX_MODEL_BYTES);
+        if (heavy) {
+          throw new Error(
+            `« ${heavy.file.name} » (${integer.format(Math.round(heavy.file.size / 1e6))} Mo) est trop volumineux pour être ouvert dans le navigateur (limite : ${integer.format(MAX_MODEL_BYTES / 1e6)} Mo). Essayez un fichier plus léger, par exemple un modèle découpé par bâtiment ou par lot.`,
+          );
+        }
         const siblings = inputs.filter((input) => input !== modelFile);
         const { gltf, missingTextures, warnings } = await loadModelFiles(modelFile, siblings).catch((error: unknown) => {
           if (error instanceof ModelFileError) throw error;
           const detail = error instanceof Error ? error.message : String(error);
+          if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(modelFile.file.name));
           throw new Error(`Impossible de lire « ${modelFile.file.name} » : ce n’est pas un fichier glTF valide (${detail}).`);
         });
         // Un JSON déposé seul avant le modèle reste en attente et s'applique au premier modèle chargé.
@@ -464,9 +541,14 @@ export class App {
     const result = await convertIfc(file, (message) => {
       if (ticket === this.loadTicket) this.busy(message);
     }).catch((error: unknown) => {
+      if (error instanceof IfcTooLargeError) throw error;
       // Une erreur Python arrive avec toute sa trace : seule la dernière ligne parle à l'utilisateur.
       const lines = (error instanceof Error ? error.message : String(error)).trim().split('\n');
-      throw new Error(`Impossible de convertir « ${file.name} » : ${lines[lines.length - 1]}`);
+      const detail = lines[lines.length - 1];
+      if (/parse|header|schema|ISO-10303|token|syntax/i.test(detail)) {
+        throw new Error(`« ${file.name} » n’est pas un fichier IFC lisible : il est peut-être incomplet, ou dans une version d’IFC non prise en charge (${detail}).`);
+      }
+      throw new Error(`Impossible de convertir « ${file.name} » : ${detail}`);
     });
     if (ticket !== this.loadTicket) return;
     if (!result.report.elements) throw new Error(`« ${file.name} » ne contient aucun élément avec une géométrie.`);
@@ -477,11 +559,23 @@ export class App {
     if (!(await this.installModel(ticket, gltf, [metadata], file.name))) return;
 
     this.conversion = { name: base, glb, json: result.metadata };
-    const { elements = 0, seconds = 0, without_geometry: failed = 0 } = result.report;
-    this.conversionText.textContent =
-      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s, reliés à leurs propriétés par leur identifiant IFC.` +
-      (failed > 0 ? ` ${integer.format(failed)} éléments n’ont pas pu être convertis en géométrie.` : '');
+    const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
+    const lines = [
+      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` sur ${workers} cœurs` : ''}, reliés à leurs propriétés par leur identifiant IFC.`,
+    ];
+    if (linework > 0) {
+      lines.push(`${integer.format(linework)} ${linework > 1 ? 'objets sans volume (axes de trame, annotations) ont été laissés' : 'objet sans volume (axe de trame, annotation) a été laissé'} de côté : rien ne manque au bâtiment.`);
+    }
+    if (failedCount > 0) {
+      // Les vrais échecs sont nommés, pour que l'on sache ce qui manque à l'écran.
+      const shown = failed.slice(0, 5).map((item) => `${item.class} « ${item.name || item.id} »`).join(', ');
+      const more = failedCount > 5 ? ` et ${integer.format(failedCount - 5)} autres` : '';
+      lines.push(`Attention : ${integer.format(failedCount)} ${failedCount > 1 ? 'éléments n’ont pas pu être convertis et manquent' : 'élément n’a pas pu être converti et manque'} à l’affichage (${shown}${more}).`);
+    }
+    this.conversionText.textContent = lines.join(' ');
+    this.conversionText.classList.toggle('warning', failedCount > 0);
     this.conversionEl.hidden = false;
+    this.downloads.hidden = false;
   }
 
   private downloadConversion(kind: 'glb' | 'json'): void {
@@ -549,14 +643,23 @@ export class App {
     this.busy('Optimisation de la géométrie…');
     await nextFrame();
     if (ticket !== this.loadTicket) return false;
-    const model = buildModel(gltf, this.viewer.selectColor);
+    let model: Model;
+    try {
+      model = buildModel(gltf, this.viewer.selectColor);
+    } catch (error) {
+      // Un modèle très lourd peut épuiser la mémoire pendant la fusion de sa géométrie.
+      if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(name));
+      throw error;
+    }
 
     const previous = this.model;
     this.measure.clear();
     this.selection.clear();
     this.isolation = null;
+    this.masked.clear();
     this.conversion = null;
     this.conversionEl.hidden = true;
+    this.downloads.hidden = true;
     this.model = model;
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;
@@ -655,6 +758,12 @@ export class App {
         : 'sans fichier de métadonnées',
     );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
+    // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
+    const { frameTime, motionScale } = this.viewer.adaptive;
+    if (frameTime > 0) {
+      parts.push(`${Math.round(1000 / frameTime)} img/s`);
+      if (motionScale < 1) parts.push(`résolution réduite à ${Math.round(motionScale * 100)} % en mouvement`);
+    }
     this.stats.textContent = parts.join(' · ');
   }
 
@@ -742,7 +851,7 @@ export class App {
           this.fitSelection();
           break;
         case 'h':
-          if (this.selection.size > 0) this.setVisible(this.selection, false);
+          this.toggleMask();
           break;
         case 'i':
           this.toggleIsolate();

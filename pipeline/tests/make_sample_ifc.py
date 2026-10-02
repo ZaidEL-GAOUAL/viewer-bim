@@ -137,6 +137,18 @@ def build(version: str = "IFC4", storeys: int = 2) -> ifcopenshell.file:
         space = add("IfcSpace", f"Plateau {name}", box(9.6, 5.4, 2.8), (0.2, 0.2, 0))
         space.LongName = "Plateau de bureaux"
 
+    # Une trame d'axes : des lignes sans volume, que le convertisseur doit laisser de côté.
+    grid = run("root.create_entity", model, ifc_class="IfcGrid", name="Trame")
+    points = [model.create_entity("IfcCartesianPoint", Coordinates=(0.0, 0.0)), model.create_entity("IfcCartesianPoint", Coordinates=(10000.0, 0.0))]
+    line = model.create_entity("IfcPolyline", Points=points)
+    axis = model.create_entity("IfcGridAxis", AxisTag="A", AxisCurve=line, SameSense=True)
+    grid.UAxes = [axis]
+    grid.VAxes = [model.create_entity("IfcGridAxis", AxisTag="1", AxisCurve=model.create_entity("IfcPolyline", Points=points[::-1]), SameSense=True)]
+    curves = model.create_entity("IfcGeometricCurveSet", Elements=[line])
+    footprint = model.create_entity("IfcShapeRepresentation", ContextOfItems=body, RepresentationIdentifier="FootPrint", RepresentationType="GeometricCurveSet", Items=[curves])
+    grid.Representation = model.create_entity("IfcProductDefinitionShape", Representations=[footprint])
+    place(grid, 0, 0, 0)
+
     return model
 
 

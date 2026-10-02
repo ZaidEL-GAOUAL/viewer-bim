@@ -24,6 +24,7 @@ import {
   type Ray,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { AdaptiveResolution } from './AdaptiveResolution.ts';
 import { TRANSPARENT_LAYER } from './buildModel.ts';
 import type { Model, PickHit, RaycastOptions } from './Model.ts';
 import { AXES, Sections, type Axis } from './Sections.ts';
@@ -37,6 +38,9 @@ export interface FrameStats {
   triangles: number;
 }
 
+/** Délai sans mouvement après lequel la vue est recalculée en pleine résolution. */
+const SHARPEN_DELAY = 160;
+
 export class Viewer {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
@@ -49,6 +53,10 @@ export class Viewer {
   /** Appelé après chaque image : sert à replacer les étiquettes HTML sur la vue 3D. */
   readonly afterRender = new Set<() => void>();
   readonly stats: FrameStats = { calls: 0, triangles: 0 };
+  /** Mesure de fluidité et résolution réduite en mouvement sur les machines lentes. */
+  readonly adaptive = new AdaptiveResolution();
+  /** Appelé à la fin d'un mouvement de caméra, pour afficher la fluidité mesurée. */
+  onMotionEnd: () => void = () => {};
   model: Model | null = null;
 
   private readonly container: HTMLElement;
@@ -63,6 +71,8 @@ export class Viewer {
   private readonly scratch = new Vector3();
   private readonly scratchBox = new Box3();
   private dirty = true;
+  private resolutionScale = 1;
+  private sharpenTimer = 0;
   private width = 1;
   private height = 1;
 
@@ -275,7 +285,8 @@ export class Viewer {
     const height = Math.max(1, this.container.clientHeight);
     this.width = width;
     this.height = height;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.resolutionScale = 1;
+    this.renderer.setPixelRatio(this.basePixelRatio());
     this.renderer.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -283,11 +294,35 @@ export class Viewer {
     this.draw();
   }
 
+  private basePixelRatio(): number {
+    return Math.min(window.devicePixelRatio, 2);
+  }
+
+  /** Change la résolution de rendu (1 = celle de l'écran) sans changer la taille affichée. */
+  private setResolutionScale(scale: number): void {
+    if (scale === this.resolutionScale) return;
+    this.resolutionScale = scale;
+    this.renderer.setPixelRatio(this.basePixelRatio() * scale);
+  }
+
   private readonly tick = (): void => {
     this.controls.update();
     if (!this.dirty) return;
     this.dirty = false;
+    // Pendant un mouvement continu, la résolution suit ce que la machine arrive à tenir ;
+    // la vue repasse en pleine résolution dès que la caméra s'arrête.
+    this.setResolutionScale(this.adaptive.frame(performance.now()));
     this.draw();
+    window.clearTimeout(this.sharpenTimer);
+    this.sharpenTimer = window.setTimeout(this.sharpen, SHARPEN_DELAY);
+  };
+
+  private readonly sharpen = (): void => {
+    if (this.resolutionScale !== 1) {
+      this.setResolutionScale(1);
+      this.draw();
+    }
+    this.onMotionEnd();
   };
 
   /** Ajuste les plans proche et lointain au modèle pour garder un maximum de précision en profondeur. */

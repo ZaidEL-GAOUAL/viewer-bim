@@ -508,6 +508,18 @@ export function buildModel(gltf: GLTF, selectColor: IUniform<Color>): Model {
     box.max.set(Math.max(box.max.x, boxes[at + 3]), Math.max(box.max.y, boxes[at + 4]), Math.max(box.max.z, boxes[at + 5]));
   }
 
+  // Priorité d'affichage : plus un élément est petit par rapport au modèle, plus il passe devant
+  // quand ses faces se confondent avec celles d'un autre. Une poutre noyée reste ainsi visible
+  // à la surface de la dalle qui la contient.
+  const modelDiagonal = box.isEmpty() ? 1 : box.getSize(new Vector3()).length() || 1;
+  for (let i = 0; i < elementCount; i++) {
+    const at = i * 6;
+    if (boxes[at] > boxes[at + 3]) continue;
+    const diagonal = Math.hypot(boxes[at + 3] - boxes[at], boxes[at + 4] - boxes[at + 1], boxes[at + 5] - boxes[at + 2]);
+    state.setPriority(i, diagonal > 0 ? -Math.log2(diagonal / modelDiagonal) : 7);
+  }
+  state.commit();
+
   const stencilMaterial = (side: Side, operation: StencilOp): Material => {
     const material = new MeshBasicMaterial({
       side,

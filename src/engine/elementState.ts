@@ -5,6 +5,19 @@ export const FLAG_COLORED = 2;
 export const FLAG_SELECTED = 4;
 /** Élément dont le maillage n'est pas un solide fermé : exclu du remplissage des coupes. */
 export const FLAG_OPEN = 8;
+/** Bits 4 à 6 : priorité d'affichage (0 à 7) quand deux éléments ont des faces confondues. */
+const PRIORITY_SHIFT = 4;
+const PRIORITY_MASK = 7;
+
+/**
+ * Avance en profondeur donnée à un élément, en pas du tampon de profondeur. Deux éléments dont
+ * des faces sont exactement dans le même plan (une poutre noyée dans une dalle, par exemple) se
+ * disputeraient chaque pixel ; avec cette avance fixe, c'est toujours le même qui est affiché.
+ * La même valeur départage les clics (voir Model.raycast).
+ */
+export function depthPriority(flags: number, index: number): number {
+  return ((flags >> PRIORITY_SHIFT) & PRIORITY_MASK) * 3 + (index & 1) * 1.5;
+}
 
 /**
  * État d'affichage de chaque élément, stocké dans une texture lue par le vertex shader :
@@ -57,6 +70,13 @@ export class ElementState {
 
   setOpen(index: number, open: boolean): void {
     this.setFlag(index, FLAG_OPEN, open);
+  }
+
+  /** Priorité d'affichage, de 0 (grand élément) à 7 (petit élément) : le plus petit l'emporte. */
+  setPriority(index: number, level: number): void {
+    const at = index * 4 + 3;
+    const clamped = Math.max(0, Math.min(PRIORITY_MASK, Math.floor(level)));
+    this.data[at] = (this.data[at] & ~(PRIORITY_MASK << PRIORITY_SHIFT)) | (clamped << PRIORITY_SHIFT);
   }
 
   /** Couleur imposée, en octets sRGB. */
@@ -128,6 +148,9 @@ const FRAGMENT_MAP = /* glsl */ `
 // Un élément masqué a tous ses sommets rejetés hors du volume de vue : ses triangles
 // sont éliminés avant la rastérisation, sans toucher à la géométrie.
 const HIDE = /* glsl */ `
+// Avance en profondeur propre à l'élément : départage les faces confondues sans scintillement.
+// Un pas vaut la plus petite différence que distingue un tampon de profondeur de 24 bits.
+gl_Position.z -= ( float( ( bimFlags >> ${PRIORITY_SHIFT} ) & ${PRIORITY_MASK} ) * 3.0 + float( bimIndex & 1 ) * 1.5 ) * 1.1920929e-7 * gl_Position.w;
 bool bimHidden = ( bimFlags & ${FLAG_VISIBLE} ) == 0;
 #ifdef BIM_SOLID_ONLY
 	bimHidden = bimHidden || ( bimFlags & ${FLAG_OPEN} ) != 0;

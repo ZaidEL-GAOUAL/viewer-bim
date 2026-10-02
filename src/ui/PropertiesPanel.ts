@@ -13,6 +13,7 @@ export class PropertiesPanel {
   private readonly app: App;
   private readonly body: HTMLElement;
   private readonly isolateButton: HTMLButtonElement;
+  private readonly maskButton: HTMLButtonElement;
   /** Catégories repliées par l'utilisateur. */
   private readonly folded = new Set<string>();
 
@@ -21,6 +22,7 @@ export class PropertiesPanel {
     this.body = h('div', { class: 'properties-body' });
     this.el = h('section', { class: 'panel properties-panel' }, h('h2', { class: 'panel-title', text: 'Propriétés' }), this.body);
     this.isolateButton = button('Isoler', () => app.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
+    this.maskButton = button('Masquer', () => app.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
     app.on('selection', () => this.render());
     app.on('model', () => this.render());
     app.on('visibility', () => this.syncIsolate());
@@ -32,6 +34,10 @@ export class PropertiesPanel {
     this.isolateButton.textContent = isolated ? 'Ne plus isoler' : 'Isoler';
     this.isolateButton.setAttribute('aria-pressed', String(isolated));
     this.isolateButton.title = isolated ? 'Revenir à l’affichage d’avant l’isolement (I)' : 'N’afficher que la sélection (I)';
+    const unmask = this.app.maskAction === 'unmask';
+    this.maskButton.textContent = unmask ? 'Démasquer' : 'Masquer';
+    this.maskButton.setAttribute('aria-pressed', String(unmask));
+    this.maskButton.title = unmask ? 'Réafficher la sélection (H)' : 'Masquer la sélection (H). Un second clic la réaffiche.';
   }
 
   private render(): void {
@@ -56,7 +62,7 @@ export class PropertiesPanel {
     this.body.append(
       h('div', { class: 'element-actions' },
         button('Cadrer', () => app.fitTo(app.selection), { title: 'Cadrer la vue sur la sélection (F)' }),
-        button('Masquer', () => app.setVisible(app.selection, false), { title: 'Masquer la sélection (H)' }),
+        this.maskButton,
         this.isolateButton,
         button('Désélectionner', () => app.select([], 'panel'), { title: 'Vider la sélection (Échap)' }),
       ),

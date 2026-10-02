@@ -12,6 +12,8 @@ export interface ConvertRequest {
   buffer: ArrayBuffer;
   /** Adresse absolue du paquet IfcOpenShell pour le navigateur, servi avec le viewer. */
   wheelUrl: string;
+  /** Tranche des éléments à convertir : [indice, nombre de tranches]. */
+  shard: [number, number];
 }
 
 export type ConvertMessage =
@@ -59,7 +61,7 @@ import json
 import ifcopenshell
 import ifc_to_glb
 
-_result = ifc_to_glb.convert(ifcopenshell.open('/tmp/model.ifc'), progress=report_progress)
+_result = ifc_to_glb.convert(ifcopenshell.open('/tmp/model.ifc'), shard=(shard_index, shard_count), progress=report_progress)
 with open('/tmp/model.glb', 'wb') as _out:
     _out.write(_result.glb)
 with open('/tmp/model.json', 'w', encoding='utf-8') as _out:
@@ -70,7 +72,7 @@ _report
 `;
 
 scope.onmessage = async (event: MessageEvent<ConvertRequest>) => {
-  const { id, buffer, wheelUrl } = event.data;
+  const { id, buffer, wheelUrl, shard } = event.data;
   try {
     runtime ??= prepare(id, wheelUrl);
     const pyodide = await runtime.catch((error: unknown) => {
@@ -81,6 +83,8 @@ scope.onmessage = async (event: MessageEvent<ConvertRequest>) => {
     post({ id, type: 'status', message: 'Lecture de l’IFC…' });
     pyodide.FS.writeFile('/tmp/model.ifc', new Uint8Array(buffer));
     pyodide.globals.set('report_progress', (percent: number) => post({ id, type: 'progress', percent }));
+    pyodide.globals.set('shard_index', shard[0]);
+    pyodide.globals.set('shard_count', shard[1]);
     const report = JSON.parse(pyodide.runPython(CONVERT) as string) as Record<string, unknown>;
 
     const glb = pyodide.FS.readFile('/tmp/model.glb') as Uint8Array;

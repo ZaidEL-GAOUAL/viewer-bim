@@ -1,4 +1,4 @@
-import { compareValues, type PropertyStore } from './metadata.ts';
+import { PATH_SEP, compareValues, type PropertyStore } from './metadata.ts';
 
 export interface TreeGroup {
   /** Clé unique dans l'arbre (chemin des libellés depuis la racine). */
@@ -51,7 +51,10 @@ export function suggestGrouping(store: PropertyStore): string | undefined {
   if (candidates.length === 0) return undefined;
   const bestCoverage = Math.max(...candidates.map((candidate) => candidate.coverage));
   const covered = candidates.filter((candidate) => candidate.coverage >= bestCoverage * 0.9);
-  const rank = (candidate: { size: number }) => (candidate.size >= 3 ? candidate.size : 1000 + candidate.size);
+  // Une propriété générale (« Niveau », « Catégorie ») passe avant une propriété rangée dans une
+  // catégorie (« Dimensions / Hauteur ») : elle décrit mieux l'organisation du modèle.
+  const rank = (candidate: { path: string; size: number }) =>
+    (candidate.path.includes(PATH_SEP) ? 10_000 : 0) + (candidate.size >= 3 ? candidate.size : 1000 + candidate.size);
   covered.sort((a, b) => rank(a) - rank(b));
   return covered[0].path;
 }

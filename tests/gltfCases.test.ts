@@ -95,3 +95,20 @@ test('la fermeture d’un élément ne tient compte que de ses pièces opaques',
   assert.equal(model.chunks.length, 2);
   assert.equal(model.state.isOpen(0), false);
 });
+
+test('deux éléments aux faces confondues : le plus petit est celui que l’on voit et que l’on clique', async () => {
+  const { Ray, Vector3 } = await import('three');
+  const slab = { name: 'Dalle', mesh: 0, scale: [10, 1, 10], extras: { id: 'dalle' } };
+  // Poutre noyée : même épaisseur que la dalle, dessus et dessous dans les mêmes plans.
+  const strip = { name: 'Bande noyée', mesh: 0, translation: [3, 0, 4], scale: [4, 1, 1], extras: { id: 'bande' } };
+  for (const nodes of [[slab, strip], [strip, slab]]) {
+    const model = await buildFromNodes(nodes, [0, 1], CUBE);
+    const down = (x: number, z: number) => model.raycast(new Ray(new Vector3(x - model.offset.x, 50, z - model.offset.z), new Vector3(0, -1, 0)));
+    const onStrip = down(5, 4.5);
+    assert.ok(onStrip);
+    assert.equal(model.keys[onStrip.element], 'bande');
+    const besideStrip = down(5, 8);
+    assert.ok(besideStrip);
+    assert.equal(model.keys[besideStrip.element], 'dalle');
+  }
+});

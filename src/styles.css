@@ -732,6 +732,7 @@ button[aria-pressed='true'] {
   flex-direction: column;
   gap: 10px;
   width: 300px;
+  max-width: calc(100% - 24px); /* vue étroite : les cartes ne débordent pas sur le panneau voisin */
   max-height: calc(100% - 24px);
 }
 
@@ -797,6 +798,10 @@ button[aria-pressed='true'] {
 .flip {
   width: 28px;
   padding: 0;
+}
+
+.conversion-card .hint.warning {
+  color: var(--danger);
 }
 
 .conversion-actions {
