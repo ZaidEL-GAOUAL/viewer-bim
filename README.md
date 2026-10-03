@@ -80,11 +80,12 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   la géométrie a changé (déplacements, ajouts) ou pour un modèle ouvert tel quel, le viewer
   réécrit le fichier depuis ce qui est affiché (couleurs par sommet, sans textures). « JSON ↓ »
   télécharge les métadonnées, modifications comprises.
-- **Quick Look Apple** : « Voir sur Apple » ouvre le USDZ dans le viewer natif de Safari sur
-  iPhone et iPad. Sur Mac, le lien télécharge le USDZ : sélectionnez-le dans le Finder et
-  appuyez sur Espace. Un USDZ chargé ou issu de la conversion d'un IFC est prêt immédiatement ;
-  pour les autres formats ou après une modification, le premier clic prépare un USDZ à jour,
-  puis un second clic l'ouvre. Le fichier est préparé localement, sans envoi à un serveur.
+- **Aperçu Apple** : « Voir sur Apple » ouvre Quick Look dans Safari sur iPhone et iPad.
+  Sur Mac avec Safari 27 ou ultérieur, il affiche le USDZ dans un aperçu natif intégré à la page
+  (élément HTML `model`). Si le navigateur ne dispose pas de cet aperçu, le bouton explique
+  la compatibilité requise et ne télécharge aucun fichier. Un USDZ chargé ou issu de la conversion
+  d'un IFC est prêt immédiatement ; sinon, le clic prépare un USDZ à jour et ouvre l'aperçu.
+  Quick Look sur mobile nécessite alors un second clic. Le fichier reste local, sans envoi à un serveur.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
 - **Assistant** (onglet de gauche) : une conversation avec un modèle de langage qui interroge

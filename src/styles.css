@@ -97,6 +97,49 @@ select:hover:not(:disabled),
   cursor: progress;
 }
 
+.apple-preview {
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.apple-preview::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.apple-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.apple-preview-heading h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.apple-preview-model {
+  display: block;
+  width: 100%;
+  height: min(60dvh, 580px);
+  background-color: var(--viewport);
+}
+
+.apple-preview-hint {
+  color: var(--muted);
+}
+
+.apple-preview-unavailable {
+  width: min(520px, calc(100vw - 32px));
+}
+
 button:disabled,
 select:disabled,
 input:disabled {

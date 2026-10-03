@@ -15,6 +15,7 @@ import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
+import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { MeasurePanel } from './MeasurePanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
@@ -119,6 +120,7 @@ export class App {
   private quickLookUrl: string | null = null;
   private quickLookRevision = 0;
   private quickLookPreparing = false;
+  private readonly applePreview = new ApplePreview();
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   private matched = 0;
   fileName = '';
@@ -179,15 +181,21 @@ export class App {
     // Le fichier reste local : l'URL blob n'envoie jamais la maquette à un serveur.
     this.quickLookLink = h('a', {
       class: 'quick-look',
-      title: 'Quick Look sur iPhone et iPad (Safari) ; sur Mac, télécharger le USDZ puis l’ouvrir avec Espace dans le Finder',
-      attrs: { href: '#', rel: 'ar', 'aria-label': 'Voir sur Apple' },
+      title: 'Quick Look sur iPhone et iPad ; aperçu natif dans Safari 27 ou ultérieur sur Mac',
+      attrs: { href: '#', 'aria-label': 'Voir sur Apple', ...(this.applePreview.mode === 'quick-look' ? { rel: 'ar' } : { 'aria-haspopup': 'dialog' }) },
     }, h('img', { attrs: { src: `${import.meta.env.BASE_URL}quick-look.svg`, alt: '', width: '18', height: '18' } }));
     this.quickLookLink.addEventListener('click', (event) => {
+      if (this.applePreview.mode === 'unavailable') {
+        event.preventDefault();
+        this.applePreview.show(null, this.fileName);
+        return;
+      }
       if (!this.quickLookUrl || this.quickLookPreparing) {
         event.preventDefault();
         if (!this.quickLookPreparing) void this.prepareQuickLook();
-      } else if (!this.quickLookLink.relList.supports('ar')) {
-        this.toast('Sur Mac, ouvrez le fichier USDZ téléchargé dans le Finder, puis appuyez sur Espace pour Quick Look.');
+      } else if (this.applePreview.mode === 'model') {
+        event.preventDefault();
+        this.applePreview.show(this.quickLookUrl, this.fileName);
       }
     });
     // Fichiers produits par la conversion d'un IFC : téléchargeables tant que ce modèle est affiché.
@@ -755,12 +763,15 @@ export class App {
     }
     // Une conversion en cours ne doit pas créer un lien vers une ancienne version du modèle.
     if (model === this.model && revision === this.quickLookRevision && extension === 'usdz') {
-      this.setQuickLook(blob, name);
+      this.setQuickLook(blob);
     }
     if (kind === 'quicklook') {
       if (model === this.model && this.quickLookUrl) {
-        // Un second clic garde une vraie activation utilisateur après la conversion asynchrone.
-        this.toast('Le modèle est prêt. Cliquez de nouveau sur « Voir sur Apple » pour l’ouvrir.');
+        if (this.applePreview.mode === 'model') this.applePreview.show(this.quickLookUrl, this.fileName);
+        else {
+          // Quick Look mobile demande une vraie activation utilisateur après la conversion asynchrone.
+          this.toast('Le modèle est prêt. Cliquez de nouveau sur « Voir sur Apple » pour l’ouvrir.');
+        }
       }
       return;
     }
@@ -770,13 +781,12 @@ export class App {
   }
 
   /** Le lien reste valide pendant toute la consultation native, jusqu'au prochain changement. */
-  private setQuickLook(blob: Blob | null, name = this.fileName.replace(/\.[^.]+$/, '')): void {
+  private setQuickLook(blob: Blob | null): void {
+    this.applePreview.close();
     this.quickLookRevision++;
     if (this.quickLookUrl) URL.revokeObjectURL(this.quickLookUrl);
     this.quickLookUrl = blob ? URL.createObjectURL(blob) : null;
-    this.quickLookLink.href = this.quickLookUrl ?? '#';
-    if (blob) this.quickLookLink.download = `${name}.usdz`;
-    else this.quickLookLink.removeAttribute('download');
+    this.quickLookLink.href = this.applePreview.mode === 'quick-look' ? (this.quickLookUrl ?? '#') : '#';
   }
 
   private async prepareQuickLook(): Promise<void> {
