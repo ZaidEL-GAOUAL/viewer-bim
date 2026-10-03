@@ -21,7 +21,7 @@ ALLOWED_ORIGINS = "https://zaidel-gaoual.github.io,http://localhost:5173,http://
 # Modèle Workers AI par défaut (doit savoir appeler des fonctions).
 MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 # Relais optionnels, utilisés quand Workers AI refuse (quota du jour atteint, panne).
-# Leurs clés sont des secrets : tableau de bord Cloudflare → Workers → viewer-bim-assistant →
+# Leurs clés sont des secrets : tableau de bord Cloudflare → Workers → viewer-bim →
 # Settings → Variables and Secrets (GROQ_API_KEY, CEREBRAS_API_KEY).
 GROQ_MODEL = "llama-3.3-70b-versatile"
 CEREBRAS_MODEL = "llama-3.3-70b"
