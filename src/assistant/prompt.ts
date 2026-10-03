@@ -4,8 +4,9 @@
 import { PATH_SEP, UNDEFINED_LABEL, type PropertyStore } from '../data/metadata.ts';
 
 const MAX_GENERAL = 40;
-const MAX_CATEGORIES = 40;
-const VALUES_LISTED = 10;
+const MAX_CATEGORIES = 30;
+const VALUES_LISTED = 20;
+const LINE_CHARS = 320;
 const EXAMPLES = 4;
 
 export interface ModelSummary {
@@ -14,7 +15,22 @@ export interface ModelSummary {
   store: PropertyStore;
 }
 
-/** Résumé des propriétés : les générales avec leurs valeurs, les catégories avec leurs noms. */
+/** Une ligne de valeurs bornée en longueur : les premières, puis « +N autres ». */
+function valuesLine(values: string[]): string {
+  let text = '';
+  for (let i = 0; i < values.length; i++) {
+    const next = text ? `${text}, ${values[i]}` : values[i];
+    if (next.length > LINE_CHARS && i > 0) return `${text} … (+${values.length - i} autres)`;
+    text = next;
+  }
+  return text;
+}
+
+/**
+ * Résumé des propriétés : les générales avec leurs valeurs, les catégories par ordre de
+ * présence. Les catégories portées par presque aucun élément (un jeu de propriétés par porte,
+ * exporté par certains logiciels) sont comptées sans être listées.
+ */
 export function summarizeProperties(store: PropertyStore): string {
   const general: string[] = [];
   const categories = new Map<string, string[]>();
@@ -40,7 +56,7 @@ export function summarizeProperties(store: PropertyStore): string {
         .sort((a, b) => b[1].length - a[1].length)
         .map(([label, members]) => `${label} (${members.length})`);
       const missing = groups.get(UNDEFINED_LABEL)?.length ?? 0;
-      lines.push(`- ${path}${lock} : ${values.join(', ')}${missing > 0 ? ` ; non défini (${missing})` : ''}`);
+      lines.push(`- ${path}${lock} : ${valuesLine(values)}${missing > 0 ? ` ; non défini (${missing})` : ''}`);
     } else {
       const examples: string[] = [];
       for (const label of store.groups(path).keys()) {
@@ -48,17 +64,36 @@ export function summarizeProperties(store: PropertyStore): string {
         examples.push(label);
         if (examples.length >= EXAMPLES) break;
       }
-      lines.push(`- ${path}${lock} : plus de ${VALUES_LISTED} valeurs distinctes, ex. ${examples.join(', ')}`);
+      lines.push(`- ${path}${lock} : plus de ${VALUES_LISTED} valeurs distinctes, ex. ${valuesLine(examples)}`);
     }
   }
   if (general.length > MAX_GENERAL) lines.push(`- … et ${general.length - MAX_GENERAL} autres propriétés générales (voir list_properties)`);
 
-  const categoryLines: string[] = [];
-  for (const [category, names] of [...categories.entries()].slice(0, MAX_CATEGORIES)) {
-    const lock = store.isEditable(`${category}${PATH_SEP}${names[0]}`) ? '' : ' [verrouillée]';
-    categoryLines.push(`- ${category}${lock} : ${names.slice(0, 12).join(', ')}${names.length > 12 ? `, … (${names.length} au total)` : ''}`);
+  // Présence de chaque catégorie : nombre d'éléments qui ont au moins une de ses propriétés.
+  const coverage = new Map<string, number>();
+  for (let i = 0; i < store.count; i++) {
+    const props = store.propsOf(i);
+    if (!props) continue;
+    const seen = new Set<string>();
+    for (const path of Object.keys(props)) {
+      const cut = path.lastIndexOf(PATH_SEP);
+      if (cut >= 0) seen.add(path.slice(0, cut));
+    }
+    for (const category of seen) coverage.set(category, (coverage.get(category) ?? 0) + 1);
   }
-  if (categories.size > MAX_CATEGORIES) categoryLines.push(`- … et ${categories.size - MAX_CATEGORIES} autres catégories (voir list_properties)`);
+  const rareBelow = Math.max(2, Math.ceil(store.count * 0.01));
+  const ranked = [...categories.keys()].sort((a, b) => (coverage.get(b) ?? 0) - (coverage.get(a) ?? 0) || a.localeCompare(b, 'fr'));
+  const common = ranked.filter((category) => (coverage.get(category) ?? 0) >= rareBelow);
+  const rare = ranked.length - common.length;
+
+  const categoryLines: string[] = [];
+  for (const category of common.slice(0, MAX_CATEGORIES)) {
+    const names = categories.get(category)!;
+    const lock = store.isEditable(`${category}${PATH_SEP}${names[0]}`) ? '' : ' [verrouillée]';
+    categoryLines.push(`- ${category}${lock} (${coverage.get(category)} éléments) : ${valuesLine(names)}`);
+  }
+  if (common.length > MAX_CATEGORIES) categoryLines.push(`- … et ${common.length - MAX_CATEGORIES} autres catégories (voir list_properties)`);
+  if (rare > 0) categoryLines.push(`- … et ${rare} catégories rares, portées chacune par moins de ${rareBelow} éléments (voir list_properties)`);
 
   let text = lines.length > 0 ? `Propriétés générales :\n${lines.join('\n')}` : 'Aucune propriété générale.';
   if (categoryLines.length > 0) text += `\n\nCatégories (propriété = « Catégorie / Nom ») :\n${categoryLines.join('\n')}`;

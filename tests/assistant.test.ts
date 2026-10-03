@@ -110,8 +110,8 @@ test('le message système résume les propriétés sans dépasser quelques milli
   const { store } = sampleContext();
   const summary = summarizeProperties(store);
   assert.match(summary, /- Niveau \[verrouillée\] : RDC \(3\), R\+1 \(2\) ; non défini \(1\)/);
-  assert.match(summary, /Pset_WallCommon : FireRating/);
-  assert.match(summary, /Qto_WallBaseQuantities \[verrouillée\] : NetVolume/);
+  assert.match(summary, /Pset_WallCommon \(2 éléments\) : FireRating/);
+  assert.match(summary, /Qto_WallBaseQuantities \[verrouillée\] \(2 éléments\) : NetVolume/);
   const prompt = buildSystemPrompt({ fileName: 'test.glb', count: 6, store });
   assert.match(prompt, /« test.glb », 6 éléments, 5 avec des propriétés/);
   assert.match(prompt, /verrouillées .* : Classe IFC, Niveau, Matériaux, Qto_\*/);
@@ -128,8 +128,22 @@ test('le message système résume les propriétés sans dépasser quelques milli
   const wideSummary = summarizeProperties(wide);
   assert.ok(wideSummary.length < 8000, `résumé de ${wideSummary.length} caractères`);
   assert.match(wideSummary, /et 41 autres propriétés générales/);
-  assert.match(wideSummary, /et 20 autres catégories/);
-  assert.match(wideSummary, /Identifiant : plus de 10 valeurs distinctes, ex\. ID-0/);
+  assert.match(wideSummary, /et 30 autres catégories/);
+
+  // Des catégories portées par un seul élément (un jeu de propriétés par porte) sont comptées, pas listées.
+  const doors = new PropertyStore(400);
+  for (let i = 0; i < 400; i++) {
+    const props: Record<string, PropValue> = { 'Classe IFC': 'IfcDoor', 'Pset_DoorCommon / IsExternal': i % 2 === 0 };
+    props[`Porte ${i} / PanelOperation`] = 'SWING';
+    doors.set(i, props);
+  }
+  doors.finalize();
+  const doorSummary = summarizeProperties(doors);
+  assert.match(doorSummary, /^- Pset_DoorCommon \(400 éléments\) : IsExternal$/m);
+  assert.match(doorSummary, /et 400 catégories rares, portées chacune par moins de 4 éléments/);
+  assert.doesNotMatch(doorSummary, /Porte 12 /);
+  assert.ok(doorSummary.length < 1500, `résumé de ${doorSummary.length} caractères`);
+  assert.match(wideSummary, /Identifiant : plus de 20 valeurs distinctes, ex\. ID-0/);
 });
 
 test('trimHistory garde le message système et des échanges complets', () => {
