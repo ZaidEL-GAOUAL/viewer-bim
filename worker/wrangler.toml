@@ -1,6 +1,6 @@
 # Worker Cloudflare « assistant » : relais entre le viewer (site statique) et un LLM.
 # Déployé par .github/workflows/deploy.yml (wrangler-action) ou à la main : npx wrangler deploy
-name = "viewer-bim-assistant"
+name = "viewer-bim"
 main = "src/index.ts"
 compatibility_date = "2025-09-01"
 workers_dev = true

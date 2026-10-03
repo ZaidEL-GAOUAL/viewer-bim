@@ -14,14 +14,14 @@ Deux façons de déployer le worker ; la première ne demande aucun jeton.
 
 | Champ | Valeur |
 | --- | --- |
-| Project / Worker name | `viewer-bim-assistant` |
+| Project / Worker name | `viewer-bim` |
 | Root directory | `worker` |
 | Build command | *(vide)* |
 | Deploy command | `npx wrangler deploy` |
 
 Cloudflare installe `wrangler` (version fixée dans `worker/package.json`) et déploie à chaque
 push sur `main`. À la fin, il affiche l'adresse du worker :
-`https://viewer-bim-assistant.<sous-domaine>.workers.dev`.
+`https://viewer-bim.<sous-domaine>.workers.dev`.
 
 Puis, dans GitHub, dire au site où est le worker : **Settings → Secrets and variables →
 Actions → onglet Variables → New repository variable** : `ASSISTANT_URL` = cette adresse.
@@ -41,7 +41,7 @@ l'indique) ; tout le reste fonctionne.
   gratuit de 10 000 neurones par jour (≈ 90 à 130 requêtes avec nos outils). Au-delà, Cloudflare
   refuse jusqu'au lendemain ; rien n'est facturé.
 - Relais facultatifs quand Workers AI refuse : **Groq** et **Cerebras** (paliers gratuits, sans
-  carte). Créer une clé chez eux, puis dans Cloudflare → Workers & Pages → `viewer-bim-assistant`
+  carte). Créer une clé chez eux, puis dans Cloudflare → Workers & Pages → `viewer-bim`
   → Settings → Variables and Secrets : `GROQ_API_KEY`, `CEREBRAS_API_KEY`. Modèles dans
   `wrangler.toml` (`GROQ_MODEL`, `CEREBRAS_MODEL`).
 - `ALLOWED_ORIGINS` (`wrangler.toml`) : seuls ces sites peuvent appeler le worker. À compléter
