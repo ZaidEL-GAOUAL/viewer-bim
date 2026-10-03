@@ -85,7 +85,12 @@ function workersAi(env: Env): Provider {
     name: 'Cloudflare Workers AI',
     model,
     async run(messages, tools) {
-      const input: Record<string, unknown> = { messages, max_tokens: MAX_TOKENS, temperature: 0.2 };
+      // OpenAI autorise content: null lors d'un appel d'outil ; le binding Workers AI
+      // exige une chaîne. Garder les appels et leurs identifiants pour relier les résultats.
+      const workerMessages = messages.map((message) => isRecord(message) && message.content === null
+        ? { ...message, content: '' }
+        : message);
+      const input: Record<string, unknown> = { messages: workerMessages, max_tokens: MAX_TOKENS, temperature: 0.2 };
       if (tools.length > 0) input.tools = tools;
       const output = await env.AI.run(model, input);
       if (!isRecord(output)) throw new Error('réponse inattendue du modèle');

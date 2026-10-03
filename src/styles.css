@@ -56,13 +56,15 @@ body {
 
 button,
 select,
-input {
+input,
+.quick-look {
   font: inherit;
   color: inherit;
 }
 
 button,
-select {
+select,
+.quick-look {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--border);
@@ -72,8 +74,27 @@ select {
 }
 
 button:hover:not(:disabled),
-select:hover:not(:disabled) {
+select:hover:not(:disabled),
+.quick-look:hover {
   border-color: var(--muted);
+}
+
+.quick-look {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* Un seul enfant img dans le lien : le libellé visuel vient du nom accessible. */
+.quick-look::after {
+  content: attr(aria-label);
+}
+
+.quick-look[aria-busy='true'] {
+  opacity: 0.45;
+  cursor: progress;
 }
 
 button:disabled,

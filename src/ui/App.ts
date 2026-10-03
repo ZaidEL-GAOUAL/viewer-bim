@@ -115,6 +115,10 @@ export class App {
   format: ModelFormat = 'glb';
   private readonly formatButtons = new Map<ModelFormat, HTMLButtonElement>();
   private modelDownload!: HTMLButtonElement;
+  private quickLookLink!: HTMLAnchorElement;
+  private quickLookUrl: string | null = null;
+  private quickLookRevision = 0;
+  private quickLookPreparing = false;
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   private matched = 0;
   fileName = '';
@@ -171,10 +175,26 @@ export class App {
 
     this.isolateButton = button('Isoler', () => this.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
     this.maskButton = button('Masquer', () => this.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
+    // Safari exige un lien rel="ar" avec un seul enfant img pour ouvrir Quick Look.
+    // Le fichier reste local : l'URL blob n'envoie jamais la maquette à un serveur.
+    this.quickLookLink = h('a', {
+      class: 'quick-look',
+      title: 'Quick Look sur iPhone et iPad (Safari) ; sur Mac, télécharger le USDZ puis l’ouvrir avec Espace dans le Finder',
+      attrs: { href: '#', rel: 'ar', 'aria-label': 'Voir sur Apple' },
+    }, h('img', { attrs: { src: `${import.meta.env.BASE_URL}quick-look.svg`, alt: '', width: '18', height: '18' } }));
+    this.quickLookLink.addEventListener('click', (event) => {
+      if (!this.quickLookUrl || this.quickLookPreparing) {
+        event.preventDefault();
+        if (!this.quickLookPreparing) void this.prepareQuickLook();
+      } else if (!this.quickLookLink.relList.supports('ar')) {
+        this.toast('Sur Mac, ouvrez le fichier USDZ téléchargé dans le Finder, puis appuyez sur Espace pour Quick Look.');
+      }
+    });
     // Fichiers produits par la conversion d'un IFC : téléchargeables tant que ce modèle est affiché.
     this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
       (this.modelDownload = button('GLB ↓', () => void this.download('model'), { title: 'Télécharger le fichier 3D issu de la conversion de l’IFC' })),
       (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger les métadonnées (JSON), modifications comprises' })),
+      this.quickLookLink,
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
     window.addEventListener('beforeunload', (event) => {
@@ -577,6 +597,9 @@ export class App {
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
         const installed = await this.installModel(ticket, loaded.source, candidates, modelFile.file.name);
         if (!installed) return;
+        if (/\.usdz$/i.test(modelFile.file.name)) {
+          this.setQuickLook(modelFile.file.slice(0, modelFile.file.size, 'model/vnd.usdz+zip'));
+        }
         const metadata = this.metadata;
         if (missingTextures.length > 0) {
           this.toast(`Modèle affiché sans ${missingTextures.length > 1 ? 'ses textures' : 'sa texture'} (« ${missingTextures.join(' », « ')} ») : déposez le dossier complet pour ${missingTextures.length > 1 ? 'les' : 'la'} charger.`, true);
@@ -668,6 +691,7 @@ export class App {
     this.conversionText.classList.toggle('warning', failedCount > 0);
     this.conversionEl.hidden = false;
     this.syncDownloads();
+    if (produced.extension === 'usdz') this.setQuickLook(produced.model);
   }
 
   /** Les métadonnées courantes (fichier JSON, `extras` du modèle et modifications réunis), au format du contrat. */
@@ -681,9 +705,10 @@ export class App {
    * Télécharge le fichier 3D issu de la conversion, ou les métadonnées. Le JSON reflète toujours
    * les modifications faites dans le viewer ; un paquet USD est reconstruit pour les contenir.
    */
-  private async download(kind: 'model' | 'json'): Promise<void> {
+  private async download(kind: 'model' | 'json' | 'quicklook'): Promise<void> {
     const model = this.model;
     if (!model) return;
+    const revision = this.quickLookRevision;
     const conversion = this.conversion;
     const name = conversion?.name ?? this.fileName.replace(/\.[^.]+$/, '');
     let blob: Blob;
@@ -691,7 +716,7 @@ export class App {
     if (kind === 'json') {
       blob = new Blob([this.exportMetadata()], { type: 'application/json' });
       extension = 'json';
-    } else if (conversion && !this.geometryChanged) {
+    } else if (conversion && !this.geometryChanged && (kind !== 'quicklook' || conversion.extension === 'usdz')) {
       blob = conversion.model;
       extension = conversion.extension;
       if (this.edits > 0 && extension === 'usdz') {
@@ -711,8 +736,8 @@ export class App {
       this.busy('Écriture du fichier 3D…');
       try {
         await nextFrame();
-        const glb = writeGlb(model);
-        if (this.format === 'usd') {
+        const glb = conversion && !this.geometryChanged ? conversion.glb : writeGlb(model);
+        if (this.format === 'usd' || kind === 'quicklook') {
           const usdz = await packageUsd(glb, this.exportMetadata(), (message) => this.busy(message));
           blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
           extension = 'usdz';
@@ -728,9 +753,41 @@ export class App {
         this.busy(null);
       }
     }
+    // Une conversion en cours ne doit pas créer un lien vers une ancienne version du modèle.
+    if (model === this.model && revision === this.quickLookRevision && extension === 'usdz') {
+      this.setQuickLook(blob, name);
+    }
+    if (kind === 'quicklook') {
+      if (model === this.model && this.quickLookUrl) {
+        // Un second clic garde une vraie activation utilisateur après la conversion asynchrone.
+        this.toast('Le modèle est prêt. Cliquez de nouveau sur « Voir sur Apple » pour l’ouvrir.');
+      }
+      return;
+    }
     const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${name}.${extension}` } });
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+  }
+
+  /** Le lien reste valide pendant toute la consultation native, jusqu'au prochain changement. */
+  private setQuickLook(blob: Blob | null, name = this.fileName.replace(/\.[^.]+$/, '')): void {
+    this.quickLookRevision++;
+    if (this.quickLookUrl) URL.revokeObjectURL(this.quickLookUrl);
+    this.quickLookUrl = blob ? URL.createObjectURL(blob) : null;
+    this.quickLookLink.href = this.quickLookUrl ?? '#';
+    if (blob) this.quickLookLink.download = `${name}.usdz`;
+    else this.quickLookLink.removeAttribute('download');
+  }
+
+  private async prepareQuickLook(): Promise<void> {
+    this.quickLookPreparing = true;
+    this.quickLookLink.setAttribute('aria-busy', 'true');
+    try {
+      await this.download('quicklook');
+    } finally {
+      this.quickLookPreparing = false;
+      this.quickLookLink.removeAttribute('aria-busy');
+    }
   }
 
   /** Le fichier 3D se télécharge dès qu'un modèle est affiché ; le JSON dès qu'il y a des métadonnées. */
@@ -835,6 +892,7 @@ export class App {
   }
 
   private afterGeometry(): void {
+    this.setQuickLook(null);
     this.viewer.modelChanged();
     this.syncDownloads();
     this.updateStats();
@@ -866,6 +924,7 @@ export class App {
     }
     if (changed === 0) return false;
     this.edits += changed;
+    this.setQuickLook(null);
     this.lastEdit = { path };
     this.syncDownloads();
     this.updateStats();
@@ -1013,6 +1072,7 @@ export class App {
   private rebuildStore(): void {
     const model = this.model;
     if (!model) return;
+    this.setQuickLook(null);
     const store = new PropertyStore(model.count);
     for (let i = 0; i < model.count; i++) {
       const entry = this.metadata?.elements.get(model.keys[i]);
