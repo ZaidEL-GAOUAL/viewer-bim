@@ -1,0 +1,12 @@
+{
+  "name": "viewer-bim-assistant",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

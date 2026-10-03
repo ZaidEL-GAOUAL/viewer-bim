@@ -5,23 +5,35 @@ modèle de langage. Il garde les clés et le quota ; le viewer lui envoie la con
 résumé des propriétés du modèle, les questions, les résultats des outils), jamais le fichier
 entier. Les outils eux-mêmes (`src/assistant/tools.ts`) tournent dans le navigateur.
 
-## Ce qu'il faut, une fois
+## Mise en place, une fois
 
-1. Un compte Cloudflare (gratuit, e-mail seulement). Dans le tableau de bord, ouvrir
-   **Workers & Pages** une première fois : Cloudflare demande de choisir un sous-domaine
-   `*.workers.dev` ; c'est l'adresse publique du worker.
-2. Un **jeton d'API** (My Profile → API Tokens → Create Token → modèle « Edit Cloudflare
-   Workers »), et l'**identifiant du compte** (Account ID, affiché dans Workers & Pages, à droite).
-3. Dans le dépôt GitHub : **Settings → Secrets and variables → Actions → New repository secret**,
-   deux secrets : `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID`.
+Deux façons de déployer le worker ; la première ne demande aucun jeton.
 
-Le workflow de déploiement (`.github/workflows/deploy.yml`) déploie alors le worker à chaque
-`git push`, puis construit le site avec son adresse. Sans ces secrets, le site se déploie sans
-assistant (l'onglet l'indique).
+**A. Cloudflare suit le dépôt Git** (Workers & Pages → Create → Import a repository, choisir
+`viewer-bim`) :
 
-Si l'adresse du worker n'est pas reprise automatiquement, la fixer à la main : **Settings →
-Secrets and variables → Actions → Variables → `ASSISTANT_URL`** (par exemple
-`https://viewer-bim-assistant.<sous-domaine>.workers.dev`).
+| Champ | Valeur |
+| --- | --- |
+| Project / Worker name | `viewer-bim-assistant` |
+| Root directory | `worker` |
+| Build command | *(vide)* |
+| Deploy command | `npx wrangler deploy` |
+
+Cloudflare installe `wrangler` (version fixée dans `worker/package.json`) et déploie à chaque
+push sur `main`. À la fin, il affiche l'adresse du worker :
+`https://viewer-bim-assistant.<sous-domaine>.workers.dev`.
+
+Puis, dans GitHub, dire au site où est le worker : **Settings → Secrets and variables →
+Actions → onglet Variables → New repository variable** : `ASSISTANT_URL` = cette adresse.
+Relancer le workflow (Actions → Run workflow) ou faire un push : le site est reconstruit avec.
+
+**B. GitHub déploie le worker** (`.github/workflows/deploy.yml`) : deux secrets dans le dépôt,
+`CLOUDFLARE_API_TOKEN` (jeton « Edit Cloudflare Workers ») et `CLOUDFLARE_ACCOUNT_ID`. Le
+workflow déploie le worker puis construit le site avec son adresse. Sans ces secrets, cette
+étape est sautée.
+
+Dans les deux cas, sans adresse de worker, le site se déploie sans assistant (l'onglet
+l'indique) ; tout le reste fonctionne.
 
 ## Modèles et relais
 
