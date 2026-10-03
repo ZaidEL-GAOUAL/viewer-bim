@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compactHistory, trimHistory, type Message } from '../src/assistant/client.ts';
+import { compileExpression } from '../src/assistant/expression.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
@@ -163,7 +164,7 @@ test('trimHistory garde le message système et des échanges complets', () => {
 
 test('les définitions d’outils sont au format OpenAI et nomment des outils implémentés', () => {
   const names = TOOL_DEFINITIONS.map((tool) => tool.function.name);
-  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'set_property']);
+  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'compute', 'set_property']);
   for (const tool of TOOL_DEFINITIONS) {
     assert.equal(tool.type, 'function');
     assert.equal(tool.function.parameters.type, 'object');
@@ -188,4 +189,57 @@ test('compactHistory abrège les résultats d’outils des tours précédents', 
   assert.ok(tool.content.startsWith(long.slice(0, 100)));
   assert.match(tool.content, /abrégé/);
   assert.equal(messages[4].content, 'r');
+});
+
+test('compileExpression : arithmétique, comparaisons, logique, fonctions, erreurs', () => {
+  const resolve = (name: string) => ({ volume: 'Qto / NetVolume', l: 'L', h: 'H', porteur: 'Porteur', feu: 'Feu', classe: 'Classe IFC' })[name.toLowerCase()] ?? name;
+  const props: Record<string, PropValue> = { 'Qto / NetVolume': 5.6, L: 10, H: 2.8, Porteur: true, Feu: '', 'Classe IFC': 'IfcWall' };
+  const lookup = (path: string) => props[path];
+  const evaluate = (text: string) => compileExpression(text, resolve).evaluate(lookup);
+  assert.ok(Math.abs(evaluate('[volume] - [L] * [H] * 0.2') as number) < 1e-9);
+  assert.equal(evaluate('round([L] / 3, 2)'), 3.33);
+  assert.equal(evaluate('abs(-[L]) + min([L], [H]) + max(1, 2)'), 14.8);
+  assert.equal(evaluate('[porteur] == true and [feu] == null'), true);
+  assert.equal(evaluate('[classe] == "ifcwall" and not ([L] < 5 or [H] > 3)'), true);
+  assert.equal(evaluate('[L] >= 10 and [L] != 11'), true);
+  assert.equal(evaluate('[Inconnue] == null'), true, 'une propriété absente vaut null');
+  assert.equal(evaluate('1,5 + 1'), 2.5, 'virgule décimale acceptée');
+  assert.deepEqual(compileExpression('[volume] + [L]', resolve).paths, ['Qto / NetVolume', 'L']);
+  assert.throws(() => compileExpression('[L] +', resolve), /incomplète/);
+  assert.throws(() => compileExpression('volume * 2', resolve), /crochets/);
+  assert.throws(() => compileExpression('[L] + (2', resolve), /parenthèse/);
+  assert.throws(() => compileExpression('[L] $ 2', resolve), /inattendu/);
+});
+
+test('compute : sommes et conditions calculées par le viewer, pas par le modèle', () => {
+  const { context } = sampleContext();
+  const total = runTool('compute', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], expression: '[NetVolume]' }, context);
+  const sum = total.result as { computed: number; skipped: number; sum: number; mean: number; min: number; max: number; examples: { label: string; value: number }[] };
+  assert.equal(sum.computed, 2);
+  assert.equal(sum.sum, 7.7);
+  assert.equal(sum.mean, 3.85);
+  assert.deepEqual([sum.min, sum.max], [2.1, 5.6]);
+  assert.deepEqual(sum.examples.map((item) => [item.label, item.value]), [['Mur A', 5.6], ['Mur B', 2.1]]);
+  assert.equal(total.note, 'Calcul sur 2 éléments : somme 7,7');
+
+  // Éléments sans la propriété : ignorés et comptés, pas inventés.
+  const all = runTool('compute', { filters: [], expression: '[NetVolume] * 2' }, context).result as { computed: number; skipped: number; note: string };
+  assert.equal(all.computed, 2);
+  assert.equal(all.skipped, 4);
+  assert.match(all.note, /4 éléments ignorés/);
+
+  // Condition logique entre propriétés : murs sans résistance au feu.
+  const check = runTool('compute', { filters: [], where: '[Classe IFC] == "IfcWall" and [FireRating] == null' }, context);
+  const found = check.result as { matching: number; examples: { label: string }[] };
+  assert.equal(found.matching, 1);
+  assert.equal(found.examples[0].label, 'Mur B');
+  assert.equal(check.note, 'Condition vraie pour 1 élément sur 6');
+
+  // Formule et condition ensemble : seuls les éléments retenus sont calculés.
+  const both = runTool('compute', { filters: [], expression: '[NetVolume]', where: '[NetVolume] > 3' }, context).result as { matching: number; sum: number };
+  assert.deepEqual([both.matching, both.sum], [1, 5.6]);
+
+  assert.match(runTool('compute', { filters: [], expression: '[Inexistante] + 1' }, context).note, /introuvable/);
+  assert.match(runTool('compute', { filters: [], expression: '[NetVolume] +' }, context).note, /illisible/);
+  assert.match(runTool('compute', { filters: [] }, context).note, /manquante/);
 });

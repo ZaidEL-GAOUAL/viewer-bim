@@ -116,6 +116,6 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
     '- Utilise le nom exact des propriétés tel qu’il apparaît ci-dessus (ou dans list_properties).',
     '- Pour modifier ou ajouter des propriétés, utilise set_property. Avant une modification qui touche beaucoup d’éléments ou dont le périmètre est flou, vérifie d’abord avec find_elements et annonce le nombre d’éléments concernés. Après une modification, dis exactement ce qui a changé (propriété, valeur, nombre d’éléments). L’utilisateur peut tout annuler.',
     '- Si la demande est ambiguë (plusieurs propriétés possibles, valeur imprécise), pose une question courte plutôt que de choisir au hasard.',
-    '- Les quantités (surfaces, volumes) viennent des propriétés du modèle : ne les calcule pas toi-même.',
+    '- Ne fais aucun calcul toi-même (sommes, moyennes, vérifications de formules) : utilise compute, qui calcule sur tous les éléments. Les quantités (surfaces, volumes) sont des propriétés du modèle.',
   ].join('\n');
 }

@@ -82,9 +82,11 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   affichent le panneau de gauche et celui de droite.
 - **Assistant** (onglet de gauche) : une conversation avec un modèle de langage qui interroge
   et complète les métadonnées — « combien d'éléments par niveau ? », « quels murs n'ont pas de
-  résistance au feu ? », « mets le lot Gros œuvre sur les murs du RDC ». Le modèle ne reçoit
-  jamais le fichier : il appelle des outils (compter, chercher, lire une fiche, sélectionner,
-  modifier) exécutés dans le navigateur, et seuls leurs résultats lui sont envoyés. Les
+  résistance au feu ? », « mets le lot Gros œuvre sur les murs du RDC », « surface totale des
+  dalles du R+1 ? », « quels murs ont un volume incohérent avec leurs dimensions ? ». Le modèle
+  ne reçoit jamais le fichier : il appelle des outils (compter, chercher, lire une fiche,
+  sélectionner, calculer une formule sur tous les éléments, modifier) exécutés dans le
+  navigateur, et seuls leurs résultats lui sont envoyés — les chiffres viennent du code. Les
   propriétés verrouillées lui sont interdites comme à tout le monde, ses modifications se
   comptent et s'annulent comme les vôtres. Le service tourne sur un worker Cloudflare gratuit
   (voir `worker/README.md`) ; sans lui, l'onglet le signale et tout le reste fonctionne.

@@ -2,6 +2,7 @@
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
 import { PATH_SEP, UNDEFINED_LABEL, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
+import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
 
 export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less';
 
@@ -86,6 +87,23 @@ export const TOOL_DEFINITIONS = [
       name: 'select_elements',
       description: 'Sélectionne et cadre dans la vue 3D les éléments vérifiant les filtres ; isolate=true masque les autres.',
       parameters: { type: 'object', properties: { filters: FILTERS, scope: SCOPE, isolate: { type: 'boolean', description: 'N’afficher que ces éléments.' } }, required: ['filters'] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'compute',
+      description: 'Calcule une formule sur chaque élément vérifiant les filtres (le viewer fait le calcul, pas toi) : somme, moyenne, min, max, et les éléments où une condition est vraie. Propriétés entre crochets : [Qto_WallBaseQuantities / NetVolume] - [Length] * [Height] * 0.2 ; condition : [LoadBearing] == true and [FireRating] == null. Opérateurs : + - * / < <= > >= == != and or not, abs() min() max() round().',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          expression: { type: 'string', description: 'Formule numérique par élément (facultatif si where est donné).' },
+          where: { type: 'string', description: 'Condition par élément ; renvoie les éléments où elle est vraie (facultatif).' },
+        },
+        required: ['filters'],
+      },
     },
   },
   {
@@ -313,6 +331,78 @@ export function runTool(name: string, args: Record<string, unknown>, context: To
       const isolate = args.isolate === true;
       context.select(indices, isolate);
       return { result: { count: indices.length, isolated: isolate }, note: `${plural(indices.length, 'élément')} ${isolate ? 'isolé' : 'sélectionné'}${indices.length > 1 ? 's' : ''}` };
+    }
+
+    case 'compute': {
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      const compile = (text: unknown): Expression | null | { error: string } => {
+        if (typeof text !== 'string' || text.trim() === '') return null;
+        try {
+          return compileExpression(text, (name) => {
+            const path = resolveProperty(store, name);
+            if (typeof path !== 'string') throw new ExpressionError(path.error);
+            return path;
+          });
+        } catch (error) {
+          return { error: `Formule illisible : ${error instanceof Error ? error.message : String(error)}` };
+        }
+      };
+      const expression = compile(args.expression);
+      const where = compile(args.where);
+      if (expression && 'error' in expression) return { result: expression, note: expression.error };
+      if (where && 'error' in where) return { result: where, note: where.error };
+      if (!expression && !where) return { result: { error: 'Donnez expression et/ou where.' }, note: 'Formule manquante' };
+
+      const indices = selectIndices(context, filters, args.scope);
+      const stats = { elements: indices.length, computed: 0, skipped: 0, sum: 0, min: Infinity, max: -Infinity };
+      const matching: number[] = [];
+      const values = new Map<number, number>();
+      for (const index of indices) {
+        const props = store.propsOf(index);
+        const lookup = (path: string) => ownValue(props, path);
+        if (where) {
+          const ok: Value = where.evaluate(lookup);
+          if (ok !== true) continue;
+          matching.push(index);
+        }
+        if (expression) {
+          const value = expression.evaluate(lookup);
+          if (typeof value !== 'number' || !Number.isFinite(value)) {
+            stats.skipped++;
+            continue;
+          }
+          stats.computed++;
+          stats.sum += value;
+          stats.min = Math.min(stats.min, value);
+          stats.max = Math.max(stats.max, value);
+          values.set(index, value);
+        }
+      }
+      const paths = [...new Set([...(expression?.paths ?? []), ...(where?.paths ?? [])])];
+      const shown = (where ? matching : [...values.keys()]).slice(0, DETAIL_LIMIT);
+      const examples = shown.map((index) => {
+        const summary = elementSummary(context, index, paths);
+        if (values.has(index)) summary.value = Number(values.get(index)!.toPrecision(10));
+        return summary;
+      });
+      const result: Record<string, unknown> = { elements: indices.length, shown: examples.length, examples };
+      if (where) result.matching = matching.length;
+      if (expression) {
+        Object.assign(result, {
+          computed: stats.computed,
+          skipped: stats.skipped,
+          sum: Number(stats.sum.toPrecision(10)),
+          mean: stats.computed > 0 ? Number((stats.sum / stats.computed).toPrecision(10)) : null,
+          min: stats.computed > 0 ? stats.min : null,
+          max: stats.computed > 0 ? stats.max : null,
+        });
+        if (stats.skipped > 0) result.note = `${stats.skipped} éléments ignorés : propriété absente ou non numérique.`;
+      }
+      const note = where
+        ? `Condition vraie pour ${plural(matching.length, 'élément')} sur ${indices.length}`
+        : `Calcul sur ${plural(stats.computed, 'élément')} : somme ${Number(stats.sum.toPrecision(6)).toLocaleString('fr-FR')}`;
+      return { result, note };
     }
 
     case 'set_property': {
