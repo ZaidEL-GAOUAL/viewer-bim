@@ -38,11 +38,16 @@ jobs:
       - name: Déploiement du worker Cloudflare (assistant)
         id: worker
         if: env.HAS_CLOUDFLARE == 'true'
+        # Un échec ici ne bloque pas le site : il se déploie alors sans assistant.
+        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
+          # Même version que worker/package-lock.json ; l'action installe sinon un wrangler 3,
+          # qui ne connaît pas [[ratelimits]].
+          wranglerVersion: '4.147.0'
           command: deploy
       - run: npm run build
         env:
