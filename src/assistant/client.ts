@@ -37,6 +37,8 @@ const MAX_ROUNDS = 6;
 const MAX_HISTORY = 40;
 /** Un résultat d'outil trop long est coupé : le modèle n'a pas besoin de tout. */
 const MAX_RESULT_CHARS = 8000;
+/** Taille gardée pour les résultats d'outils des tours précédents, renvoyés à chaque appel. */
+const OLD_RESULT_CHARS = 240;
 
 /** Adresse du worker : fixée au build (VITE_ASSISTANT_URL), ou le worker local en développement. */
 export function assistantUrl(): string {
@@ -94,10 +96,23 @@ function truncate(text: string): string {
 }
 
 /**
+ * Une fois un tour terminé, ses résultats d'outils n'ont plus besoin d'être renvoyés en entier :
+ * seuls les premiers caractères restent, pour que le modèle sache ce qu'il a déjà demandé.
+ */
+export function compactHistory(messages: Message[]): void {
+  for (const message of messages) {
+    if (message.role === 'tool' && message.content.length > OLD_RESULT_CHARS) {
+      message.content = `${message.content.slice(0, OLD_RESULT_CHARS)}… (résultat d’un tour précédent, abrégé)`;
+    }
+  }
+}
+
+/**
  * Un tour de conversation : la question de l'utilisateur, les appels d'outils que le modèle
  * demande (exécutés ici, dans le navigateur), puis sa réponse. `messages` est complété en place.
  */
 export async function runTurn(url: string, messages: Message[], userText: string, context: ToolContext, events: TurnEvents, signal?: AbortSignal): Promise<string> {
+  compactHistory(messages);
   messages.push({ role: 'user', content: userText });
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const reply = await chat(url, trimHistory(messages), signal);

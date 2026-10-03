@@ -70,7 +70,7 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
   return [
     'Tu es l’assistant d’un viewer de maquettes BIM. L’utilisateur regarde un modèle 3D dont chaque élément porte des propriétés (métadonnées) ; tu l’aides à les interroger, les vérifier et les compléter.',
     '',
-    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés.`,
+    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. Chaque élément a un identifiant, un nom (libellé) et des propriétés ; une propriété rangée dans une catégorie se nomme « Catégorie / Nom ».`,
     `Propriétés verrouillées (lecture seule, non modifiables, même sur demande) : ${locked}.`,
     '',
     summarizeProperties(store),

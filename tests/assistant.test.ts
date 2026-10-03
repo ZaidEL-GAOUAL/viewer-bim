@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { trimHistory, type Message } from '../src/assistant/client.ts';
+import { compactHistory, trimHistory, type Message } from '../src/assistant/client.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
@@ -157,4 +157,21 @@ test('les définitions d’outils sont au format OpenAI et nomment des outils im
       assert.ok((schema as { description?: string }).description, `${tool.function.name}.${name} sans description`);
     }
   }
+});
+
+test('compactHistory abrège les résultats d’outils des tours précédents', () => {
+  const long = JSON.stringify({ elements: Array.from({ length: 50 }, (_, i) => ({ label: `Élément ${i}` })) });
+  const messages: Message[] = [
+    { role: 'system', content: 'S' },
+    { role: 'user', content: 'q' },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'c', type: 'function', function: { name: 'find_elements', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c', content: long },
+    { role: 'assistant', content: 'r' },
+  ];
+  compactHistory(messages);
+  const tool = messages[3] as { content: string };
+  assert.ok(tool.content.length < 300, `${tool.content.length} caractères`);
+  assert.ok(tool.content.startsWith(long.slice(0, 100)));
+  assert.match(tool.content, /abrégé/);
+  assert.equal(messages[4].content, 'r');
 });

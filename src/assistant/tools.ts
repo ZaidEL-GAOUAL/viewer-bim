@@ -30,50 +30,43 @@ export interface ToolOutcome {
   note: string;
 }
 
-/** Définitions au format OpenAI (comprises par Workers AI, Groq, Cerebras). */
+/** Définitions au format OpenAI (comprises par Workers AI, Groq, Cerebras). Renvoyées à chaque appel : courtes. */
+const FILTERS = {
+  type: 'array',
+  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less. Liste vide = tous.',
+  items: { type: 'object', description: 'Filtre {property, op, value}.' },
+};
+const SCOPE = { type: 'string', description: '"model" (défaut) ou "selection" (éléments sélectionnés).' };
+
 export const TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
       name: 'list_properties',
-      description: 'Liste les propriétés disponibles dans le modèle, avec leur nombre de valeurs distinctes. Utile quand le nom exact d’une propriété est inconnu.',
-      parameters: {
-        type: 'object',
-        properties: { search: { type: 'string', description: 'Texte à chercher dans le nom des propriétés (facultatif).' } },
-      },
+      description: 'Propriétés du modèle avec leur nombre de valeurs distinctes.',
+      parameters: { type: 'object', properties: { search: { type: 'string', description: 'Texte cherché dans les noms (facultatif).' } } },
     },
   },
   {
     type: 'function',
     function: {
       name: 'count_by',
-      description: 'Compte les éléments par valeur d’une propriété (répartition). Exemple : combien d’éléments par niveau.',
-      parameters: {
-        type: 'object',
-        properties: {
-          property: { type: 'string', description: 'Nom de la propriété (ex. "Niveau", "Classe IFC", "Pset_WallCommon / FireRating").' },
-          scope: { type: 'string', description: '"model" (défaut) ou "selection" pour ne compter que les éléments sélectionnés.' },
-        },
-        required: ['property'],
-      },
+      description: 'Répartition des éléments par valeur d’une propriété.',
+      parameters: { type: 'object', properties: { property: { type: 'string', description: 'Nom de la propriété.' }, scope: SCOPE }, required: ['property'] },
     },
   },
   {
     type: 'function',
     function: {
       name: 'find_elements',
-      description: 'Cherche les éléments qui vérifient tous les filtres. Renvoie le nombre total et les premiers éléments avec les propriétés demandées.',
+      description: 'Éléments vérifiant les filtres : total et premiers éléments avec les propriétés demandées.',
       parameters: {
         type: 'object',
         properties: {
-          filters: {
-            type: 'array',
-            description: 'Filtres combinés par ET. Chaque filtre : {property, op, value}. op ∈ equals, not_equals, contains, missing (propriété absente ou vide), present, greater, less.',
-            items: { type: 'object', description: 'Un filtre {property, op, value}.' },
-          },
-          properties: { type: 'array', description: 'Propriétés à renvoyer pour chaque élément (facultatif).', items: { type: 'string', description: 'Nom de propriété.' } },
-          scope: { type: 'string', description: '"model" (défaut) ou "selection".' },
-          limit: { type: 'number', description: 'Nombre maximal d’éléments détaillés (défaut 20, maximum 50).' },
+          filters: FILTERS,
+          properties: { type: 'array', description: 'Propriétés à renvoyer (facultatif).', items: { type: 'string', description: 'Nom de propriété.' } },
+          scope: SCOPE,
+          limit: { type: 'number', description: 'Éléments détaillés (défaut 20, max 50).' },
         },
         required: ['filters'],
       },
@@ -83,42 +76,30 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'get_element',
-      description: 'Donne toutes les propriétés d’un élément, trouvé par son nom (libellé) ou son identifiant.',
-      parameters: {
-        type: 'object',
-        properties: { query: { type: 'string', description: 'Nom ou identifiant, même partiel.' } },
-        required: ['query'],
-      },
+      description: 'Toutes les propriétés d’un élément, par nom ou identifiant (même partiel).',
+      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Nom ou identifiant.' } }, required: ['query'] },
     },
   },
   {
     type: 'function',
     function: {
       name: 'select_elements',
-      description: 'Sélectionne dans la vue 3D les éléments qui vérifient les filtres et cadre la vue dessus. Avec isolate=true, masque tous les autres.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: { type: 'array', description: 'Filtres {property, op, value}, combinés par ET. Liste vide = tous les éléments.', items: { type: 'object', description: 'Un filtre.' } },
-          scope: { type: 'string', description: '"model" (défaut) ou "selection".' },
-          isolate: { type: 'boolean', description: 'true pour n’afficher que ces éléments.' },
-        },
-        required: ['filters'],
-      },
+      description: 'Sélectionne et cadre dans la vue 3D les éléments vérifiant les filtres ; isolate=true masque les autres.',
+      parameters: { type: 'object', properties: { filters: FILTERS, scope: SCOPE, isolate: { type: 'boolean', description: 'N’afficher que ces éléments.' } }, required: ['filters'] },
     },
   },
   {
     type: 'function',
     function: {
       name: 'set_property',
-      description: 'Donne une valeur à une propriété (existante ou nouvelle) pour tous les éléments qui vérifient les filtres. Refusé pour les propriétés verrouillées. Utiliser "Catégorie / Nom" pour ranger une nouvelle propriété dans une catégorie.',
+      description: 'Donne une valeur à une propriété (existante ou nouvelle, "Catégorie / Nom") sur les éléments vérifiant les filtres. Refusé si verrouillée.',
       parameters: {
         type: 'object',
         properties: {
-          filters: { type: 'array', description: 'Filtres {property, op, value}, combinés par ET. Liste vide = tous les éléments du périmètre.', items: { type: 'object', description: 'Un filtre.' } },
-          scope: { type: 'string', description: '"model" (défaut) ou "selection" pour ne modifier que la sélection courante.' },
-          property: { type: 'string', description: 'Propriété à modifier ou à créer.' },
-          value: { type: 'string', description: 'Nouvelle valeur (texte, nombre, true/false, ou null pour effacer).' },
+          filters: FILTERS,
+          scope: SCOPE,
+          property: { type: 'string', description: 'Propriété à modifier ou créer.' },
+          value: { type: 'string', description: 'Valeur : texte, nombre, true/false, ou null pour effacer.' },
         },
         required: ['filters', 'property', 'value'],
       },
