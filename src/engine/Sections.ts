@@ -31,6 +31,17 @@ export class Sections {
   }
 
   /** Adapte les bornes au modèle chargé et replace chaque plan au milieu. */
+  /** Élargit les bornes à une nouvelle boîte du modèle sans toucher aux plans en place. */
+  extendBounds(box: Box3): void {
+    const min = box.min.toArray();
+    const max = box.max.toArray();
+    for (const axis of AXES) {
+      this.min[axis] = Math.min(this.min[axis], min[axis]);
+      this.max[axis] = Math.max(this.max[axis], max[axis]);
+      this.update(axis);
+    }
+  }
+
   setBounds(box: Box3): void {
     const min = box.min.toArray();
     const max = box.max.toArray();

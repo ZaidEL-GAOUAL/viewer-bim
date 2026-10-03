@@ -75,9 +75,11 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   l'affichage d'avant. **Masquer** cache la sélection ; le même bouton devient « Démasquer » et
   la fait revenir, même après avoir désélectionné. **Tout afficher** réaffiche tous les éléments
   et recadre le modèle entier.
-- **Téléchargement** : après la conversion d'un IFC, le bouton « GLB ↓ » (ou « USD ↓ ») de la
-  barre d'outils reste disponible tant que ce modèle est affiché ; « JSON ↓ » l'est dès qu'un
-  modèle a des métadonnées, modifications comprises. Un paquet USD est réécrit avec elles.
+- **Téléchargement** : « GLB ↓ » (ou « USD ↓ », selon le format choisi) télécharge le fichier 3D
+  dès qu'un modèle est affiché. Après la conversion d'un IFC, c'est le fichier produit ; dès que
+  la géométrie a changé (déplacements, ajouts) ou pour un modèle ouvert tel quel, le viewer
+  réécrit le fichier depuis ce qui est affiché (couleurs par sommet, sans textures). « JSON ↓ »
+  télécharge les métadonnées, modifications comprises.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
 - **Assistant** (onglet de gauche) : une conversation avec un modèle de langage qui interroge
@@ -86,10 +88,19 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   dalles du R+1 ? », « quels murs ont un volume incohérent avec leurs dimensions ? ». Le modèle
   ne reçoit jamais le fichier : il appelle des outils (compter, chercher, lire une fiche,
   sélectionner, calculer une formule sur tous les éléments, modifier) exécutés dans le
-  navigateur, et seuls leurs résultats lui sont envoyés — les chiffres viennent du code. Les
-  propriétés verrouillées lui sont interdites comme à tout le monde, ses modifications se
-  comptent et s'annulent comme les vôtres. Le service tourne sur un worker Cloudflare gratuit
-  (voir `worker/README.md`) ; sans lui, l'onglet le signale et tout le reste fonctionne.
+  navigateur, et seuls leurs résultats lui sont envoyés — les chiffres viennent du code. Il lit
+  aussi la géométrie (centre, emprise, bas et haut de chaque élément) et peut **déplacer,
+  dupliquer et créer des éléments** : « ajoute une pièce de 4 × 4 m avec quatre murs et un sol
+  à côté du bâtiment ». Les propriétés verrouillées lui sont interdites comme à tout le monde,
+  ses modifications se comptent et s'annulent comme les vôtres. Le service tourne sur un worker
+  Cloudflare gratuit (voir `worker/README.md`) ; sans lui, l'onglet le signale et tout le reste
+  fonctionne.
+- **Déplacer, dupliquer, créer** : dans la fiche, « Déplacer ou dupliquer » décale la sélection
+  d'un vecteur en mètres ou en fait une copie décalée (propriétés comprises). Les éléments créés
+  (boîtes : murs provisoires, réservations, zones, mobilier simplifié) reçoivent un identifiant
+  au format IFC et une fiche qui garde leurs paramètres (`Boîte / Centre X`, `Taille X`,
+  `Rotation`…), de quoi les recréer ailleurs — dans un IFC, par exemple. « Annuler les
+  modifications » défait tout.
 
 Raccourcis : `F` cadrer, `H` masquer ou démasquer, `I` isoler ou ne plus isoler, `A` tout
 afficher, `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.

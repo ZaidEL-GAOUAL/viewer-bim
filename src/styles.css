@@ -707,6 +707,33 @@ button[aria-pressed='true'] {
   color: var(--accent);
 }
 
+.props-move {
+  padding: 6px 12px 4px;
+  border-top: 1px solid var(--border);
+}
+
+.props-move-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.props-move-fields input {
+  min-width: 0;
+  font: inherit;
+}
+
+.props-move-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.props-move .hint {
+  padding: 6px 0 0;
+  font-size: 11px;
+}
+
 /* ------------------------------------------------------------------ vue 3D */
 
 .viewport {

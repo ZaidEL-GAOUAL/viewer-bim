@@ -69,6 +69,8 @@ export class TreePanel {
         this.refreshLabels();
       }
     });
+    // Éléments ajoutés ou retirés : l'arbre est refait, groupes ouverts conservés.
+    app.on('structure', () => this.rebuild(true));
     app.on('visibility', () => this.refresh());
     app.on('selection', () => {
       this.refresh();

@@ -67,6 +67,7 @@ export class FilterPanel {
 
     app.on('model', () => this.reset());
     app.on('metadata', () => this.refreshPaths());
+    app.on('structure', () => this.refreshPaths());
     app.on('visibility', () => this.refreshChecks());
     this.reset();
   }

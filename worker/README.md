@@ -38,7 +38,7 @@ l'indique) ; tout le reste fonctionne.
 ## Modèles et relais
 
 - Par défaut : **Workers AI**, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, dans le quota
-  gratuit de 10 000 neurones par jour (≈ 80 questions par jour : chaque question coûte deux appels d’environ 1 800 jetons). Au-delà, Cloudflare
+  gratuit de 10 000 neurones par jour (≈ 60 questions par jour : chaque question coûte deux appels d’environ 2 500 jetons). Au-delà, Cloudflare
   refuse jusqu'au lendemain ; rien n'est facturé.
 - Relais facultatifs quand Workers AI refuse : **Groq** et **Cerebras** (paliers gratuits, sans
   carte). Créer une clé chez eux, puis dans Cloudflare → Workers & Pages → `viewer-bim`

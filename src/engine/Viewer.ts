@@ -163,6 +163,16 @@ export class Viewer {
     this.invalidate();
   }
 
+  /** Après une modification de la géométrie (éléments déplacés ou ajoutés) : bornes et rendu à jour. */
+  modelChanged(): void {
+    const model = this.model;
+    if (!model) return;
+    model.box.getBoundingSphere(this.sphere);
+    this.sections.extendBounds(model.box);
+    this.sectionsChanged();
+    this.invalidate();
+  }
+
   /** Cadre la caméra sur une boîte, en conservant la direction de vue sauf indication contraire. */
   fit(box: Box3, direction?: Vector3): void {
     if (box.isEmpty()) return;

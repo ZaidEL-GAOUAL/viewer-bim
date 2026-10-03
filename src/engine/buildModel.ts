@@ -586,5 +586,6 @@ export function buildModel(input: GLTF | ModelSource, selectColor: IUniform<Colo
     textures: [...keptTextures],
     stencilBack: stencilMaterial(BackSide, IncrementWrapStencilOp),
     stencilFront: stencilMaterial(FrontSide, DecrementWrapStencilOp),
+    selectColor,
   });
 }

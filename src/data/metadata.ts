@@ -174,7 +174,7 @@ export function compareValues(a: string, b: string): number {
 
 /** Propriétés de tous les éléments d'un modèle, indexées par numéro d'élément. */
 export class PropertyStore {
-  readonly count: number;
+  count: number;
   paths: string[] = [];
   matched = 0;
   /** Motifs des propriétés non modifiables. */
@@ -194,6 +194,25 @@ export class PropertyStore {
   set(index: number, props: FlatProps, label?: string): void {
     this.props[index] = props;
     this.labels[index] = label;
+  }
+
+  /** Fait de la place pour des éléments ajoutés au modèle (sans propriétés pour l'instant). */
+  grow(count: number): void {
+    while (this.count < count) {
+      this.props.push(undefined);
+      this.labels.push(undefined);
+      this.count++;
+    }
+  }
+
+  /** Oublie les derniers éléments (après le retrait d'éléments ajoutés). */
+  shrink(count: number): void {
+    if (count >= this.count) return;
+    this.props.length = count;
+    this.labels.length = count;
+    for (const index of this.owned) if (index >= count) this.owned.delete(index);
+    this.count = count;
+    this.finalize();
   }
 
   /** À appeler une fois toutes les propriétés enregistrées. */

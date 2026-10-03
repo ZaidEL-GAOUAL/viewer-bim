@@ -131,6 +131,20 @@ export class AssistantPanel {
         app.editProperty(indices, path, value);
         return app.edits - before;
       },
+      move: (indices, dx, dy, dz) => app.moveElements(indices, dx, dy, dz),
+      duplicate: (indices, dx, dy, dz) => {
+        const created = app.duplicateElements(indices, dx, dy, dz);
+        if (created.length > 0) app.select(created, 'panel');
+        return created;
+      },
+      addBoxes: (boxes) => {
+        const created = app.addBoxes(boxes);
+        if (created.length > 0) {
+          app.select(created, 'panel');
+          app.fitTo(created);
+        }
+        return created;
+      },
     };
   }
 

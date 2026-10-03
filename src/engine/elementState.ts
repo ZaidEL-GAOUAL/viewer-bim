@@ -25,21 +25,56 @@ export function depthPriority(flags: number, index: number): number {
  * à écrire un texel, quelle que soit la taille du modèle.
  */
 export class ElementState {
-  readonly count: number;
-  readonly data: Uint8Array;
-  readonly texture: DataTexture;
+  count: number;
+  data: Uint8Array;
+  texture: DataTexture;
+  /** Uniforme partagé par tous les matériaux : changer de texture (voir `grow`) les met tous à jour. */
+  readonly uniform: IUniform<DataTexture>;
 
   constructor(count: number) {
     this.count = count;
+    this.data = new Uint8Array(0);
+    this.texture = this.allocate(count);
+    for (let i = 0; i < count; i++) this.data[i * 4 + 3] = FLAG_VISIBLE;
+    this.uniform = { value: this.texture };
+  }
+
+  private allocate(count: number): DataTexture {
     const width = Math.max(1, Math.min(count, 1024));
     const height = Math.max(1, Math.ceil(count / width));
-    this.data = new Uint8Array(width * height * 4);
-    for (let i = 0; i < count; i++) this.data[i * 4 + 3] = FLAG_VISIBLE;
-    this.texture = new DataTexture(this.data, width, height, RGBAFormat, UnsignedByteType);
-    this.texture.minFilter = NearestFilter;
-    this.texture.magFilter = NearestFilter;
-    this.texture.generateMipmaps = false;
+    const data = new Uint8Array(width * height * 4);
+    data.set(this.data.subarray(0, Math.min(this.data.length, data.length)));
+    this.data = data;
+    const texture = new DataTexture(data, width, height, RGBAFormat, UnsignedByteType);
+    texture.minFilter = NearestFilter;
+    texture.magFilter = NearestFilter;
+    texture.generateMipmaps = false;
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  /** Fait de la place pour des éléments ajoutés (visibles, sans couleur) ; l'état existant est conservé. */
+  grow(count: number): void {
+    if (count <= this.count) return;
+    if (count * 4 > this.data.length) {
+      const previous = this.texture;
+      this.texture = this.allocate(count);
+      this.uniform.value = this.texture;
+      previous.dispose();
+    }
+    for (let i = this.count; i < count; i++) {
+      this.data[i * 4] = 0;
+      this.data[i * 4 + 1] = 0;
+      this.data[i * 4 + 2] = 0;
+      this.data[i * 4 + 3] = FLAG_VISIBLE;
+    }
+    this.count = count;
     this.texture.needsUpdate = true;
+  }
+
+  /** Oublie les derniers éléments (après un retrait) ; la texture garde sa taille. */
+  shrink(count: number): void {
+    if (count < this.count) this.count = count;
   }
 
   private setFlag(index: number, flag: number, on: boolean): void {
@@ -161,7 +196,7 @@ if ( bimHidden ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 /** Branche un matériau three.js sur la texture d'état des éléments. */
 export function applyElementState(material: Material, state: ElementState, selectColor: IUniform<Color>): void {
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.uElementState = { value: state.texture };
+    shader.uniforms.uElementState = state.uniform;
     shader.uniforms.uSelectColor = selectColor;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', `#include <common>\n${PARS}`)

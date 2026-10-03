@@ -1,6 +1,9 @@
 import { Box3 } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { IFC_READ_ONLY, PropertyStore, flattenProperties, mergeProperties, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
+import { IFC_READ_ONLY, PATH_SEP, PropertyStore, flattenProperties, mergeProperties, parseMetadata, type FlatProps, type Metadata, type PropValue } from '../data/metadata.ts';
+import { boxMesh, type BoxSpec } from '../engine/boxMesh.ts';
+import { writeGlb } from '../engine/writeGlb.ts';
+import { newGuid } from '../data/guid.ts';
 import { hexToRgb } from '../data/palette.ts';
 import { buildModel } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
@@ -18,12 +21,23 @@ import { PropertiesPanel } from './PropertiesPanel.ts';
 import { SectionPanel } from './SectionPanel.ts';
 import { TreePanel } from './TreePanel.ts';
 
-/** `metadata` : des propriétés ont été modifiées ou ajoutées sans que le modèle change. */
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata';
+/**
+ * `metadata` : des propriétés ont été modifiées ou ajoutées ; `geometry` : des éléments ont été
+ * déplacés ; `structure` : des éléments ont été ajoutés ou retirés (le modèle reste le même).
+ */
+export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'geometry' | 'structure';
 export type SelectionSource = 'view' | 'panel';
 export type Tool = 'select' | MeasureKind;
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 export type ModelFormat = 'glb' | 'usd';
+
+/** Une boîte à créer dans le viewer, avec sa fiche. */
+export interface BoxCreation extends BoxSpec {
+  name: string;
+  /** Couleur sRGB, 0 à 255. */
+  color?: [number, number, number];
+  properties?: FlatProps;
+}
 
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'select', label: 'Sélection', hint: 'Cliquer un élément pour afficher ses propriétés' },
@@ -95,6 +109,8 @@ export class App {
   edits = 0;
   /** Dernière modification, pour que les panneaux ne refassent que ce qui en dépend. */
   lastEdit: { path: string } | null = null;
+  /** Déplacements faits dans le viewer, dans l'ordre, pour pouvoir les annuler. */
+  private moves: { indices: number[]; delta: [number, number, number] }[] = [];
   private jsonDownload!: HTMLButtonElement;
   format: ModelFormat = 'glb';
   private readonly formatButtons = new Map<ModelFormat, HTMLButtonElement>();
@@ -274,6 +290,7 @@ export class App {
     this.setTool('select');
     this.updateStats();
     this.on('visibility', () => this.updateStats());
+    this.on('structure', () => this.updateStats());
     this.viewer.onMotionEnd = () => this.updateStats();
     this.on('visibility', () => this.syncIsolateButton());
     this.on('selection', () => this.syncIsolateButton());
@@ -396,7 +413,7 @@ export class App {
     if (this.isolation) {
       const saved = this.isolation;
       this.isolation = null;
-      for (let i = 0; i < model.count; i++) state.setVisible(i, saved[i] === 1);
+      for (let i = 0; i < model.count; i++) state.setVisible(i, i >= saved.length || saved[i] === 1);
       this.visibilityChanged();
     } else if (this.selection.size > 0) {
       this.isolate(this.selection);
@@ -674,8 +691,7 @@ export class App {
     if (kind === 'json') {
       blob = new Blob([this.exportMetadata()], { type: 'application/json' });
       extension = 'json';
-    } else {
-      if (!conversion) return;
+    } else if (conversion && !this.geometryChanged) {
       blob = conversion.model;
       extension = conversion.extension;
       if (this.edits > 0 && extension === 'usdz') {
@@ -690,18 +706,143 @@ export class App {
           this.busy(null);
         }
       }
+    } else {
+      // Géométrie modifiée, ou modèle ouvert tel quel : le fichier est réécrit depuis ce qui est affiché.
+      this.busy('Écriture du fichier 3D…');
+      try {
+        await nextFrame();
+        const glb = writeGlb(model);
+        if (this.format === 'usd') {
+          const usdz = await packageUsd(glb, this.exportMetadata(), (message) => this.busy(message));
+          blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
+          extension = 'usdz';
+        } else {
+          blob = new Blob([glb], { type: 'model/gltf-binary' });
+          extension = 'glb';
+        }
+      } catch (error) {
+        if (isOutOfMemory(error)) this.toast('Pas assez de mémoire pour réécrire ce modèle.', true);
+        else this.toast(`Impossible d’écrire le fichier 3D : ${error instanceof Error ? error.message : String(error)}`, true);
+        return;
+      } finally {
+        this.busy(null);
+      }
     }
     const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${name}.${extension}` } });
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
   }
 
-  /** Le fichier 3D se télécharge après une conversion ; le JSON dès qu'il y a des métadonnées. */
+  /** Le fichier 3D se télécharge dès qu'un modèle est affiché ; le JSON dès qu'il y a des métadonnées. */
   private syncDownloads(): void {
     const hasMetadata = this.store.matched > 0;
-    this.modelDownload.hidden = this.conversion === null;
+    this.modelDownload.hidden = this.model === null;
+    this.modelDownload.textContent = `${this.format === 'usd' && (this.conversion === null || this.conversion.extension === 'usdz') ? 'USD' : 'GLB'} ↓`;
+    this.modelDownload.title = this.conversion && !this.geometryChanged
+      ? 'Télécharger le fichier 3D issu de la conversion de l’IFC'
+      : 'Télécharger le fichier 3D tel qu’affiché (déplacements et ajouts compris, sans textures)';
     this.jsonDownload.hidden = !hasMetadata;
-    this.downloads.hidden = this.model === null || (this.conversion === null && !hasMetadata);
+    this.downloads.hidden = this.model === null;
+  }
+
+  /** Vrai si des éléments ont été déplacés ou ajoutés depuis le chargement. */
+  get geometryChanged(): boolean {
+    return this.moves.length > 0 || (this.model !== null && this.model.count > this.model.originalCount);
+  }
+
+  get addedCount(): number {
+    return this.model ? this.model.count - this.model.originalCount : 0;
+  }
+
+  /** Déplace des éléments d'un vecteur, en mètres (Y vertical). Renvoie le nombre d'éléments déplacés. */
+  moveElements(indices: Iterable<number>, dx: number, dy: number, dz: number): number {
+    const model = this.model;
+    if (!model || !(Number.isFinite(dx) && Number.isFinite(dy) && Number.isFinite(dz))) return 0;
+    const list = [...new Set(indices)].filter((index) => index >= 0 && index < model.count);
+    if (list.length === 0 || (dx === 0 && dy === 0 && dz === 0)) return 0;
+    model.translate(list, dx, dy, dz);
+    this.moves.push({ indices: list, delta: [dx, dy, dz] });
+    this.afterGeometry();
+    this.emit('geometry');
+    return list.length;
+  }
+
+  /** Copie des éléments, décalés, avec leurs propriétés. Renvoie les indices des copies. */
+  duplicateElements(indices: Iterable<number>, dx: number, dy: number, dz: number): number[] {
+    const model = this.model;
+    if (!model) return [];
+    const created: number[] = [];
+    for (const source of new Set(indices)) {
+      if (source < 0 || source >= model.count) continue;
+      const parts = model.copyParts(source, dx, dy, dz);
+      if (parts.length === 0) continue;
+      const key = newGuid();
+      const name = `${model.names[source]} (copie)`;
+      const index = model.addElement({ key, name, extras: model.extras[source] ? { ...model.extras[source] } : undefined, parts, closed: !model.state.isOpen(source) });
+      const props: FlatProps = { ...(this.store.propsOf(source) ?? {}) };
+      const label = this.store.labelOf(source);
+      this.registerCreated(index, key, props, label ? `${label} (copie)` : undefined, name);
+      created.push(index);
+    }
+    if (created.length > 0) this.afterStructure();
+    return created;
+  }
+
+  /** Ajoute des boîtes (murs provisoires, réservations, zones…) avec leur fiche. Renvoie leurs indices. */
+  addBoxes(specs: BoxCreation[]): number[] {
+    const model = this.model;
+    if (!model) return [];
+    const offset = model.offset.toArray() as [number, number, number];
+    const created: number[] = [];
+    for (const spec of specs) {
+      const mesh = boxMesh(spec, offset);
+      const color = spec.color ?? [176, 96, 96];
+      const key = newGuid();
+      const index = model.addElement({
+        key,
+        name: spec.name,
+        parts: [{ positions: mesh.positions, normals: mesh.normals, colors: new Uint8Array([color[0], color[1], color[2], 255]), index: mesh.index, transparent: false, doubleSided: false }],
+        closed: true,
+      });
+      // Les paramètres de la boîte restent dans la fiche : de quoi la recréer ailleurs (IFC, par exemple).
+      const props: FlatProps = { ...(spec.properties ?? {}) };
+      const put = (name: string, value: PropValue) => Object.defineProperty(props, `Boîte${PATH_SEP}${name}`, { value, enumerable: true, writable: true, configurable: true });
+      put('Centre X', spec.center[0]);
+      put('Centre Y', spec.center[1]);
+      put('Centre Z', spec.center[2]);
+      put('Taille X', spec.size[0]);
+      put('Taille Y (hauteur)', spec.size[1]);
+      put('Taille Z', spec.size[2]);
+      put('Rotation', spec.rotation ?? 0);
+      put('Créée dans le viewer', true);
+      this.registerCreated(index, key, props, spec.name, spec.name);
+      created.push(index);
+    }
+    if (created.length > 0) this.afterStructure();
+    return created;
+  }
+
+  private registerCreated(index: number, key: string, props: FlatProps, label: string | undefined, name: string): void {
+    // Si le fichier range le nom des éléments dans une propriété « Nom », l'élément créé suit la convention.
+    if (this.store.paths.includes('Nom')) Object.defineProperty(props, 'Nom', { value: name, enumerable: true, writable: true, configurable: true });
+    this.store.grow(index + 1);
+    this.store.set(index, props, label);
+    this.store.finalize();
+    // Enregistrée dans les métadonnées courantes : un rechargement du magasin la retrouve.
+    this.metadata ??= { version: 1, elements: new Map() };
+    this.metadata.elements.set(key, { label, props: { ...props } });
+    this.matched = this.countMatches(this.metadata);
+  }
+
+  private afterGeometry(): void {
+    this.viewer.modelChanged();
+    this.syncDownloads();
+    this.updateStats();
+  }
+
+  private afterStructure(): void {
+    this.afterGeometry();
+    this.emit('structure');
   }
 
   // ------------------------------------------------------------ modifications
@@ -734,9 +875,27 @@ export class App {
 
   /** Oublie toutes les modifications et revient aux métadonnées des fichiers. */
   revertEdits(): void {
-    if (this.edits === 0) return;
+    const model = this.model;
+    if (!model || (this.edits === 0 && !this.geometryChanged)) return;
+    // Les déplacements sont défaits dans l'ordre inverse, puis les éléments ajoutés retirés.
+    for (const move of this.moves.reverse()) {
+      const kept = move.indices.filter((index) => index < model.originalCount);
+      if (kept.length > 0) model.translate(kept, -move.delta[0], -move.delta[1], -move.delta[2]);
+    }
+    this.moves = [];
+    if (model.count > model.originalCount) {
+      for (let index = model.originalCount; index < model.count; index++) {
+        this.metadata?.elements.delete(model.keys[index]);
+        this.selection.delete(index);
+        this.masked.delete(index);
+      }
+      model.removeFrom(model.originalCount);
+      if (this.metadata && this.metadata.elements.size === 0 && !this.metadata.source) this.metadata = null;
+    }
     this.rebuildStore();
+    this.afterGeometry();
     this.emit('selection');
+    this.emit('visibility');
   }
 
   async loadSample(name: string): Promise<void> {
@@ -826,6 +985,7 @@ export class App {
     this.conversion = null;
     this.conversionEl.hidden = true;
     this.model = model;
+    this.moves = [];
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;
     let bestMatches = metadata ? this.countMatches(metadata) : 0;
@@ -929,6 +1089,8 @@ export class App {
     );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
     if (this.edits > 0) parts.push(`${integer.format(this.edits)} valeur${this.edits > 1 ? 's' : ''} modifiée${this.edits > 1 ? 's' : ''}`);
+    if (this.moves.length > 0) parts.push(`${integer.format(this.moves.length)} déplacement${this.moves.length > 1 ? 's' : ''}`);
+    if (this.addedCount > 0) parts.push(`${integer.format(this.addedCount)} élément${this.addedCount > 1 ? 's' : ''} ajouté${this.addedCount > 1 ? 's' : ''}`);
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
     if (frameTime > 0) {

@@ -7,6 +7,7 @@ import { button, clear, h, integer } from './dom.ts';
 const MULTI_LIMIT = 5000;
 const MIXED = '(valeurs multiples)';
 const ADD_TITLE = 'Ajouter une propriété';
+const MOVE_TITLE = 'Déplacer ou dupliquer';
 const LOCKED_HINT = 'Propriété verrouillée par le fichier de métadonnées : elle découle de la structure du modèle (classe, type, emplacement, matériaux, quantités) et ne se modifie pas ici.';
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
@@ -37,7 +38,7 @@ export class PropertiesPanel {
   private readonly revertButton: HTMLButtonElement;
   private titleEl: HTMLElement | null = null;
   /** Catégories repliées par l'utilisateur. */
-  private readonly folded = new Set<string>([ADD_TITLE]);
+  private readonly folded = new Set<string>([ADD_TITLE, MOVE_TITLE]);
 
   constructor(app: App) {
     this.app = app;
@@ -55,6 +56,8 @@ export class PropertiesPanel {
     // Une modification ne redessine pas la fiche (le champ en cours garderait difficilement le
     // focus) : seuls le titre et le bouton d'annulation suivent.
     app.on('metadata', () => this.syncEdits());
+    app.on('geometry', () => this.render());
+    app.on('structure', () => this.render());
     this.render();
   }
 
@@ -71,7 +74,7 @@ export class PropertiesPanel {
 
   private syncEdits(): void {
     const { app } = this;
-    this.revertButton.hidden = app.edits === 0;
+    this.revertButton.hidden = app.edits === 0 && !app.geometryChanged;
     const indices = [...app.selection];
     if (this.titleEl && indices.length === 1) this.titleEl.textContent = app.elementLabel(indices[0]);
   }
@@ -133,6 +136,7 @@ export class PropertiesPanel {
     }
 
     this.body.append(this.section(ADD_TITLE, this.addForm(indices)));
+    this.body.append(this.section(MOVE_TITLE, this.moveForm(indices)));
 
     const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
     const geometry = h('dl', { class: 'props' });
@@ -277,6 +281,31 @@ export class PropertiesPanel {
       });
     }
     return h('div', { class: 'props-add' }, name, value, button('Ajouter', submit, { title: 'Ajouter cette propriété à la sélection' }));
+  }
+
+  /** Déplacement (ou copie décalée) de la sélection, en mètres dans le repère du projet. */
+  private moveForm(indices: number[]): HTMLElement {
+    const { app } = this;
+    const fields = (['X', 'Y (vertical)', 'Z'] as const).map((axis) =>
+      h('input', { attrs: { type: 'number', step: 'any', value: '0', placeholder: axis, 'aria-label': `Décalage ${axis} en mètres`, title: `Décalage ${axis} (m)` } }),
+    );
+    const delta = () => fields.map((field) => (field.value.trim() === '' ? 0 : field.valueAsNumber)) as [number, number, number];
+    const move = button('Déplacer', () => {
+      const [dx, dy, dz] = delta();
+      if (![dx, dy, dz].every(Number.isFinite)) return;
+      if (app.moveElements(indices, dx, dy, dz) === 0) app.toast('Indiquez un décalage non nul.');
+    }, { title: 'Déplacer la sélection de ce vecteur' });
+    const duplicate = button('Dupliquer', () => {
+      const [dx, dy, dz] = delta();
+      if (![dx, dy, dz].every(Number.isFinite)) return;
+      const created = app.duplicateElements(indices, dx, dy, dz);
+      if (created.length > 0) app.select(created, 'panel');
+    }, { title: 'Copier la sélection, décalée de ce vecteur, avec ses propriétés' });
+    return h('div', { class: 'props-move' },
+      h('div', { class: 'props-move-fields' }, ...fields),
+      h('div', { class: 'props-move-actions' }, move, duplicate),
+      h('p', { class: 'hint', text: 'Décalage en mètres, dans le repère du projet (Y vers le haut).' }),
+    );
   }
 
   /** Catégorie pliable ; son état est conservé d'un élément à l'autre. */

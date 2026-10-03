@@ -30,6 +30,21 @@ export interface ToolContext {
   select(indices: number[], isolate: boolean): void;
   /** Nombre de valeurs changées, ou 'locked' si la propriété est verrouillée. */
   edit(indices: number[], path: string, value: PropValue): number | 'locked';
+  /** Déplace des éléments (mètres, Y vertical) ; renvoie le nombre déplacé. */
+  move(indices: number[], dx: number, dy: number, dz: number): number;
+  /** Copie des éléments, décalés ; renvoie les indices des copies. */
+  duplicate(indices: number[], dx: number, dy: number, dz: number): number[];
+  /** Crée des boîtes avec leur fiche ; renvoie leurs indices. */
+  addBoxes(boxes: BoxRequest[]): number[];
+}
+
+export interface BoxRequest {
+  name: string;
+  size: [number, number, number];
+  center: [number, number, number];
+  rotation?: number;
+  color?: [number, number, number];
+  properties?: Record<string, PropValue>;
 }
 
 export interface ToolOutcome {
@@ -111,6 +126,60 @@ export const TOOL_DEFINITIONS = [
           where: { type: 'string', description: 'Condition par élément ; renvoie les éléments où elle est vraie (facultatif).' },
         },
         required: ['filters'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'move_elements',
+      description: 'Déplace les éléments vérifiant les filtres d’un vecteur en mètres (dy = vertical).',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          dx: { type: 'number', description: 'Décalage X (m).' },
+          dy: { type: 'number', description: 'Décalage vertical (m).' },
+          dz: { type: 'number', description: 'Décalage Z (m).' },
+        },
+        required: ['filters', 'dx', 'dy', 'dz'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'duplicate_elements',
+      description: 'Copie les éléments vérifiant les filtres, décalés d’un vecteur en mètres, avec leurs propriétés.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          dx: { type: 'number', description: 'Décalage X (m).' },
+          dy: { type: 'number', description: 'Décalage vertical (m).' },
+          dz: { type: 'number', description: 'Décalage Z (m).' },
+        },
+        required: ['filters', 'dx', 'dy', 'dz'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_boxes',
+      description: 'Crée des boîtes (murs provisoires, réservations, zones, mobilier simplifié) dans le modèle, chacune avec sa fiche. Coordonnées du projet en mètres, Y vertical ; center = centre de la boîte (son bas est à center.y - size.y/2).',
+      parameters: {
+        type: 'object',
+        properties: {
+          boxes: {
+            type: 'array',
+            description: 'Boîtes : {name, size:[x,y,z], center:[x,y,z], rotation (degrés autour de la verticale, facultatif), color:[r,g,b] 0-255 (facultatif), properties:{…} (facultatif, ex. "Classe IFC", "Niveau")}.',
+            items: { type: 'object', description: 'Une boîte.' },
+          },
+        },
+        required: ['boxes'],
       },
     },
   },
@@ -296,6 +365,42 @@ function parseValue(raw: unknown): PropValue {
   return text;
 }
 
+function triple(raw: unknown, what: string): [number, number, number] | { error: string } {
+  const list = asList(raw);
+  if (!Array.isArray(list) || list.length !== 3) return { error: `${what} doit être [x, y, z] en mètres.` };
+  const values = list.map((item) => Number(String(item).replace(',', '.')));
+  if (!values.every(Number.isFinite)) return { error: `${what} doit contenir trois nombres.` };
+  return values as [number, number, number];
+}
+
+function parseBox(item: unknown): BoxRequest | { error: string } {
+  if (typeof item !== 'object' || item === null) return { error: 'Chaque boîte doit être un objet {name, size, center}.' };
+  const record = item as Record<string, unknown>;
+  const name = String(record.name ?? '').trim() || 'Boîte';
+  const size = triple(record.size, 'size');
+  if ('error' in size) return size;
+  if (size.some((value) => value <= 0)) return { error: 'size : les trois dimensions doivent être positives.' };
+  const center = triple(record.center, 'center');
+  if ('error' in center) return center;
+  const rotation = record.rotation === undefined ? 0 : Number(String(record.rotation).replace(',', '.'));
+  if (!Number.isFinite(rotation)) return { error: 'rotation doit être un nombre de degrés.' };
+  let color: [number, number, number] | undefined;
+  if (record.color !== undefined) {
+    const parsed = triple(record.color, 'color');
+    if ('error' in parsed) return parsed;
+    color = parsed.map((value) => Math.max(0, Math.min(255, Math.round(value)))) as [number, number, number];
+  }
+  const properties: Record<string, PropValue> = {};
+  const rawProps = typeof record.properties === 'string' ? asList(record.properties) : record.properties;
+  if (rawProps && typeof rawProps === 'object' && !Array.isArray(rawProps)) {
+    for (const [key, value] of Object.entries(rawProps as Record<string, unknown>)) {
+      const path = key.split('/').map((part) => part.trim()).filter(Boolean).join(PATH_SEP);
+      if (path) Object.defineProperty(properties, path, { value: parseValue(value), enumerable: true, writable: true, configurable: true });
+    }
+  }
+  return { name, size, center, rotation, color, properties };
+}
+
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
   return `${count.toLocaleString('fr-FR')} ${count > 1 ? pluralForm : singular}`;
 }
@@ -476,6 +581,43 @@ export function runTool(name: string, args: Record<string, unknown>, context: To
       return {
         result: { property: path, value, elements: indices.length, changed },
         note: `« ${path} » = ${value === null ? '(effacé)' : String(value)} sur ${plural(indices.length, 'élément')}`,
+      };
+    }
+
+    case 'move_elements':
+    case 'duplicate_elements': {
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      const [dx, dy, dz] = ['dx', 'dy', 'dz'].map((key) => Number(String(args[key] ?? 0).replace(',', '.')));
+      if (![dx, dy, dz].every(Number.isFinite)) return { result: { error: 'dx, dy, dz doivent être des nombres (mètres).' }, note: 'Décalage illisible' };
+      const indices = selectIndices(context, filters, args.scope);
+      if (indices.length === 0) return { result: { moved: 0, error: 'Aucun élément ne vérifie ces filtres.' }, note: 'Aucun élément concerné' };
+      if (indices.length > 500) return { result: { error: `${indices.length} éléments : trop pour une seule opération (maximum 500). Précisez les filtres.` }, note: 'Trop d’éléments' };
+      if (name === 'move_elements') {
+        const moved = context.move(indices, dx, dy, dz);
+        return { result: { moved, delta: [dx, dy, dz] }, note: `${plural(moved, 'élément')} déplacé${moved > 1 ? 's' : ''} de (${dx}, ${dy}, ${dz}) m` };
+      }
+      const created = context.duplicate(indices, dx, dy, dz);
+      return {
+        result: { created: created.length, elements: created.slice(0, DETAIL_LIMIT).map((index) => elementSummary(context, index, [])) },
+        note: `${plural(created.length, 'copie')} créée${created.length > 1 ? 's' : ''}, décalée${created.length > 1 ? 's' : ''} de (${dx}, ${dy}, ${dz}) m`,
+      };
+    }
+
+    case 'add_boxes': {
+      const raw = asList(args.boxes);
+      if (!Array.isArray(raw) || raw.length === 0) return { result: { error: 'boxes doit être une liste de boîtes.' }, note: 'Aucune boîte' };
+      if (raw.length > 100) return { result: { error: 'Au plus 100 boîtes par appel.' }, note: 'Trop de boîtes' };
+      const boxes: BoxRequest[] = [];
+      for (const item of raw) {
+        const box = parseBox(item);
+        if ('error' in box) return { result: box, note: box.error };
+        boxes.push(box);
+      }
+      const created = context.addBoxes(boxes);
+      return {
+        result: { created: created.length, elements: created.slice(0, DETAIL_LIMIT).map((index) => elementSummary(context, index, [])) },
+        note: `${plural(created.length, 'boîte')} créée${created.length > 1 ? 's' : ''} : ${boxes.slice(0, 4).map((box) => box.name).join(', ')}${boxes.length > 4 ? '…' : ''}`,
       };
     }
 

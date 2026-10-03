@@ -119,6 +119,16 @@ plutôt que d'une saisie : la classe, le type, l'emplacement (site, bâtiment, n
 matériaux et les quantités calculées. Le nom, la description, le repère et les jeux de
 propriétés (`Pset_…`) restent modifiables.
 
+## 2 ter. Éléments créés dans le viewer
+
+Un élément dupliqué ou créé (une boîte) reçoit un identifiant neuf au format `GlobalId` de
+l'IFC (22 caractères), présent dans le GLB réécrit (`extras.id`) et dans le JSON exporté. Une
+boîte garde ses paramètres dans sa fiche, catégorie « Boîte » : `Centre X`, `Centre Y`,
+`Centre Z` (coordonnées du projet, mètres, Y vertical), `Taille X`, `Taille Y (hauteur)`,
+`Taille Z`, `Rotation` (degrés autour de la verticale) et `Créée dans le viewer`. Un outil qui
+voudrait en faire de vrais objets IFC (IfcOpenShell, par exemple) a tout ce qu'il lui faut. Si le
+fichier range le nom des éléments dans une propriété `Nom`, l'élément créé la reçoit aussi.
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
