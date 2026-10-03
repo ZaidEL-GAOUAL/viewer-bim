@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r pipeline/requirements.txt pytest
+      - run: pip install -r pipeline/requirements.txt pytest usd-core
       - run: pytest pipeline/tests -q
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3

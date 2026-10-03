@@ -1,11 +1,13 @@
 import { Box3 } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { PropertyStore, flattenProperties, mergeProperties, parseMetadata, type Metadata } from '../data/metadata.ts';
+import { IFC_READ_ONLY, PropertyStore, flattenProperties, mergeProperties, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
 import { hexToRgb } from '../data/palette.ts';
 import { buildModel } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
-import { IfcTooLargeError, convertIfc, isIfcFile } from '../ifc/convertIfc.ts';
+import { IfcTooLargeError, convertIfc, isIfcFile, packageUsd } from '../ifc/convertIfc.ts';
+import { isUsdFile, loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
+import type { ModelSource } from '../engine/buildModel.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
@@ -15,9 +17,12 @@ import { PropertiesPanel } from './PropertiesPanel.ts';
 import { SectionPanel } from './SectionPanel.ts';
 import { TreePanel } from './TreePanel.ts';
 
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool';
+/** `metadata` : des propriétés ont été modifiées ou ajoutées sans que le modèle change. */
+export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata';
 export type SelectionSource = 'view' | 'panel';
 export type Tool = 'select' | MeasureKind;
+/** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
+export type ModelFormat = 'glb' | 'usd';
 
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'select', label: 'Sélection', hint: 'Cliquer un élément pour afficher ses propriétés' },
@@ -84,7 +89,15 @@ export class App {
   private conversionEl!: HTMLElement;
   private conversionText!: HTMLElement;
   /** Fichiers produits par la dernière conversion d'IFC, proposés au téléchargement. */
-  private conversion: { name: string; glb: Blob; json: string } | null = null;
+  private conversion: { name: string; model: Blob; extension: string; glb: ArrayBuffer } | null = null;
+  /** Nombre de valeurs modifiées dans le panneau Propriétés depuis le chargement du modèle. */
+  edits = 0;
+  /** Dernière modification, pour que les panneaux ne refassent que ce qui en dépend. */
+  lastEdit: { path: string } | null = null;
+  private jsonDownload!: HTMLButtonElement;
+  format: ModelFormat = 'glb';
+  private readonly formatButtons = new Map<ModelFormat, HTMLButtonElement>();
+  private modelDownload!: HTMLButtonElement;
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   private matched = 0;
   private fileName = '';
@@ -102,7 +115,7 @@ export class App {
 
     // ------------------------------------------------------------ barre d'outils
     const fileInput = h('input', {
-      attrs: { type: 'file', multiple: '', accept: '.ifc,.glb,.gltf,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
+      attrs: { type: 'file', multiple: '', accept: '.ifc,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
     });
     // Un .gltf vient souvent avec un .bin et un dossier de textures : on peut ouvrir le dossier entier.
     const folderInput = h('input', { attrs: { type: 'file', webkitdirectory: '', hidden: '' } });
@@ -143,9 +156,28 @@ export class App {
     this.maskButton = button('Masquer', () => this.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
     // Fichiers produits par la conversion d'un IFC : téléchargeables tant que ce modèle est affiché.
     this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
-      button('GLB ↓', () => this.downloadConversion('glb'), { title: 'Télécharger le fichier GLB (géométrie) issu de la conversion de l’IFC' }),
-      button('JSON ↓', () => this.downloadConversion('json'), { title: 'Télécharger le fichier JSON (métadonnées) issu de la conversion de l’IFC' }),
+      (this.modelDownload = button('GLB ↓', () => void this.download('model'), { title: 'Télécharger le fichier 3D issu de la conversion de l’IFC' })),
+      (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger les métadonnées (JSON), modifications comprises' })),
     );
+    // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
+    window.addEventListener('beforeunload', (event) => {
+      if (this.edits > 0) event.preventDefault();
+    });
+
+    // Format de sortie : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
+    // le format choisi, et c'est ce fichier qui est affiché et proposé au téléchargement.
+    const formats = h('div', { class: 'segmented formats', attrs: { role: 'group', 'aria-label': 'Format' } });
+    for (const [format, label, hint] of [['glb', 'GLB', 'Fichiers glTF binaires (.glb) : compacts, lus par tous les outils 3D'], ['usd', 'USD', 'Fichiers OpenUSD (.usdz) : métadonnées embarquées dans chaque élément']] as const) {
+      const element = button(label, () => this.setFormat(format), { title: hint });
+      this.formatButtons.set(format, element);
+      formats.append(element);
+    }
+    try {
+      if (localStorage.getItem('viewer-bim.format') === 'usd') this.format = 'usd';
+    } catch {
+      // stockage indisponible : on garde le format par défaut
+    }
+    this.syncFormat();
 
     // Boutons de repli des panneaux latéraux, aux deux extrémités de la barre.
     const panelToggle = (side: 'left' | 'right', label: string) => {
@@ -161,6 +193,7 @@ export class App {
     const topbar = h('header', { class: 'topbar' },
       panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
+      formats,
       h('div', { class: 'bar-group' },
         button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .glb ou .gltf et son .json de métadonnées' }),
         button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
@@ -185,7 +218,7 @@ export class App {
     this.emptyEl = h('div', { class: 'empty' },
       h('div', { class: 'empty-card' },
         h('h1', { text: 'Déposez un modèle' }),
-        h('p', { text: 'Un fichier .ifc (converti sur place), ou un .glb avec son .json de métadonnées, ou le dossier d’un .gltf (avec son .bin et ses textures).' }),
+        h('p', { text: 'Un fichier .ifc (converti sur place, en GLB ou en USD selon le format choisi en haut), un .glb ou un .usdz avec son .json de métadonnées, ou le dossier d’un .gltf (avec son .bin et ses textures).' }),
         h('div', { class: 'empty-actions' },
           button('Choisir des fichiers…', () => fileInput.click(), { class: 'primary' }),
           button('Choisir un dossier…', () => folderInput.click()),
@@ -204,8 +237,8 @@ export class App {
       ),
       this.conversionText,
       h('div', { class: 'conversion-actions' },
-        button('Télécharger le GLB', () => this.downloadConversion('glb')),
-        button('Télécharger le JSON', () => this.downloadConversion('json')),
+        button('Télécharger le fichier 3D', () => void this.download('model')),
+        button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
     const measurePanel = new MeasurePanel(this);
@@ -457,7 +490,7 @@ export class App {
     // Dans un dossier, on prend le modèle et le JSON les plus proches de la racine.
     const depth = (input: InputFile) => input.path.split('/').length;
     const byDepth = (matches: InputFile[]) => matches.sort((a, b) => depth(a) - depth(b));
-    const modelFiles = byDepth(inputs.filter((input) => isModelFile(input.file.name)));
+    const modelFiles = byDepth(inputs.filter((input) => isModelFile(input.file.name) || isUsdFile(input.file.name)));
     const modelFile = modelFiles[0] as InputFile | undefined;
     const jsonFiles = byDepth(inputs.filter((input) => /\.json$/i.test(input.file.name)));
     const ifcFile = byDepth(inputs.filter((input) => isIfcFile(input.file.name)))[0] as InputFile | undefined;
@@ -490,15 +523,31 @@ export class App {
           );
         }
         const siblings = inputs.filter((input) => input !== modelFile);
-        const { gltf, missingTextures, warnings } = await loadModelFiles(modelFile, siblings).catch((error: unknown) => {
-          if (error instanceof ModelFileError) throw error;
-          const detail = error instanceof Error ? error.message : String(error);
-          if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(modelFile.file.name));
-          throw new Error(`Impossible de lire « ${modelFile.file.name} » : ce n’est pas un fichier glTF valide (${detail}).`);
-        });
+        let loaded: { source: GLTF | ModelSource; missingTextures: string[]; warnings: string[] };
+        if (isUsdFile(modelFile.file.name)) {
+          const usd = await loadUsdFile(modelFile.file).catch((error: unknown) => {
+            if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(modelFile.file.name));
+            throw new Error(`Impossible de lire « ${modelFile.file.name} » : ${error instanceof Error ? error.message : String(error)}`);
+          });
+          // Les métadonnées embarquées dans l'USD servent si aucun JSON ne correspond mieux.
+          if (usd.metadata) {
+            usd.metadata.source = `${modelFile.file.name} (embarquées)`;
+            candidates.push(usd.metadata);
+          }
+          loaded = { source: usd.source, missingTextures: [], warnings: usd.warnings };
+        } else {
+          const { gltf, missingTextures, warnings } = await loadModelFiles(modelFile, siblings).catch((error: unknown) => {
+            if (error instanceof ModelFileError) throw error;
+            const detail = error instanceof Error ? error.message : String(error);
+            if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(modelFile.file.name));
+            throw new Error(`Impossible de lire « ${modelFile.file.name} » : ce n’est pas un fichier glTF valide (${detail}).`);
+          });
+          loaded = { source: gltf, missingTextures, warnings };
+        }
+        const { missingTextures, warnings } = loaded;
         // Un JSON déposé seul avant le modèle reste en attente et s'applique au premier modèle chargé.
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
-        const installed = await this.installModel(ticket, gltf, candidates, modelFile.file.name);
+        const installed = await this.installModel(ticket, loaded.source, candidates, modelFile.file.name);
         if (!installed) return;
         const metadata = this.metadata;
         if (missingTextures.length > 0) {
@@ -553,12 +602,27 @@ export class App {
     if (ticket !== this.loadTicket) return;
     if (!result.report.elements) throw new Error(`« ${file.name} » ne contient aucun élément avec une géométrie.`);
 
-    const glb = new File([result.glb], `${base}.glb`, { type: 'model/gltf-binary' });
     const metadata = this.readMetadata(result.metadata, `${base}.json`);
-    const { gltf } = await loadModelFiles({ file: glb, path: glb.name }, []);
-    if (!(await this.installModel(ticket, gltf, [metadata], file.name))) return;
+    let source: GLTF | ModelSource;
+    let produced: { model: Blob; extension: string };
+    if (this.format === 'usd') {
+      // Le paquet USDZ est écrit par le convertisseur, puis relu par le viewer : ce qui est
+      // affiché est exactement le fichier que l'on télécharge.
+      const usdz = await packageUsd(result.glb, result.metadata, (message) => {
+        if (ticket === this.loadTicket) this.busy(message);
+      });
+      if (ticket !== this.loadTicket) return;
+      source = loadUsda(usdaFromUsdz(usdz)).source;
+      produced = { model: new Blob([usdz], { type: 'model/vnd.usdz+zip' }), extension: 'usdz' };
+    } else {
+      const glb = new File([result.glb], `${base}.glb`, { type: 'model/gltf-binary' });
+      source = (await loadModelFiles({ file: glb, path: glb.name }, [])).gltf;
+      produced = { model: glb, extension: 'glb' };
+    }
+    if (!(await this.installModel(ticket, source, [metadata], `${base}.${produced.extension}`))) return;
 
-    this.conversion = { name: base, glb, json: result.metadata };
+    this.conversion = { name: base, glb: result.glb, ...produced };
+    this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
     const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
     const lines = [
       `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` sur ${workers} cœurs` : ''}, reliés à leurs propriétés par leur identifiant IFC.`,
@@ -575,16 +639,93 @@ export class App {
     this.conversionText.textContent = lines.join(' ');
     this.conversionText.classList.toggle('warning', failedCount > 0);
     this.conversionEl.hidden = false;
-    this.downloads.hidden = false;
+    this.syncDownloads();
   }
 
-  private downloadConversion(kind: 'glb' | 'json'): void {
+  /** Les métadonnées courantes (fichier JSON, `extras` du modèle et modifications réunis), au format du contrat. */
+  exportMetadata(): string {
+    const model = this.model;
+    if (!model) return '';
+    return JSON.stringify(this.store.export(model.keys));
+  }
+
+  /**
+   * Télécharge le fichier 3D issu de la conversion, ou les métadonnées. Le JSON reflète toujours
+   * les modifications faites dans le viewer ; un paquet USD est reconstruit pour les contenir.
+   */
+  private async download(kind: 'model' | 'json'): Promise<void> {
+    const model = this.model;
+    if (!model) return;
     const conversion = this.conversion;
-    if (!conversion) return;
-    const blob = kind === 'glb' ? conversion.glb : new Blob([conversion.json], { type: 'application/json' });
-    const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${conversion.name}.${kind}` } });
+    const name = conversion?.name ?? this.fileName.replace(/\.[^.]+$/, '');
+    let blob: Blob;
+    let extension: string;
+    if (kind === 'json') {
+      blob = new Blob([this.exportMetadata()], { type: 'application/json' });
+      extension = 'json';
+    } else {
+      if (!conversion) return;
+      blob = conversion.model;
+      extension = conversion.extension;
+      if (this.edits > 0 && extension === 'usdz') {
+        // Les métadonnées vivent dans le paquet USD lui-même : il est réécrit avec les valeurs du jour.
+        try {
+          const usdz = await packageUsd(conversion.glb, this.exportMetadata(), (message) => this.busy(message));
+          blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
+        } catch (error) {
+          this.toast(`Impossible de réécrire le paquet USD : ${error instanceof Error ? error.message : String(error)}`, true);
+          return;
+        } finally {
+          this.busy(null);
+        }
+      }
+    }
+    const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${name}.${extension}` } });
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+  }
+
+  /** Le fichier 3D se télécharge après une conversion ; le JSON dès qu'il y a des métadonnées. */
+  private syncDownloads(): void {
+    const hasMetadata = this.store.matched > 0;
+    this.modelDownload.hidden = this.conversion === null;
+    this.jsonDownload.hidden = !hasMetadata;
+    this.downloads.hidden = this.model === null || (this.conversion === null && !hasMetadata);
+  }
+
+  // ------------------------------------------------------------ modifications
+
+  /**
+   * Donne une valeur à une propriété des éléments indiqués (la crée si elle n'existe pas).
+   * Refusé pour les propriétés verrouillées. Renvoie vrai si quelque chose a changé.
+   */
+  editProperty(indices: readonly number[], path: string, value: PropValue): boolean {
+    const model = this.model;
+    if (!model || indices.length === 0 || !this.store.isEditable(path)) return false;
+    let changed = 0;
+    for (const index of indices) {
+      const before = this.store.propsOf(index)?.[path];
+      if (!this.store.update(index, path, value)) continue;
+      changed++;
+      // Un libellé qui reprenait la valeur modifiée (le nom de l'objet, en général) la suit.
+      if (before !== undefined && before !== null && this.store.labelOf(index) === String(before)) {
+        this.store.setLabel(index, value === null || value === '' ? undefined : String(value));
+      }
+    }
+    if (changed === 0) return false;
+    this.edits += changed;
+    this.lastEdit = { path };
+    this.syncDownloads();
+    this.updateStats();
+    this.emit('metadata');
+    return true;
+  }
+
+  /** Oublie toutes les modifications et revient aux métadonnées des fichiers. */
+  revertEdits(): void {
+    if (this.edits === 0) return;
+    this.rebuildStore();
+    this.emit('selection');
   }
 
   async loadSample(name: string): Promise<void> {
@@ -638,7 +779,21 @@ export class App {
   }
 
   /** Renvoie faux si le chargement a été abandonné au profit d'un plus récent. */
-  private async installModel(ticket: number, gltf: GLTF, candidates: Metadata[], name: string): Promise<boolean> {
+  setFormat(format: ModelFormat): void {
+    this.format = format;
+    try {
+      localStorage.setItem('viewer-bim.format', format);
+    } catch {
+      // stockage indisponible : le choix vaut pour la session
+    }
+    this.syncFormat();
+  }
+
+  private syncFormat(): void {
+    for (const [format, element] of this.formatButtons) element.setAttribute('aria-pressed', String(format === this.format));
+  }
+
+  private async installModel(ticket: number, gltf: GLTF | ModelSource, candidates: Metadata[], name: string): Promise<boolean> {
     if (ticket !== this.loadTicket) return false;
     this.busy('Optimisation de la géométrie…');
     await nextFrame();
@@ -659,7 +814,6 @@ export class App {
     this.masked.clear();
     this.conversion = null;
     this.conversionEl.hidden = true;
-    this.downloads.hidden = true;
     this.model = model;
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;
@@ -696,8 +850,13 @@ export class App {
       if (props) store.set(i, props, entry?.label);
     }
     store.finalize();
+    // Le fichier dit ce qui est verrouillé ; à défaut, des métadonnées issues d'un IFC (par un
+    // convertisseur plus ancien) gardent les verrous habituels.
+    store.readOnly = this.metadata?.readOnly ?? (store.paths.includes('Classe IFC') ? [...IFC_READ_ONLY] : []);
     this.store = store;
+    this.edits = 0;
     this.matched = this.metadata ? this.countMatches(this.metadata) : 0;
+    this.syncDownloads();
     for (let i = 0; i < model.count; i++) model.state.clearColor(i);
     model.state.commit();
     this.viewer.invalidate();
@@ -758,6 +917,7 @@ export class App {
         : 'sans fichier de métadonnées',
     );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
+    if (this.edits > 0) parts.push(`${integer.format(this.edits)} valeur${this.edits > 1 ? 's' : ''} modifiée${this.edits > 1 ? 's' : ''}`);
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
     if (frameTime > 0) {

@@ -208,5 +208,14 @@ def test_model_without_geometry_gives_an_empty_but_valid_glb():
     model = ifcopenshell.api.run("project.create_file", version="IFC4")
     ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcProject", name="Vide")
     empty = ifc_to_glb.convert(model)
-    assert empty.metadata == {"version": 1, "elements": {}}
+    assert empty.metadata == {"version": 1, "readOnly": ifc_to_glb.READ_ONLY, "elements": {}}
     assert empty.glb[:4] == b"glTF"
+
+
+def test_metadata_declare_the_properties_the_viewer_must_not_edit(result):
+    read_only = result.metadata["readOnly"]
+    assert read_only == ifc_to_glb.READ_ONLY
+    # La classe, la structure spatiale et les quantités y sont ; les jeux de propriétés restent modifiables.
+    assert {"Classe IFC", "Niveau", "Matériaux", "Qto_*"} <= set(read_only)
+    assert not any(item.startswith("Pset") for item in read_only)
+    assert json.loads(result.metadata_json())["readOnly"] == read_only

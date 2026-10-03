@@ -59,6 +59,16 @@ export class TreePanel {
       this.paths = suggestion ? [suggestion] : [];
       this.rebuild();
     });
+    // Une propriété modifiée ne refait l'arbre que si elle sert au regroupement ; sinon seuls
+    // les libellés changent, et les groupes ouverts le restent.
+    app.on('metadata', () => {
+      const edit = app.lastEdit;
+      if (edit && this.paths.includes(edit.path)) this.rebuild(true);
+      else {
+        this.renderHeader(); // une propriété nouvelle devient proposable comme niveau
+        this.refreshLabels();
+      }
+    });
     app.on('visibility', () => this.refresh());
     app.on('selection', () => {
       this.refresh();
@@ -111,8 +121,9 @@ export class TreePanel {
     }
   }
 
-  private rebuild(): void {
+  private rebuild(keepOpen = false): void {
     const { model, store } = this.app;
+    const open = keepOpen && this.root ? this.openGroups(this.root, '') : new Set<string>();
     // Les propriétés de regroupement qui n'existent plus (nouvelles métadonnées) sont retirées
     // avant d'afficher l'en-tête, pour que les pastilles correspondent à l'arbre.
     this.paths = this.paths.filter((path) => store.paths.includes(path));
@@ -128,7 +139,38 @@ export class TreePanel {
     const groups = this.paths.length > 0 ? buildTree(store, this.paths, all) : null;
     this.root = this.createList(this.list, 0, groups, all);
     this.renderList(this.root);
+    if (open.size > 0) this.reopen(this.root, '', open);
     this.refresh();
+  }
+
+  /** Chemins (libellés emboîtés) des groupes ouverts, pour les rouvrir après une reconstruction. */
+  private openGroups(list: ListView, prefix: string, out = new Set<string>()): Set<string> {
+    for (const view of list.groupViews.values()) {
+      if (view.body.hidden || !view.list) continue;
+      const key = `${prefix}${view.group.label}\u0000`;
+      out.add(key);
+      this.openGroups(view.list, key, out);
+    }
+    return out;
+  }
+
+  private reopen(list: ListView, prefix: string, open: Set<string>): void {
+    for (const view of list.groupViews.values()) {
+      const key = `${prefix}${view.group.label}\u0000`;
+      if (!open.has(key)) continue;
+      this.toggle(view, true);
+      if (view.list) this.reopen(view.list, key, open);
+    }
+  }
+
+  /** Libellés des éléments affichés, après une modification qui ne change pas les groupes. */
+  private refreshLabels(list = this.root): void {
+    if (!list) return;
+    for (const [index, { row }] of list.leafRows) {
+      const label = row.querySelector('.row-label');
+      if (label) label.textContent = this.app.elementLabel(index);
+    }
+    for (const view of list.groupViews.values()) if (view.list) this.refreshLabels(view.list);
   }
 
   // ------------------------------------------------------------------ lignes

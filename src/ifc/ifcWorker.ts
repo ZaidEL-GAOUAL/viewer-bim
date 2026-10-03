@@ -4,10 +4,12 @@
 // (pipeline/ifc_to_glb.py) : il tourne sur IfcOpenShell compilé en WebAssembly, via Pyodide.
 
 import converterSource from '../../pipeline/ifc_to_glb.py?raw';
+import usdWriterSource from '../../pipeline/usd_writer.py?raw';
 
 const PYODIDE_URL = 'https://cdn.jsdelivr.net/pyodide/v0.29.3/full/';
 
 export interface ConvertRequest {
+  kind: 'convert';
   id: number;
   buffer: ArrayBuffer;
   /** Adresse absolue du paquet IfcOpenShell pour le navigateur, servi avec le viewer. */
@@ -16,10 +18,20 @@ export interface ConvertRequest {
   shard: [number, number];
 }
 
+/** Emballage d'un GLB (déjà fusionné) et de ses métadonnées en paquet USDZ. */
+export interface UsdRequest {
+  kind: 'usd';
+  id: number;
+  glb: ArrayBuffer;
+  metadata: string;
+  wheelUrl: string;
+}
+
 export type ConvertMessage =
   | { id: number; type: 'status'; message: string }
   | { id: number; type: 'progress'; percent: number }
   | { id: number; type: 'done'; glb: ArrayBuffer; metadata: string; report: Record<string, unknown> }
+  | { id: number; type: 'usd'; usdz: ArrayBuffer }
   | { id: number; type: 'error'; message: string };
 
 interface Pyodide {
@@ -52,7 +64,8 @@ async function prepare(id: number, wheelUrl: string): Promise<Pyodide> {
   await pyodide.pyimport('micropip').install(wheelUrl);
   pyodide.FS.mkdirTree('/pipeline');
   pyodide.FS.writeFile('/pipeline/ifc_to_glb.py', converterSource);
-  pyodide.runPython("import sys\nsys.path.insert(0, '/pipeline')\nimport ifc_to_glb");
+  pyodide.FS.writeFile('/pipeline/usd_writer.py', usdWriterSource);
+  pyodide.runPython("import sys\nsys.path.insert(0, '/pipeline')\nimport ifc_to_glb\nimport usd_writer");
   return pyodide;
 }
 
@@ -71,14 +84,38 @@ del _result
 _report
 `;
 
-scope.onmessage = async (event: MessageEvent<ConvertRequest>) => {
-  const { id, buffer, wheelUrl, shard } = event.data;
+const PACKAGE_USD = `
+import json
+import usd_writer
+with open('/tmp/merged.glb', 'rb') as _in:
+    _scene = usd_writer.scene_from_glb(_in.read())
+with open('/tmp/merged.json', 'r', encoding='utf-8') as _in:
+    _metadata = json.load(_in)
+with open('/tmp/model.usdz', 'wb') as _out:
+    _out.write(usd_writer.write_usdz(usd_writer.write_usda(_scene, _metadata, 'viewer-bim ifc_to_glb (IfcOpenShell, navigateur)')))
+del _scene, _metadata
+`;
+
+scope.onmessage = async (event: MessageEvent<ConvertRequest | UsdRequest>) => {
+  const { id, wheelUrl } = event.data;
   try {
     runtime ??= prepare(id, wheelUrl);
     const pyodide = await runtime.catch((error: unknown) => {
       runtime = null; // un échec de téléchargement ne doit pas bloquer l'essai suivant
       throw error;
     });
+
+    if (event.data.kind === 'usd') {
+      post({ id, type: 'status', message: 'Écriture du fichier USD…' });
+      pyodide.FS.writeFile('/tmp/merged.glb', new Uint8Array(event.data.glb));
+      pyodide.FS.writeFile('/tmp/merged.json', event.data.metadata);
+      pyodide.runPython(PACKAGE_USD);
+      const usdz = (pyodide.FS.readFile('/tmp/model.usdz') as Uint8Array).slice().buffer as ArrayBuffer;
+      for (const path of ['/tmp/merged.glb', '/tmp/merged.json', '/tmp/model.usdz']) pyodide.FS.unlink(path);
+      post({ id, type: 'usd', usdz }, [usdz]);
+      return;
+    }
+    const { buffer, shard } = event.data;
 
     post({ id, type: 'status', message: 'Lecture de l’IFC…' });
     pyodide.FS.writeFile('/tmp/model.ifc', new Uint8Array(buffer));

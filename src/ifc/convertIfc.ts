@@ -1,4 +1,4 @@
-import type { ConvertMessage, ConvertRequest } from './ifcWorker.ts';
+import type { ConvertMessage, ConvertRequest, UsdRequest } from './ifcWorker.ts';
 import { mergeGlb, mergeMetadata } from './mergeGlb.ts';
 
 export interface FailedElement {
@@ -104,7 +104,7 @@ function convertShard(
       else if (message.type === 'done') {
         finish();
         resolve({ glb: message.glb, metadata: message.metadata, report: message.report as Part['report'] });
-      } else {
+      } else if (message.type === 'error') {
         finish();
         reject(new Error(message.message));
       }
@@ -115,8 +115,44 @@ function convertShard(
     };
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    const request: ConvertRequest = { id, buffer, shard, wheelUrl: new URL(WHEEL, document.baseURI).href };
+    const request: ConvertRequest = { kind: 'convert', id, buffer, shard, wheelUrl: new URL(WHEEL, document.baseURI).href };
     worker.postMessage(request, [buffer]);
+  });
+}
+
+/**
+ * Emballe un GLB et ses métadonnées en paquet USDZ, dans le convertisseur (même script que la
+ * ligne de commande : pipeline/usd_writer.py).
+ */
+export function packageUsd(glb: ArrayBuffer, metadata: string, onStatus: (message: string) => void): Promise<ArrayBuffer> {
+  if (pool.length === 0) pool.push(new Worker(new URL('./ifcWorker.ts', import.meta.url), { type: 'module' }));
+  const worker = pool[0];
+  const id = nextId++;
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const finish = () => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+    };
+    const onMessage = (event: MessageEvent<ConvertMessage>) => {
+      const message = event.data;
+      if (message.id !== id) return;
+      if (message.type === 'status') onStatus(message.message);
+      else if (message.type === 'usd') {
+        finish();
+        resolve(message.usdz);
+      } else if (message.type === 'error') {
+        finish();
+        reject(new Error(message.message));
+      }
+    };
+    const onError = (event: ErrorEvent) => {
+      finish();
+      reject(new Error(event.message || 'Le convertisseur IFC s’est arrêté.'));
+    };
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    const request: UsdRequest = { kind: 'usd', id, glb: glb.slice(0), metadata, wheelUrl: new URL(WHEEL, document.baseURI).href };
+    worker.postMessage(request, [request.glb]);
   });
 }
 

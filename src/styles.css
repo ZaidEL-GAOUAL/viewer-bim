@@ -644,6 +644,65 @@ button[aria-pressed='true'] {
   font-style: italic;
 }
 
+/* Propriétés verrouillées (classe, structure, quantités) : lisibles, non modifiables. */
+.props dt.locked::after {
+  content: '🔒';
+  margin-left: 4px;
+  font-size: 9px;
+  opacity: 0.55;
+}
+
+.props dd.editable {
+  padding: 2px 8px 2px 0;
+}
+
+.props dd.editable input[type='text'],
+.props dd.editable input[type='number'] {
+  width: calc(100% + 7px);
+  min-width: 0;
+  margin-left: -7px; /* le texte s'aligne sur les valeurs verrouillées */
+  padding: 3px 6px;
+  border-color: transparent;
+  background: transparent;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.props dd.editable input:hover,
+.props dd.editable input:focus {
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.props dd.editable input.mixed::placeholder {
+  font-style: italic;
+}
+
+.props dd.editable .check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.props-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.props-add input {
+  min-width: 0;
+  font: inherit;
+}
+
+.element-actions .revert {
+  color: var(--accent);
+}
+
 /* ------------------------------------------------------------------ vue 3D */
 
 .viewport {

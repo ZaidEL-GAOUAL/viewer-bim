@@ -54,6 +54,7 @@ Règles :
 | Champ | Obligatoire | Rôle |
 | --- | --- | --- |
 | `version` | non (1 par défaut) | Version du format. Le viewer refuse une version plus récente que celle qu'il connaît. |
+| `readOnly` | non | Liste des propriétés que le viewer affiche sans permettre de les modifier (voir § 2 bis). |
 | `elements` | oui | Objet indexé par identifiant : la même valeur que `extras.id` dans le GLB. |
 | `label` | non | Nom affiché dans l'arborescence et la fiche. À défaut, le `name` du nœud glTF. |
 | `properties` | non | Propriétés libres de l'élément. |
@@ -91,6 +92,33 @@ Le viewer les réunit avec celles du JSON :
 
 Le fichier GLB lui-même n'est jamais modifié.
 
+## 2 bis. Modification des métadonnées dans le viewer
+
+Dans la fiche d'un élément (ou d'une sélection de plusieurs éléments), chaque propriété est un
+champ : texte, nombre ou case à cocher selon la valeur en place. Une valeur modifiée s'applique
+à toute la sélection ; « Ajouter une propriété » en crée une nouvelle, avec `Catégorie / Nom`
+pour la ranger dans une catégorie. Les modifications ne vivent que dans la page : le bouton
+« JSON ↓ » télécharge les métadonnées courantes dans le format ci-dessus (propriétés du GLB,
+du JSON et modifications réunies, `readOnly` compris), et « Annuler les modifications » revient
+aux fichiers chargés.
+
+Le fichier décide de ce qui ne doit pas être modifié avec `readOnly`, une liste de motifs :
+
+```json
+"readOnly": ["Classe IFC", "Site", "Bâtiment", "Niveau", "Local", "Matériaux", "Qto_*"]
+```
+
+- un nom exact (`"Classe IFC"`) verrouille cette propriété ;
+- le nom d'une catégorie verrouille tout son contenu (`"Dimensions"` verrouille
+  `Dimensions / Hauteur (m)`) ;
+- un préfixe suivi de `*` verrouille tout ce qui commence ainsi (`"Qto_*"` : toutes les quantités).
+
+Sans `readOnly`, tout est modifiable. L'identifiant, lui, ne l'est jamais : c'est le lien avec
+la géométrie. Le convertisseur IFC fourni verrouille ce qui découle de la structure du modèle
+plutôt que d'une saisie : la classe, le type, l'emplacement (site, bâtiment, niveau, local), les
+matériaux et les quantités calculées. Le nom, la description, le repère et les jeux de
+propriétés (`Pset_…`) restent modifiables.
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
@@ -111,13 +139,38 @@ Le champ `version` permet d'ajouter plus tard des sections optionnelles à côt�
 (vues enregistrées, regroupements prédéfinis, unités) sans casser les fichiers existants : un
 viewer en version 1 ignore les sections qu'il ne connaît pas.
 
-## 5. Le convertisseur IFC fourni
+## 5. Variante USD
+
+Le viewer accepte aussi un fichier USD (`.usdz` contenant un `.usda`, ou `.usda` seul) à la place
+du GLB. L'identifiant et les propriétés peuvent alors être écrits directement dans le fichier,
+dans le `customData` du prim de chaque élément :
+
+```
+def Xform "E_2O2Fr_t4X7Zf8NOew3FLOH" (
+    customData = {
+        string id = "2O2Fr$t4X7Zf8NOew3FLOH"
+        string label = "Mur extérieur 01"
+        dictionary properties = {
+            string "Catégorie" = "Mur"
+            string Niveau = "R+1"
+            dictionary Dimensions = { double "Longueur (m)" = 4.2 }
+        }
+    }
+)
+```
+
+Un JSON déposé avec le fichier reste prioritaire sur ces métadonnées embarquées. La liste
+`readOnly` se place dans le `customLayerData` du calque (`string[] readOnly = [...]`). Après des
+modifications dans le viewer, « USD ↓ » réécrit le paquet issu de la conversion avec les
+métadonnées courantes.
+
+## 6. Le convertisseur IFC fourni
 
 `pipeline/ifc_to_glb.py` produit ce format à partir d'un IFC : `extras.id` et les clés du JSON
 sont les `GlobalId` des éléments, et la structure spatiale (site, bâtiment, niveau, local) est
 écrite comme propriétés. Voir [pipeline/README.md](../pipeline/README.md).
 
-## 6. Vérifier un export
+## 7. Vérifier un export
 
 `scripts/make-sample.mjs` génère un GLB et un JSON conformes, à comparer avec la sortie du
 pipeline. Au chargement, le viewer indique combien d'éléments ont trouvé leurs métadonnées ;

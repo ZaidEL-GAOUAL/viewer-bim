@@ -4,9 +4,11 @@ Viewer 3D pour maquettes au format GLB ou glTF, accompagnées d'un fichier JSON 
 L'affichage ne repose que sur three.js : pas d'ifc.js, de xeokit ni d'OpenIFC. Les coupes, les
 mesures, le picking, l'arborescence et les filtres sont écrits dans ce dépôt.
 
-Un fichier **IFC** peut aussi être déposé directement : il est converti en GLB + JSON par le
-convertisseur du dossier [pipeline/](pipeline/README.md), qui s'appuie sur IfcOpenShell et
-conserve l'identifiant de chaque élément pour relier la géométrie aux métadonnées.
+Un fichier **IFC** peut aussi être déposé directement : il est converti en GLB + JSON, ou en
+**USD** (`.usdz`) selon le format choisi dans la barre d'outils, par le convertisseur du dossier
+[pipeline/](pipeline/README.md), qui s'appuie sur IfcOpenShell et conserve l'identifiant de
+chaque élément pour relier la géométrie aux métadonnées. Le viewer lit les deux formats avec les
+mêmes fonctions.
 
 Le viewer est générique : il ne connaît aucun standard BIM et découvre les propriétés dans le
 JSON. Le format attendu est décrit dans [docs/contrat-metadonnees.md](docs/contrat-metadonnees.md).
@@ -46,12 +48,20 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   ouvert. La conversion est répartie sur plusieurs cœurs (jusqu'à quatre, selon la machine et la
   taille du fichier). Le GLB et le JSON produits peuvent être téléchargés.
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
-  y compris compressés (Draco, Meshopt).
+  y compris compressés (Draco, Meshopt), et de fichiers USD (`.usdz`, `.usda`) : ceux du
+  convertisseur, avec leurs métadonnées embarquées, ou des scènes USD simples venues d'ailleurs.
+- **Format GLB ou USD** : le choix en haut à gauche décide dans quel format un IFC est converti,
+  affiché et téléchargé. Il est mémorisé d'une visite à l'autre.
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
   l'arborescence. La fiche à droite affiche les propriétés du GLB puis celles du JSON, regroupées
   par catégories repliables.
 - **Métadonnées** : le JSON peut être fourni avec le modèle, dans son dossier, ou ajouté après
   coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
+- **Modification des métadonnées** : dans la fiche, chaque propriété se modifie sur place (texte,
+  nombre, case à cocher), pour un élément ou pour toute la sélection, et « Ajouter une propriété »
+  en crée de nouvelles. Les propriétés que le fichier déclare `readOnly` (pour un IFC : classe,
+  type, niveau, matériaux, quantités…) s'affichent avec un cadenas. « JSON ↓ » télécharge les
+  métadonnées modifiées ; « Annuler les modifications » revient aux fichiers chargés.
 - **Arborescence** calculée à partir d'une ou plusieurs propriétés choisies dans « Grouper par » :
   la première donne les groupes, les suivantes les sous-groupes.
 - **Couleurs et filtres** : pour une propriété, chaque valeur distincte reçoit une couleur
@@ -65,8 +75,9 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   l'affichage d'avant. **Masquer** cache la sélection ; le même bouton devient « Démasquer » et
   la fait revenir, même après avoir désélectionné. **Tout afficher** réaffiche tous les éléments
   et recadre le modèle entier.
-- **Téléchargement** : après la conversion d'un IFC, les boutons « GLB ↓ » et « JSON ↓ » de la
-  barre d'outils restent disponibles tant que ce modèle est affiché.
+- **Téléchargement** : après la conversion d'un IFC, le bouton « GLB ↓ » (ou « USD ↓ ») de la
+  barre d'outils reste disponible tant que ce modèle est affiché ; « JSON ↓ » l'est dès qu'un
+  modèle a des métadonnées, modifications comprises. Un paquet USD est réécrit avec elles.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
 
@@ -86,8 +97,9 @@ src/
   data/      métadonnées : lecture du JSON, index des propriétés, regroupements, palette
   engine/    moteur 3D : chargement, fusion de la géométrie, rendu, picking, coupes, mesures
   ifc/       lancement du convertisseur IFC dans le navigateur (fil d'exécution séparé)
+  usd/       lecture des fichiers USD (usda, usdz)
   ui/        interface : barre d'outils et panneaux, en DOM natif
-pipeline/    convertisseur IFC → GLB + JSON (Python, IfcOpenShell) et ses tests
+pipeline/    convertisseur IFC → GLB ou USD + JSON (Python, IfcOpenShell) et ses tests
 tests/       tests des modules de données et du moteur
 scripts/     générateur du modèle de démonstration
 ```
@@ -186,6 +198,11 @@ fichier). Le viewer en lance d'autant moins que le fichier est gros et la mémoi
   nuages de points du glTF sont ignorés, de même que les scènes autres que la scène par défaut.
 - Les textures compressées KTX2 ne sont pas décodées : le modèle s'affiche avec ses couleurs de
   base et un avertissement.
+- USD : seul le format texte (`.usda`, seul ou dans un `.usdz`) est lu, avec les maillages
+  polygonaux, les transformations par matrice, les références internes et les matériaux
+  UsdPreviewSurface. Le format binaire (`.usdc`) et les scènes plus riches (variantes, fichiers
+  liés, textures) ne sont pas pris en charge. Un USD texte est bien plus volumineux qu'un GLB
+  (environ quatre fois).
 - Un verre décrit par l'extension « transmission » est rendu par une simple transparence.
 - Les éléments transparents ne sont pas triés entre eux : des vitrages superposés de couleurs
   très différentes peuvent se mélanger de façon approximative.

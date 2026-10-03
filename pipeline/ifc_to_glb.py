@@ -10,6 +10,7 @@ Utilisation en ligne de commande :
     python ifc_to_glb.py maquette.ifc -o sortie/      # dans un autre dossier
     python ifc_to_glb.py maquette.ifc --espaces       # exporte aussi les IfcSpace
     python ifc_to_glb.py maquette.ifc --classes IfcWall,IfcSlab   # seulement ces classes
+    python ifc_to_glb.py maquette.ifc --format usd    # écrit maquette.usdz (voir usd_writer.py)
 
 Le même module est exécuté dans le navigateur (Pyodide) quand on dépose un IFC dans le viewer.
 """
@@ -34,6 +35,10 @@ import ifcopenshell.util.element as element_util
 
 CONTRACT_VERSION = 1
 
+# Propriétés que le viewer ne doit pas laisser modifier : elles viennent de relations IFC
+# (classe, type, structure spatiale, matériaux) ou de calculs sur la géométrie (quantités).
+READ_ONLY = ["Classe IFC", "Type", "Type prédéfini", "Site", "Bâtiment", "Niveau", "Local", "Matériaux", "Qto_*"]
+
 # IFC est en Z vers le haut, glTF en Y vers le haut : (x, y, z) devient (x, z, -y).
 Z_UP_TO_Y_UP = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1]
 IDENTITY = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0)
@@ -55,11 +60,29 @@ ELEMENT_ARRAY_BUFFER = 34963
 
 @dataclass
 class Conversion:
-    """Résultat d'une conversion."""
+    """Résultat d'une conversion : la scène, prête à être écrite en GLB ou en USD, et les métadonnées."""
 
-    glb: bytes
+    scene: "Scene"
     metadata: dict[str, Any]
     report: dict[str, Any] = field(default_factory=dict)
+    generator: str = "viewer-bim ifc_to_glb"
+    _glb: bytes | None = field(default=None, repr=False)
+
+    @property
+    def glb(self) -> bytes:
+        if self._glb is None:
+            self._glb = write_glb(self.scene, self.generator)
+        return self._glb
+
+    def usda(self) -> str:
+        from usd_writer import write_usda
+
+        return write_usda(self.scene, self.metadata, self.generator)
+
+    def usdz(self) -> bytes:
+        from usd_writer import write_usdz
+
+        return write_usdz(self.usda())
 
     def metadata_json(self) -> str:
         return json.dumps(self.metadata, ensure_ascii=False, separators=(",", ":"))
@@ -179,48 +202,51 @@ def _is_closed(positions: np.ndarray, triangles: np.ndarray) -> bool:
     return bool(np.all(np.add.reduceat(signs[order], boundaries) == 0))
 
 
-class _GlbWriter:
-    """Assemble le glTF binaire : tampon de géométrie, maillages, matériaux, nœuds."""
+@dataclass
+class Primitive:
+    """Un paquet de triangles d'un même matériau."""
+
+    positions: np.ndarray  # float32, N × 3, en mètres, dans le repère de l'élément
+    normals: np.ndarray | None  # float32, N × 3
+    indices: np.ndarray  # int32, 3 par triangle
+    material: int
+
+
+@dataclass
+class MeshData:
+    primitives: list[Primitive]
+    triangles: int
+
+
+@dataclass
+class MaterialData:
+    name: str
+    rgba: tuple[float, float, float, float]  # couleur linéaire et opacité
+    double_sided: bool
+
+
+@dataclass
+class ElementData:
+    guid: str
+    name: str | None
+    # Maillage et matrice (16 valeurs, colonnes d'abord, comme glTF) de chaque forme de l'élément.
+    placements: list[tuple[int, tuple[float, ...]]]
+
+
+class Scene:
+    """Géométrie convertie, indépendante du format de sortie (GLB ou USD)."""
 
     def __init__(self) -> None:
-        self.chunks: list[bytes] = []
-        self.byte_length = 0
-        self.buffer_views: list[dict[str, Any]] = []
-        self.accessors: list[dict[str, Any]] = []
-        self.meshes: list[dict[str, Any]] = []
-        self.materials: list[dict[str, Any]] = []
+        self.meshes: list[MeshData] = []
+        self.materials: list[MaterialData] = []
         self.material_index: dict[tuple, int] = {}
-        self.nodes: list[dict[str, Any]] = [{"name": "IFC", "matrix": Z_UP_TO_Y_UP, "children": []}]
-
-    def _view(self, data: np.ndarray, target: int) -> int:
-        raw = data.tobytes()
-        self.buffer_views.append({"buffer": 0, "byteOffset": self.byte_length, "byteLength": len(raw), "target": target})
-        padding = (-len(raw)) % 4
-        self.chunks.append(raw + b"\x00" * padding)
-        self.byte_length += len(raw) + padding
-        return len(self.buffer_views) - 1
-
-    def _accessor(self, data: np.ndarray, target: int, component: int, kind: str, bounds: bool = False) -> int:
-        accessor: dict[str, Any] = {"bufferView": self._view(data, target), "componentType": component, "count": len(data), "type": kind}
-        if bounds:
-            accessor["min"] = [float(v) for v in data.min(axis=0)]
-            accessor["max"] = [float(v) for v in data.max(axis=0)]
-        self.accessors.append(accessor)
-        return len(self.accessors) - 1
+        self.elements: list[ElementData] = []
 
     def material(self, name: str, rgba: tuple[float, float, float, float], double_sided: bool) -> int:
         key = (name, tuple(round(c, 4) for c in rgba), double_sided)
         index = self.material_index.get(key)
         if index is None:
-            material: dict[str, Any] = {
-                "name": name,
-                "pbrMetallicRoughness": {"baseColorFactor": list(key[1]), "metallicFactor": 0, "roughnessFactor": 0.9},
-            }
-            if rgba[3] < 1:
-                material["alphaMode"] = "BLEND"
-            if double_sided:
-                material["doubleSided"] = True
-            self.materials.append(material)
+            self.materials.append(MaterialData(name, key[1], double_sided))  # type: ignore[arg-type]
             index = self.material_index[key] = len(self.materials) - 1
         return index
 
@@ -244,69 +270,111 @@ class _GlbWriter:
         for material_id in np.unique(material_ids):
             selected = triangles[material_ids == material_id]
             used, remapped = np.unique(selected, return_inverse=True)
-            indices = remapped.reshape(-1)
-            vertex_positions = positions[used].astype(np.float32)
-            attributes = {"POSITION": self._accessor(vertex_positions, ARRAY_BUFFER, 5126, "VEC3", bounds=True)}
-            if has_normals:
-                attributes["NORMAL"] = self._accessor(normals[used].astype(np.float32), ARRAY_BUFFER, 5126, "VEC3")
-            if len(used) <= 65535:
-                index_accessor = self._accessor(indices.astype(np.uint16), ELEMENT_ARRAY_BUFFER, 5123, "SCALAR")
-            else:
-                index_accessor = self._accessor(indices.astype(np.uint32), ELEMENT_ARRAY_BUFFER, 5125, "SCALAR")
-
             style = styles[int(material_id)] if 0 <= material_id < len(styles) else None
             if style is not None:
                 diffuse = style.diffuse
                 transparency = style.transparency
                 alpha = 1.0 - transparency if math.isfinite(transparency) else 1.0
-                # Les couleurs IFC sont saisies pour l'écran (sRGB) ; glTF les attend en linéaire.
+                # Les couleurs IFC sont saisies pour l'écran (sRGB) ; glTF et USD les attendent en linéaire.
                 rgba = (_srgb_to_linear(diffuse.r()), _srgb_to_linear(diffuse.g()), _srgb_to_linear(diffuse.b()), min(1.0, max(0.0, alpha)))
                 name = style.name
             else:
                 rgba, name = (0.45, 0.45, 0.45, 1.0), "Défaut"
-            primitives.append({"attributes": attributes, "indices": index_accessor, "material": self.material(name, rgba, double_sided)})
-
-        self.meshes.append({"primitives": primitives})
+            primitives.append(
+                Primitive(
+                    positions=positions[used].astype(np.float32),
+                    normals=normals[used].astype(np.float32) if has_normals else None,
+                    indices=remapped.reshape(-1).astype(np.int32),
+                    material=self.material(name, rgba, double_sided),
+                )
+            )
+        self.meshes.append(MeshData(primitives, len(triangles)))
         return len(self.meshes) - 1, len(triangles)
 
     def element(self, guid: str, name: str | None, placements: list[tuple[int, tuple[float, ...]]]) -> None:
-        """Ajoute le nœud d'un élément. `extras.id` porte son GlobalId : c'est la clé du JSON."""
-        node: dict[str, Any] = {"extras": {"id": guid}}
-        if name:
-            node["name"] = name
-        if len(placements) == 1:
-            mesh, matrix = placements[0]
-            node["mesh"] = mesh
-            if matrix != IDENTITY:
-                node["matrix"] = list(matrix)
-        else:
-            # Plusieurs représentations pour un même élément : des nœuds enfants sans identifiant,
-            # que le viewer rattache à l'élément parent.
-            node["children"] = []
-            for mesh, matrix in placements:
-                child: dict[str, Any] = {"mesh": mesh}
-                if matrix != IDENTITY:
-                    child["matrix"] = list(matrix)
-                self.nodes.append(child)
-                node["children"].append(len(self.nodes) - 1)
-        self.nodes.append(node)
-        self.nodes[0]["children"].append(len(self.nodes) - 1)
+        self.elements.append(ElementData(guid, name, placements))
 
-    def to_bytes(self, generator: str) -> bytes:
-        gltf: dict[str, Any] = {
-            "asset": {"version": "2.0", "generator": generator},
-            "scene": 0,
-            "scenes": [{"nodes": [0]}],
-            "nodes": self.nodes,
-        }
-        if self.meshes:
-            gltf.update(
-                meshes=self.meshes,
-                materials=self.materials,
-                accessors=self.accessors,
-                bufferViews=self.buffer_views,
-                buffers=[{"byteLength": self.byte_length}],
-            )
+
+class _GlbWriter:
+    """Assemble le glTF binaire : tampon de géométrie, maillages, matériaux, nœuds."""
+
+    def __init__(self) -> None:
+        self.chunks: list[bytes] = []
+        self.byte_length = 0
+        self.buffer_views: list[dict[str, Any]] = []
+        self.accessors: list[dict[str, Any]] = []
+
+    def _view(self, data: np.ndarray, target: int) -> int:
+        raw = data.tobytes()
+        self.buffer_views.append({"buffer": 0, "byteOffset": self.byte_length, "byteLength": len(raw), "target": target})
+        padding = (-len(raw)) % 4
+        self.chunks.append(raw + b"\x00" * padding)
+        self.byte_length += len(raw) + padding
+        return len(self.buffer_views) - 1
+
+    def _accessor(self, data: np.ndarray, target: int, component: int, kind: str, bounds: bool = False) -> int:
+        accessor: dict[str, Any] = {"bufferView": self._view(data, target), "componentType": component, "count": len(data), "type": kind}
+        if bounds:
+            accessor["min"] = [float(v) for v in data.min(axis=0)]
+            accessor["max"] = [float(v) for v in data.max(axis=0)]
+        self.accessors.append(accessor)
+        return len(self.accessors) - 1
+
+    def write(self, scene: Scene, generator: str) -> bytes:
+        materials: list[dict[str, Any]] = []
+        for material in scene.materials:
+            entry: dict[str, Any] = {
+                "name": material.name,
+                "pbrMetallicRoughness": {"baseColorFactor": list(material.rgba), "metallicFactor": 0, "roughnessFactor": 0.9},
+            }
+            if material.rgba[3] < 1:
+                entry["alphaMode"] = "BLEND"
+            if material.double_sided:
+                entry["doubleSided"] = True
+            materials.append(entry)
+
+        meshes: list[dict[str, Any]] = []
+        for mesh in scene.meshes:
+            primitives = []
+            for primitive in mesh.primitives:
+                attributes = {"POSITION": self._accessor(primitive.positions, ARRAY_BUFFER, 5126, "VEC3", bounds=True)}
+                if primitive.normals is not None:
+                    attributes["NORMAL"] = self._accessor(primitive.normals, ARRAY_BUFFER, 5126, "VEC3")
+                if len(primitive.positions) <= 65535:
+                    indices = self._accessor(primitive.indices.astype(np.uint16), ELEMENT_ARRAY_BUFFER, 5123, "SCALAR")
+                else:
+                    indices = self._accessor(primitive.indices.astype(np.uint32), ELEMENT_ARRAY_BUFFER, 5125, "SCALAR")
+                primitives.append({"attributes": attributes, "indices": indices, "material": primitive.material})
+            meshes.append({"primitives": primitives})
+
+        # Le nœud 0 est la racine : elle passe de Z vers le haut (IFC) à Y vers le haut (glTF).
+        nodes: list[dict[str, Any]] = [{"name": "IFC", "matrix": Z_UP_TO_Y_UP, "children": []}]
+        for element in scene.elements:
+            # `extras.id` porte le GlobalId : c'est la clé du JSON de métadonnées.
+            node: dict[str, Any] = {"extras": {"id": element.guid}}
+            if element.name:
+                node["name"] = element.name
+            if len(element.placements) == 1:
+                mesh_index, matrix = element.placements[0]
+                node["mesh"] = mesh_index
+                if matrix != IDENTITY:
+                    node["matrix"] = list(matrix)
+            else:
+                # Plusieurs formes pour un même élément : des nœuds enfants sans identifiant,
+                # que le viewer rattache à l'élément parent.
+                node["children"] = []
+                for mesh_index, matrix in element.placements:
+                    child: dict[str, Any] = {"mesh": mesh_index}
+                    if matrix != IDENTITY:
+                        child["matrix"] = list(matrix)
+                    nodes.append(child)
+                    node["children"].append(len(nodes) - 1)
+            nodes.append(node)
+            nodes[0]["children"].append(len(nodes) - 1)
+
+        gltf: dict[str, Any] = {"asset": {"version": "2.0", "generator": generator}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": nodes}
+        if meshes:
+            gltf.update(meshes=meshes, materials=materials, accessors=self.accessors, bufferViews=self.buffer_views, buffers=[{"byteLength": self.byte_length}])
         document = json.dumps(gltf, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         document += b" " * ((-len(document)) % 4)
         binary = b"".join(self.chunks)
@@ -315,6 +383,10 @@ class _GlbWriter:
             parts += [struct.pack("<II", len(binary), 0x004E4942), binary]
         body = b"".join(parts)
         return struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body
+
+
+def write_glb(scene: Scene, generator: str) -> bytes:
+    return _GlbWriter().write(scene, generator)
 
 
 # ------------------------------------------------------------------- conversion
@@ -373,7 +445,7 @@ def convert(
     linework = len(products) - len(volumes)
     products = volumes
 
-    writer = _GlbWriter()
+    scene = Scene()
     mesh_by_geometry: dict[str, tuple[int, int] | None] = {}
     placements: dict[str, list[tuple[int, tuple[float, ...]]]] = {}
     names: dict[str, str | None] = {}
@@ -387,7 +459,7 @@ def convert(
             geometry = shape.geometry
             # Les éléments qui partagent une même représentation (même type) partagent un maillage.
             if geometry.id not in mesh_by_geometry:
-                mesh_by_geometry[geometry.id] = writer.mesh(geometry)
+                mesh_by_geometry[geometry.id] = scene.mesh(geometry)
             mesh = mesh_by_geometry[geometry.id]
             if mesh is not None:
                 matrix = tuple(float(v) for v in shape.transformation.matrix)
@@ -405,7 +477,7 @@ def convert(
 
     elements: dict[str, Any] = {}
     for guid, shapes in placements.items():
-        writer.element(guid, names[guid], shapes)
+        scene.element(guid, names[guid], shapes)
         elements[guid] = describe(model.by_guid(guid))
 
     # Éléments attendus mais absents : IfcOpenShell n'a pas pu calculer leur géométrie.
@@ -418,16 +490,20 @@ def convert(
         "schema": model.schema,
         "elements": len(elements),
         "triangles": triangle_count,
-        "meshes": len(writer.meshes),
-        "materials": len(writer.materials),
+        "meshes": len(scene.meshes),
+        "materials": len(scene.materials),
         "excluded": excluded,
         "linework": linework,
         "without_geometry": len(failed),
         "failed": failed[:50],
         "seconds": round(time.perf_counter() - started, 2),
     }
-    glb = writer.to_bytes(f"viewer-bim ifc_to_glb (IfcOpenShell {ifcopenshell.version})")
-    return Conversion(glb=glb, metadata={"version": CONTRACT_VERSION, "elements": elements}, report=report)
+    return Conversion(
+        scene=scene,
+        metadata={"version": CONTRACT_VERSION, "readOnly": READ_ONLY, "elements": elements},
+        report=report,
+        generator=f"viewer-bim ifc_to_glb (IfcOpenShell {ifcopenshell.version})",
+    )
 
 
 def convert_file(path: str | Path, **options: Any) -> Conversion:
@@ -438,6 +514,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Convertit un IFC en GLB + JSON pour le Viewer BIM.")
     parser.add_argument("ifc", type=Path, help="fichier IFC à convertir")
     parser.add_argument("-o", "--output", type=Path, help="dossier de sortie (par défaut : celui de l'IFC)")
+    parser.add_argument("--format", choices=["glb", "usd", "usda"], default="glb", help="format de la géométrie : glb (défaut), usd (paquet .usdz) ou usda (USD texte)")
     parser.add_argument("--espaces", action="store_true", help="exporter aussi les locaux (IfcSpace)")
     parser.add_argument("--classes", help="ne convertir que ces classes IFC, séparées par des virgules (ex. IfcWall,IfcSlab)")
     parser.add_argument("--ids", help="ne convertir que ces GlobalId, séparés par des virgules")
@@ -463,10 +540,17 @@ def main(argv: list[str] | None = None) -> int:
         progress=show,
     )
     print()
-    glb_path = output / f"{arguments.ifc.stem}.glb"
     json_path = output / f"{arguments.ifc.stem}.json"
-    glb_path.write_bytes(result.glb)
     json_path.write_text(result.metadata_json(), encoding="utf-8")
+    if arguments.format == "glb":
+        glb_path = output / f"{arguments.ifc.stem}.glb"
+        glb_path.write_bytes(result.glb)
+    elif arguments.format == "usda":
+        glb_path = output / f"{arguments.ifc.stem}.usda"
+        glb_path.write_text(result.usda(), encoding="utf-8")
+    else:
+        glb_path = output / f"{arguments.ifc.stem}.usdz"
+        glb_path.write_bytes(result.usdz())
 
     report = result.report
     print(f"{report['elements']} éléments, {report['triangles']} triangles, {report['meshes']} maillages, en {report['seconds']} s")

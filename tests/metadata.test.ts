@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildTree, suggestGrouping } from '../src/data/grouping.ts';
-import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, mergeProperties, parseMetadata } from '../src/data/metadata.ts';
+import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, isReadOnly, mergeProperties, parseMetadata, unflattenProperties } from '../src/data/metadata.ts';
 
 test('flattenProperties aplatit les objets imbriqués et les tableaux', () => {
   const flat = flattenProperties({ Type: 'Mur', Dimensions: { Longueur: 4.2, Détail: { Unité: 'm' } }, Tags: ['a', 'b'], Vide: null });
@@ -154,4 +154,68 @@ test('suggestGrouping préfère une propriété générale à une propriété ra
   }
   store.finalize();
   assert.equal(suggestGrouping(store), 'Classe IFC');
+});
+
+test('isReadOnly verrouille un nom exact, une catégorie entière ou un préfixe', () => {
+  const patterns = ['Classe IFC', 'Qto_*', 'Structure'];
+  assert.equal(isReadOnly('Classe IFC', patterns), true);
+  assert.equal(isReadOnly('Classe IFC bis', patterns), false);
+  assert.equal(isReadOnly('Qto_WallBaseQuantities / NetVolume', patterns), true);
+  assert.equal(isReadOnly('Structure / Niveau', patterns), true);
+  assert.equal(isReadOnly('Pset_WallCommon / FireRating', patterns), false);
+  assert.equal(isReadOnly('Nom', []), false);
+});
+
+test('parseMetadata lit la liste readOnly et l’export la restitue avec les modifications', () => {
+  const metadata = parseMetadata({
+    version: 1,
+    readOnly: ['Classe IFC', 'Qto_*', 42],
+    elements: {
+      a: { label: 'Mur A', properties: { 'Classe IFC': 'IfcWall', Nom: 'Mur A', Pset_WallCommon: { IsExternal: true }, Qto_WallBaseQuantities: { NetVolume: 5.6 } } },
+      b: { properties: { 'Classe IFC': 'IfcDoor' } },
+    },
+  });
+  assert.deepEqual(metadata.readOnly, ['Classe IFC', 'Qto_*']);
+
+  const store = new PropertyStore(3);
+  store.set(0, metadata.elements.get('a')!.props, 'Mur A');
+  store.set(1, metadata.elements.get('b')!.props);
+  store.finalize();
+  store.readOnly = metadata.readOnly!;
+  assert.equal(store.isEditable('Classe IFC'), false);
+  assert.equal(store.isEditable('Qto_WallBaseQuantities / NetVolume'), false);
+  assert.equal(store.isEditable('Pset_WallCommon / IsExternal'), true);
+
+  // Modifier, créer (dans une catégorie nouvelle), et sur un élément sans métadonnées.
+  assert.equal(store.update(0, 'Pset_WallCommon / IsExternal', false), true);
+  assert.equal(metadata.elements.get('a')!.props['Pset_WallCommon / IsExternal'], true, 'le fichier chargé reste intact');
+  assert.equal(store.update(0, 'Pset_WallCommon / IsExternal', false), false, 'même valeur : rien ne change');
+  assert.equal(store.update(1, 'Chantier / Lot', 'Gros œuvre'), true);
+  assert.equal(store.update(2, 'Chantier / Lot', 'Gros œuvre'), true);
+  assert.equal(store.matched, 3);
+  assert.ok(store.paths.includes('Chantier / Lot'));
+  assert.deepEqual([...store.groups('Chantier / Lot').entries()], [['Gros œuvre', [1, 2]], [UNDEFINED_LABEL, [0]]]);
+  store.setLabel(0, 'Mur A bis');
+
+  const exported = store.export(['a', 'b', 'c']) as { version: number; readOnly: string[]; elements: Record<string, { label?: string; properties: Record<string, unknown> }> };
+  assert.equal(exported.version, 1);
+  assert.deepEqual(exported.readOnly, ['Classe IFC', 'Qto_*']);
+  assert.deepEqual(exported.elements.a, {
+    label: 'Mur A bis',
+    properties: { 'Classe IFC': 'IfcWall', Nom: 'Mur A', Pset_WallCommon: { IsExternal: false }, Qto_WallBaseQuantities: { NetVolume: 5.6 } },
+  });
+  assert.deepEqual(exported.elements.b, { properties: { 'Classe IFC': 'IfcDoor', Chantier: { Lot: 'Gros œuvre' } } });
+  assert.deepEqual(exported.elements.c, { properties: { Chantier: { Lot: 'Gros œuvre' } } });
+  // Relu par le viewer, l'export redonne les mêmes propriétés aplaties.
+  const again = parseMetadata(JSON.parse(JSON.stringify(exported)));
+  assert.deepEqual(again.elements.get('b')!.props, { 'Classe IFC': 'IfcDoor', 'Chantier / Lot': 'Gros œuvre' });
+  assert.deepEqual(again.readOnly, ['Classe IFC', 'Qto_*']);
+});
+
+test('unflattenProperties ne se laisse pas piéger par des noms de membres de Object', () => {
+  const nested = unflattenProperties({ '__proto__ / x': 1, constructor: 'c', 'A / toString': 2 });
+  assert.deepEqual(Object.keys(nested), ['__proto__', 'constructor', 'A']);
+  assert.equal(JSON.stringify(nested), '{"__proto__":{"x":1},"constructor":"c","A":{"toString":2}}');
+  assert.equal(Object.getPrototypeOf(nested), Object.prototype);
+  assert.equal('x' in {}, false, 'Object.prototype n’a pas été modifié');
 });

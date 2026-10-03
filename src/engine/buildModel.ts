@@ -99,22 +99,57 @@ function readFloats(attribute: Attribute, itemSize: number): ArrayLike<number> {
 }
 
 /**
- * Transforme la scène glTF en modèle optimisé pour l'affichage :
+ * Ce que buildModel a besoin de savoir d'une scène, quel que soit le format d'origine
+ * (glTF, USD…) : quels objets sont des nœuds du fichier, et l'identifiant, le nom et les
+ * propriétés que chacun porte.
+ */
+export interface ModelSource {
+  scene: Object3D;
+  /** Vrai si au moins un nœud porte un identifiant d'élément. */
+  useIds: boolean;
+  isNode(object: Object3D): boolean;
+  idOf(object: Object3D): string | number | undefined;
+  nameOf(object: Object3D): string | undefined;
+  /** Autres propriétés portées par le nœud (hors identifiant). */
+  extrasOf(object: Object3D): Record<string, unknown> | undefined;
+}
+
+/** Adaptateur pour une scène lue par GLTFLoader : l'identifiant est `extras.id` du nœud glTF. */
+export function gltfSource(gltf: GLTF): ModelSource {
+  const nodeDefs: NodeDef[] = (gltf.parser.json.nodes as NodeDef[] | undefined) ?? [];
+  const associations = gltf.parser.associations;
+  const nodeIndexOf = (object: Object3D): number | undefined => (associations.get(object) as { nodes?: number } | undefined)?.nodes;
+  const defOf = (object: Object3D): NodeDef | undefined => {
+    const index = nodeIndexOf(object);
+    return index === undefined ? undefined : nodeDefs[index];
+  };
+  return {
+    scene: gltf.scene,
+    useIds: nodeDefs.some((node) => validId(node.extras?.id)),
+    isNode: (object) => nodeIndexOf(object) !== undefined,
+    idOf: (object) => defOf(object)?.extras?.id as string | number | undefined,
+    nameOf: (object) => defOf(object)?.name,
+    extrasOf: (object) => {
+      const { id, ...rest } = defOf(object)?.extras ?? {};
+      void id;
+      return rest;
+    },
+  };
+}
+
+/**
+ * Transforme la scène (glTF ou USD) en modèle optimisé pour l'affichage :
  * - chaque nœud portant un identifiant devient un « élément » ;
  * - toute la géométrie est fusionnée en quelques lots (un appel de dessin par lot), les
  *   transformations sont cuites dans les sommets et le modèle est recentré sur l'origine ;
  * - chaque sommet porte le numéro de son élément, ce qui permet de le masquer ou de le colorer
  *   depuis le GPU sans jamais reconstruire la géométrie.
  */
-export function buildModel(gltf: GLTF, selectColor: IUniform<Color>): Model {
-  const scene = gltf.scene;
+export function buildModel(input: GLTF | ModelSource, selectColor: IUniform<Color>): Model {
+  const source = 'parser' in input ? gltfSource(input) : input;
+  const scene = source.scene;
   scene.updateMatrixWorld(true);
-
-  const nodeDefs: NodeDef[] = (gltf.parser.json.nodes as NodeDef[] | undefined) ?? [];
-  const associations = gltf.parser.associations;
-  const nodeIndexOf = (object: Object3D): number | undefined =>
-    (associations.get(object) as { nodes?: number } | undefined)?.nodes;
-  const useIds = nodeDefs.some((node) => validId(node.extras?.id));
+  const useIds = source.useIds;
 
   // ------------------------------------------------------------ éléments
   const elementOf = new Map<Object3D, number>();
@@ -124,13 +159,12 @@ export function buildModel(gltf: GLTF, selectColor: IUniform<Color>): Model {
 
   const elementFor = (mesh: Object3D): number => {
     let owner: Object3D | null = null; // nœud le plus proche portant un identifiant
-    let holder: Object3D | null = null; // nœud glTF le plus proche
+    let holder: Object3D | null = null; // nœud du fichier le plus proche
     for (let object: Object3D | null = mesh; object; object = object.parent) {
-      const n = nodeIndexOf(object);
-      if (n === undefined) continue;
+      if (!source.isNode(object)) continue;
       holder ??= object;
       if (!useIds) break;
-      if (validId(nodeDefs[n]?.extras?.id)) {
+      if (validId(source.idOf(object))) {
         owner = object;
         break;
       }
@@ -140,14 +174,13 @@ export function buildModel(gltf: GLTF, selectColor: IUniform<Color>): Model {
     if (index === undefined) {
       index = keys.length;
       elementOf.set(target, index);
-      const n = nodeIndexOf(target);
-      const def = n === undefined ? undefined : nodeDefs[n];
-      const { id, ...rest } = def?.extras ?? {};
-      const name = def?.name ?? target.name ?? '';
-      const key = validId(id) ? String(id) : name || `node-${n ?? index}`;
+      const id = source.idOf(target);
+      const name = source.nameOf(target) ?? target.name ?? '';
+      const key = validId(id) ? String(id) : name || `node-${index}`;
       keys.push(key);
       names.push(name || key);
-      extras.push(Object.keys(rest).length > 0 ? rest : undefined);
+      const rest = source.extrasOf(target);
+      extras.push(rest && Object.keys(rest).length > 0 ? rest : undefined);
     }
     return index;
   };

@@ -66,8 +66,20 @@ export class FilterPanel {
     );
 
     app.on('model', () => this.reset());
+    app.on('metadata', () => this.refreshPaths());
     app.on('visibility', () => this.refreshChecks());
     this.reset();
+  }
+
+  /** Après une modification de propriétés : mêmes choix, liste des propriétés et des valeurs à jour. */
+  private refreshPaths(): void {
+    const { store } = this.app;
+    clear(this.select);
+    for (const path of store.paths) this.select.append(h('option', { text: path, attrs: { value: path } }));
+    if (!store.paths.includes(this.path)) this.path = suggestGrouping(store) ?? store.paths[0] ?? '';
+    this.select.value = this.path;
+    this.renderValues();
+    if (this.coloring) this.applyColors();
   }
 
   private reset(): void {
@@ -96,9 +108,11 @@ export class FilterPanel {
     let palette = this.palettes.get(this.path);
     if (!palette) {
       palette = new Map();
-      let index = 0;
-      for (const label of this.app.store.groups(this.path).keys()) palette.set(label, categoryColor(index++, label));
       this.palettes.set(this.path, palette);
+    }
+    // Les valeurs apparues depuis (propriétés modifiées) reçoivent une couleur à leur tour.
+    for (const label of this.app.store.groups(this.path).keys()) {
+      if (!palette.has(label)) palette.set(label, categoryColor(palette.size, label));
     }
     return palette;
   }

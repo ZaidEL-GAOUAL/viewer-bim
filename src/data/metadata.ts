@@ -14,6 +14,32 @@ export interface Metadata {
   elements: Map<string, MetadataEntry>;
   /** Nom du fichier d'origine, pour l'affichage. */
   source?: string;
+  /** Propriétés que le viewer ne doit pas laisser modifier (voir `isReadOnly`). */
+  readOnly?: string[];
+}
+
+/**
+ * Propriétés issues d'un IFC qui ne se modifient pas en changeant un texte : la classe de
+ * l'objet, son type, sa place dans la structure spatiale, ses matériaux (des relations entre
+ * objets) et les quantités, calculées à partir de la géométrie. Le convertisseur les écrit dans
+ * le JSON, et le viewer les affiche sans champ de saisie.
+ */
+export const IFC_READ_ONLY = ['Classe IFC', 'Type', 'Type prédéfini', 'Site', 'Bâtiment', 'Niveau', 'Local', 'Matériaux', 'Qto_*'];
+
+/**
+ * Vrai si la propriété correspond à l'un des motifs : le nom exact, une catégorie entière
+ * (« Qto_WallBaseQuantities » verrouille « Qto_WallBaseQuantities / NetVolume »), ou un préfixe
+ * terminé par « * ».
+ */
+export function isReadOnly(path: string, patterns: readonly string[]): boolean {
+  for (const pattern of patterns) {
+    if (pattern.endsWith('*')) {
+      if (path.startsWith(pattern.slice(0, -1))) return true;
+    } else if (path === pattern || path.startsWith(pattern + PATH_SEP)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export const SUPPORTED_VERSION = 1;
@@ -95,7 +121,30 @@ export function parseMetadata(json: unknown): Metadata {
   }
 
   if (elements.size === 0) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
-  return { version, elements };
+  const metadata: Metadata = { version, elements };
+  if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
+  return metadata;
+}
+
+/** Reconstruit des propriétés imbriquées à partir des chemins aplatis (« A / B » → { A: { B } }). */
+export function unflattenProperties(flat: FlatProps): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [path, value] of Object.entries(flat)) {
+    const parts = path.split(PATH_SEP);
+    let target = out;
+    for (const part of parts.slice(0, -1)) {
+      // Seules les catégories créées ici comptent : « __proto__ » lu par héritage serait Object.prototype.
+      const existing = Object.hasOwn(target, part) ? target[part] : undefined;
+      if (isRecord(existing)) target = existing;
+      else {
+        const next: Record<string, unknown> = {};
+        Object.defineProperty(target, part, { value: next, enumerable: true, writable: true, configurable: true });
+        target = next;
+      }
+    }
+    Object.defineProperty(target, parts[parts.length - 1], { value, enumerable: true, writable: true, configurable: true });
+  }
+  return out;
 }
 
 // Nombres à la française (virgule décimale), sans séparateur de milliers pour ne pas dénaturer
@@ -128,6 +177,10 @@ export class PropertyStore {
   readonly count: number;
   paths: string[] = [];
   matched = 0;
+  /** Motifs des propriétés non modifiables. */
+  readOnly: string[] = [];
+  /** Éléments dont l'objet de propriétés a été copié avant modification. */
+  private readonly owned = new Set<number>();
   private readonly props: (FlatProps | undefined)[];
   private readonly labels: (string | undefined)[];
   private readonly groupCache = new Map<string, Map<string, number[]>>();
@@ -158,6 +211,54 @@ export class PropertyStore {
 
   propsOf(index: number): FlatProps | undefined {
     return this.props[index];
+  }
+
+  isEditable(path: string): boolean {
+    return !isReadOnly(path, this.readOnly);
+  }
+
+  /** Modifie (ou crée) une propriété d'un élément. Renvoie faux si rien n'a changé. */
+  update(index: number, path: string, value: PropValue): boolean {
+    let props = this.props[index];
+    if (!props) {
+      props = {};
+      this.props[index] = props;
+      this.matched++;
+      this.owned.add(index);
+    }
+    if (Object.hasOwn(props, path) && props[path] === value) return false;
+    if (!this.owned.has(index)) {
+      // Les propriétés reçues de `set` appartiennent au fichier chargé : on modifie une copie,
+      // pour pouvoir y revenir.
+      props = { ...props };
+      this.props[index] = props;
+      this.owned.add(index);
+    }
+    Object.defineProperty(props, path, { value, enumerable: true, writable: true, configurable: true });
+    if (!this.paths.includes(path)) this.paths = [...this.paths, path].sort(collator.compare);
+    this.groupCache.delete(path);
+    return true;
+  }
+
+  setLabel(index: number, label: string | undefined): void {
+    this.labels[index] = label;
+  }
+
+  /** Les métadonnées courantes, modifications comprises, au format du contrat. */
+  export(keys: readonly string[]): Record<string, unknown> {
+    const elements: Record<string, unknown> = {};
+    for (let i = 0; i < this.count; i++) {
+      const props = this.props[i];
+      if (!props) continue;
+      const entry: Record<string, unknown> = {};
+      if (this.labels[i]) entry.label = this.labels[i];
+      entry.properties = unflattenProperties(props);
+      Object.defineProperty(elements, keys[i], { value: entry, enumerable: true, writable: true, configurable: true });
+    }
+    const out: Record<string, unknown> = { version: SUPPORTED_VERSION };
+    if (this.readOnly.length > 0) out.readOnly = [...this.readOnly];
+    out.elements = elements;
+    return out;
   }
 
   labelOf(index: number): string | undefined {

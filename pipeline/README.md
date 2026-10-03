@@ -1,8 +1,8 @@
-# Convertisseur IFC → GLB + JSON
+# Convertisseur IFC → GLB ou USD + JSON
 
 `ifc_to_glb.py` transforme un fichier IFC en deux fichiers que le viewer sait lire :
 
-- un **GLB** pour la géométrie ;
+- un **GLB** (ou, au choix, un **USD** : `.usdz` ou `.usda`) pour la géométrie ;
 - un **JSON** pour les métadonnées, au format décrit dans
   [docs/contrat-metadonnees.md](../docs/contrat-metadonnees.md).
 
@@ -33,6 +33,7 @@ Cela écrit `maquette.glb` et `maquette.json` à côté de l'IFC. Options :
 | Option | Effet |
 | --- | --- |
 | `-o dossier/` | écrit les fichiers dans un autre dossier |
+| `--format usd` | écrit un paquet `.usdz` au lieu du `.glb` (`--format usda` : USD texte nu) |
 | `--classes IfcWall,IfcSlab` | ne convertit que ces classes IFC (sous-classes comprises) |
 | `--ids id1,id2` | ne convertit que ces `GlobalId` |
 | `--espaces` | exporte aussi les locaux (`IfcSpace`), écartés par défaut |
@@ -53,6 +54,14 @@ Les éléments conservés par un filtre gardent leur identifiant et toutes leurs
 - Couleurs et transparence reprises des styles de surface et des matériaux IFC.
 - Un solide fermé est exporté en simple face, une surface ouverte en double face.
 
+**USD** (`usd_writer.py`). Même organisation que le GLB, dans un fichier USD texte : un prim
+`Xform` par élément sous `/IFC/Elements`, dont `customData` porte l'identifiant (`id`), le nom et
+toutes les propriétés ; un prototype de maillage par forme sous `/IFC/Prototypes`, référencé par
+les éléments qui le partagent ; des matériaux `UsdPreviewSurface`. Le fichier reste en Z vers le
+haut (`upAxis = "Z"`), en mètres. Le JSON est tout de même écrit à côté : le viewer prend ses
+métadonnées dans l'un ou l'autre. Les fichiers sont vérifiés par les tests avec la bibliothèque
+officielle OpenUSD (`usd-core`).
+
 **Métadonnées**, pour chaque élément :
 
 | Propriété | Origine dans l'IFC |
@@ -66,6 +75,13 @@ Les éléments conservés par un filtre gardent leur identifiant et toutes leurs
 
 La structure spatiale devient de simples propriétés : dans le viewer, « Grouper par » `Niveau`
 puis `Classe IFC` reconstruit l'arborescence voulue.
+
+Le JSON porte aussi `readOnly`, la liste de ce que le viewer ne doit pas laisser modifier
+(`READ_ONLY` dans `ifc_to_glb.py`) : la classe, le type, la structure spatiale et les matériaux
+sont des relations entre objets IFC, et les quantités (`Qto_*`) sont calculées à partir de la
+géométrie — changer le texte ne changerait pas le modèle. Nom, description, repère et jeux de
+propriétés (`Pset_*`) restent modifiables. Dans l'USD, la même liste est dans le
+`customLayerData` du calque.
 
 ## Limites
 
@@ -98,7 +114,7 @@ changer de version, vérifier qu'un IFC4 et un IFC2x3 se convertissent entièrem
 ## Tests
 
 ```bash
-pip install pytest
+pip install pytest usd-core
 ```
 
 ```bash
