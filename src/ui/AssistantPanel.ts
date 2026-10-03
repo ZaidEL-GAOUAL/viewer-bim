@@ -111,6 +111,14 @@ export class AssistantPanel {
       count: model.count,
       keys: model.keys,
       labelOf: (index) => app.elementLabel(index),
+      geometry: (index) => {
+        // Les boîtes sont stockées recentrées ; le décalage redonne les coordonnées du projet.
+        const b = model.boxes;
+        const at = index * 6;
+        if (b[at] > b[at + 3]) return null;
+        const { x, y, z } = model.offset;
+        return { min: [b[at] + x, b[at + 1] + y, b[at + 2] + z], max: [b[at + 3] + x, b[at + 4] + y, b[at + 5] + z] };
+      },
       selection: app.selection,
       select: (indices, isolate) => {
         app.select(indices, 'panel');

@@ -2,6 +2,7 @@
 // le fichier entier). Le résumé est borné pour tenir dans quelques milliers de caractères.
 
 import { PATH_SEP, UNDEFINED_LABEL, type PropertyStore } from '../data/metadata.ts';
+import { GEOMETRY_PATHS } from './tools.ts';
 
 const MAX_GENERAL = 40;
 const MAX_CATEGORIES = 30;
@@ -109,6 +110,8 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
     `Propriétés verrouillées (lecture seule, non modifiables, même sur demande) : ${locked}.`,
     '',
     summarizeProperties(store),
+    '',
+    `Propriétés calculées depuis la 3D (lecture seule, en mètres, repère du projet, Y = vertical), utilisables dans find_elements, select_elements et compute : ${GEOMETRY_PATHS.join(', ')}.`,
     '',
     'Règles :',
     '- Réponds en français, de façon brève et concrète. Pas de formules de politesse inutiles.',

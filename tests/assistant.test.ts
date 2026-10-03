@@ -18,11 +18,24 @@ function sampleContext() {
 
   const selected: number[][] = [];
   const isolated: boolean[] = [];
+  // Boîtes en mètres : les murs font 10 × 2,8 × 0,2 ; la dalle est à 3 m de haut ; le poteau fait 6 m ; l'élément 5 n'a pas de géométrie.
+  const boxes: ([number, number, number, number, number, number] | null)[] = [
+    [0, 0, 0, 10, 2.8, 0.2],
+    [0, 0, 5, 10, 2.8, 5.2],
+    [2, 0, 0, 3, 2.1, 0.2],
+    [0, 2.8, 0, 10, 3, 5],
+    [4, 0, 2, 4.4, 6, 2.4],
+    null,
+  ];
   const context: ToolContext = {
     store,
     count: 6,
     keys: ['a', 'b', 'c', 'd', 'e', 'f'],
     labelOf: (index) => store.labelOf(index) ?? `élément ${index}`,
+    geometry: (index) => {
+      const b = boxes[index];
+      return b ? { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] } : null;
+    },
     selection: new Set([0, 1]),
     select: (indices, isolate) => {
       selected.push(indices);
@@ -242,4 +255,33 @@ test('compute : sommes et conditions calculées par le viewer, pas par le modèl
   assert.match(runTool('compute', { filters: [], expression: '[Inexistante] + 1' }, context).note, /introuvable/);
   assert.match(runTool('compute', { filters: [], expression: '[NetVolume] +' }, context).note, /illisible/);
   assert.match(runTool('compute', { filters: [] }, context).note, /manquante/);
+});
+
+test('les propriétés calculées depuis la 3D servent aux filtres, aux formules et aux fiches, jamais aux modifications', () => {
+  const { context } = sampleContext();
+  assert.equal(resolveProperty(context.store, 'haut'), 'Géométrie / Haut');
+  assert.equal(resolveProperty(context.store, 'hauteur'), 'Géométrie / Emprise Y (hauteur)');
+
+  const tall = runTool('find_elements', { filters: [{ property: 'Haut', op: 'greater', value: 3 }], properties: ['Emprise Y (hauteur)'] }, context);
+  const found = tall.result as { count: number; elements: Record<string, unknown>[] };
+  assert.equal(found.count, 1);
+  assert.equal(found.elements[0].label, 'Poteau');
+  assert.equal(found.elements[0]['Géométrie / Emprise Y (hauteur)'], 6);
+
+  const volume = runTool('compute', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], expression: '[Emprise X] * [Emprise Y (hauteur)] * [Emprise Z]' }, context).result as { computed: number; sum: number };
+  assert.equal(volume.computed, 2);
+  assert.ok(Math.abs(volume.sum - 11.2) < 1e-9);
+
+  // Un élément sans géométrie n'a pas de valeur calculée : il est ignoré, pas mis à zéro.
+  const all = runTool('compute', { filters: [], expression: '[Centre Y]' }, context).result as { computed: number; skipped: number };
+  assert.deepEqual([all.computed, all.skipped], [5, 1]);
+  const above = runTool('compute', { filters: [], where: '[Bas] >= 2.8' }, context).result as { matching: number; examples: { label: string }[] };
+  assert.deepEqual(above.examples.map((item) => item.label), ['Dalle']);
+
+  assert.match(runTool('count_by', { property: 'Centre X' }, context).note, /calculée/);
+  assert.match(runTool('set_property', { filters: [], property: 'Géométrie / Haut', value: '9' }, context).note, /calculée/);
+  assert.equal(context.store.paths.includes('Géométrie / Haut'), false);
+  const listed = runTool('list_properties', { search: 'géom' }, context).result as { total: number; properties: { property: string; computed?: boolean }[] };
+  assert.equal(listed.total, 8);
+  assert.ok(listed.properties.every((item) => item.computed));
 });

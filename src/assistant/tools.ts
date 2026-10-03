@@ -12,12 +12,20 @@ export interface Filter {
   value?: PropValue;
 }
 
+/** Boîte englobante d'un élément, en mètres, dans le repère du projet (Y vertical). */
+export interface ElementBox {
+  min: [number, number, number];
+  max: [number, number, number];
+}
+
 /** Ce que les outils peuvent lire et faire dans l'application. */
 export interface ToolContext {
   store: PropertyStore;
   count: number;
   keys: readonly string[];
   labelOf(index: number): string;
+  /** Emprise calculée depuis la 3D, ou null pour un élément sans géométrie. */
+  geometry(index: number): ElementBox | null;
   selection: ReadonlySet<number>;
   select(indices: number[], isolate: boolean): void;
   /** Nombre de valeurs changées, ou 'locked' si la propriété est verrouillée. */
@@ -129,6 +137,48 @@ const DETAIL_LIMIT = 20;
 const DETAIL_MAX = 50;
 const COUNT_LIMIT = 40;
 
+// ------------------------------------------------- propriétés calculées (3D)
+
+export const GEOMETRY_CATEGORY = 'Géométrie';
+const GEOMETRY_NAMES = ['Centre X', 'Centre Y', 'Centre Z', 'Emprise X', 'Emprise Y (hauteur)', 'Emprise Z', 'Bas', 'Haut'] as const;
+/** Propriétés en lecture seule calculées depuis la géométrie, utilisables dans les filtres et les formules. */
+export const GEOMETRY_PATHS: string[] = GEOMETRY_NAMES.map((name) => `${GEOMETRY_CATEGORY}${PATH_SEP}${name}`);
+const GEOMETRY_SET = new Set(GEOMETRY_PATHS);
+
+function geometryValue(box: ElementBox, path: string): number {
+  const name = path.slice(GEOMETRY_CATEGORY.length + PATH_SEP.length);
+  const round = (value: number) => Number(value.toFixed(3));
+  switch (name) {
+    case 'Centre X':
+      return round((box.min[0] + box.max[0]) / 2);
+    case 'Centre Y':
+      return round((box.min[1] + box.max[1]) / 2);
+    case 'Centre Z':
+      return round((box.min[2] + box.max[2]) / 2);
+    case 'Emprise X':
+      return round(box.max[0] - box.min[0]);
+    case 'Emprise Y (hauteur)':
+      return round(box.max[1] - box.min[1]);
+    case 'Emprise Z':
+      return round(box.max[2] - box.min[2]);
+    case 'Bas':
+      return round(box.min[1]);
+    case 'Haut':
+      return round(box.max[1]);
+    default:
+      return NaN;
+  }
+}
+
+/** Valeur d'une propriété d'un élément : celle des métadonnées, ou calculée depuis la 3D. */
+export function valueOf(context: ToolContext, index: number, path: string): PropValue | undefined {
+  if (GEOMETRY_SET.has(path)) {
+    const box = context.geometry(index);
+    return box ? geometryValue(box, path) : undefined;
+  }
+  return ownValue(context.store.propsOf(index), path);
+}
+
 // ------------------------------------------------------------- résolution
 
 function fold(text: string): string {
@@ -141,7 +191,7 @@ function fold(text: string): string {
  * « Pset_WallCommon / FireRating ») s'il est unique.
  */
 export function resolveProperty(store: PropertyStore, name: string): string | { error: string } {
-  const paths = store.paths;
+  const paths = [...store.paths, ...GEOMETRY_PATHS];
   if (paths.includes(name)) return name;
   const wanted = fold(name.replace(/\s*\/\s*/g, PATH_SEP));
   const exact = paths.filter((path) => fold(path) === wanted);
@@ -232,11 +282,7 @@ function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter
 export function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
   const base = scope === 'selection' ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
   if (filters.length === 0) return base;
-  const { store } = context;
-  return base.filter((index) => {
-    const props = store.propsOf(index);
-    return filters.every(({ path, filter }) => matches(ownValue(props, path), filter));
-  });
+  return base.filter((index) => filters.every(({ path, filter }) => matches(valueOf(context, index, path), filter)));
 }
 
 function parseValue(raw: unknown): PropValue {
@@ -257,9 +303,8 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`): s
 // ------------------------------------------------------------------- outils
 
 function elementSummary(context: ToolContext, index: number, paths: string[]): Record<string, unknown> {
-  const props = context.store.propsOf(index);
   const out: Record<string, unknown> = { label: context.labelOf(index), id: context.keys[index] };
-  for (const path of paths) out[path] = ownValue(props, path) ?? null;
+  for (const path of paths) out[path] = valueOf(context, index, path) ?? null;
   return out;
 }
 
@@ -269,16 +314,22 @@ export function runTool(name: string, args: Record<string, unknown>, context: To
     case 'list_properties': {
       const search = typeof args.search === 'string' ? fold(args.search) : '';
       const paths = store.paths.filter((path) => search === '' || fold(path).includes(search));
-      const properties = paths.slice(0, 120).map((path) => {
+      const properties: Record<string, unknown>[] = paths.slice(0, 120).map((path) => {
         const { count: distinct, undefinedCount } = store.distinctCount(path, 1000);
         return { property: path, distinct: distinct > 1000 ? '> 1000' : distinct, missing: undefinedCount, locked: !store.isEditable(path) };
       });
-      return { result: { total: paths.length, properties }, note: `${plural(paths.length, 'propriété')} listée${paths.length > 1 ? 's' : ''}` };
+      const computed = GEOMETRY_PATHS.filter((path) => search === '' || fold(path).includes(search));
+      for (const path of computed) properties.push({ property: path, computed: true, locked: true, unit: 'm' });
+      const total = paths.length + computed.length;
+      return { result: { total, properties }, note: `${plural(total, 'propriété')} listée${total > 1 ? 's' : ''}` };
     }
 
     case 'count_by': {
       const path = resolveProperty(store, String(args.property ?? ''));
       if (typeof path !== 'string') return { result: path, note: path.error };
+      if (GEOMETRY_SET.has(path)) {
+        return { result: { error: `« ${path} » est une valeur continue calculée : utilisez compute (somme, min, max) ou find_elements avec greater/less.` }, note: 'Propriété calculée : pas de répartition' };
+      }
       const scope = args.scope === 'selection' ? context.selection : null;
       const counts = new Map<string, number>();
       for (const [label, members] of store.groups(path)) {
@@ -359,8 +410,7 @@ export function runTool(name: string, args: Record<string, unknown>, context: To
       const matching: number[] = [];
       const values = new Map<number, number>();
       for (const index of indices) {
-        const props = store.propsOf(index);
-        const lookup = (path: string) => ownValue(props, path);
+        const lookup = (path: string) => valueOf(context, index, path);
         if (where) {
           const ok: Value = where.evaluate(lookup);
           if (ok !== true) continue;
@@ -413,6 +463,9 @@ export function runTool(name: string, args: Record<string, unknown>, context: To
       const resolved = resolveProperty(store, name);
       // Une propriété inconnue est créée sous le nom donné (avec « / » pour la catégorie).
       const path = typeof resolved === 'string' ? resolved : name.split('/').map((part) => part.trim()).filter(Boolean).join(PATH_SEP);
+      if (GEOMETRY_SET.has(path) || path.startsWith(GEOMETRY_CATEGORY + PATH_SEP)) {
+        return { result: { changed: 0, error: `« ${path} » est calculée depuis la 3D : elle ne se modifie pas.` }, note: `« ${path} » est calculée` };
+      }
       const value = parseValue(args.value);
       const indices = selectIndices(context, filters, args.scope);
       if (indices.length === 0) return { result: { changed: 0, error: 'Aucun élément ne vérifie ces filtres.' }, note: 'Aucun élément concerné' };
