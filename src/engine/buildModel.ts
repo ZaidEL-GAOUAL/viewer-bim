@@ -112,6 +112,8 @@ export interface ModelSource {
   nameOf(object: Object3D): string | undefined;
   /** Autres propriétés portées par le nœud (hors identifiant). */
   extrasOf(object: Object3D): Record<string, unknown> | undefined;
+  /** Association au nœud source, signalée une seule fois par élément créé. */
+  onElement?(object: Object3D, key: string): void;
 }
 
 /** Adaptateur pour une scène lue par GLTFLoader : l'identifiant est `extras.id` du nœud glTF. */
@@ -178,6 +180,7 @@ export function buildModel(input: GLTF | ModelSource, selectColor: IUniform<Colo
       const name = source.nameOf(target) ?? target.name ?? '';
       const key = validId(id) ? String(id) : name || `node-${index}`;
       keys.push(key);
+      source.onElement?.(target, key);
       names.push(name || key);
       const rest = source.extrasOf(target);
       extras.push(rest && Object.keys(rest).length > 0 ? rest : undefined);

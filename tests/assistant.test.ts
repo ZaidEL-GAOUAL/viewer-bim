@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { compactHistory, trimHistory, type Message } from '../src/assistant/client.ts';
 import { compileExpression } from '../src/assistant/expression.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
-import { TOOL_DEFINITIONS, resolveProperty, runTool, type BoxRequest, type ToolContext } from '../src/assistant/tools.ts';
+import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
 
 function sampleContext() {
@@ -18,52 +18,13 @@ function sampleContext() {
 
   const selected: number[][] = [];
   const isolated: boolean[] = [];
-  const moves: [number, number, number, number][] = [];
-  const created: BoxRequest[] = [];
-  // Boîtes en mètres : les murs font 10 × 2,8 × 0,2 ; la dalle est à 3 m de haut ; le poteau fait 6 m ; l'élément 5 n'a pas de géométrie.
-  const boxes: ([number, number, number, number, number, number] | null)[] = [
-    [0, 0, 0, 10, 2.8, 0.2],
-    [0, 0, 5, 10, 2.8, 5.2],
-    [2, 0, 0, 3, 2.1, 0.2],
-    [0, 2.8, 0, 10, 3, 5],
-    [4, 0, 2, 4.4, 6, 2.4],
-    null,
-  ];
   const context: ToolContext = {
-    store,
-    count: 6,
-    keys: ['a', 'b', 'c', 'd', 'e', 'f'],
+    store, count: 6, keys: ['a', 'b', 'c', 'd', 'e', 'f'],
     labelOf: (index) => store.labelOf(index) ?? `élément ${index}`,
-    geometry: (index) => {
-      const b = boxes[index];
-      return b ? { min: [b[0], b[1], b[2]], max: [b[3], b[4], b[5]] } : null;
-    },
     selection: new Set([0, 1]),
-    select: (indices, isolate) => {
-      selected.push(indices);
-      isolated.push(isolate);
-    },
-    edit: (indices, path, value: PropValue) => {
-      if (!store.isEditable(path)) return 'locked';
-      let changed = 0;
-      for (const index of indices) if (store.update(index, path, value)) changed++;
-      return changed;
-    },
-    move: (indices, dx, dy, dz) => {
-      for (const index of indices) {
-        const b = boxes[index];
-        if (b) boxes[index] = [b[0] + dx, b[1] + dy, b[2] + dz, b[3] + dx, b[4] + dy, b[5] + dz];
-      }
-      moves.push([indices.length, dx, dy, dz]);
-      return indices.filter((index) => boxes[index]).length;
-    },
-    duplicate: (indices) => indices.map((index) => index + 100),
-    addBoxes: (list) => {
-      created.push(...list);
-      return list.map((_, i) => 200 + i);
-    },
+    select: (indices, isolate) => { selected.push(indices); isolated.push(isolate); },
   };
-  return { store, context, selected, isolated, moves, created };
+  return { store, context, selected, isolated };
 }
 
 test('resolveProperty retrouve un nom exact, approximatif ou par son dernier segment', () => {
@@ -102,25 +63,6 @@ test('count_by et find_elements filtrent sur le modèle ou la sélection', () =>
   assert.deepEqual(inSelection.values, [{ value: 'Béton', count: 1 }, { value: null, count: 1 }]);
 });
 
-test('set_property respecte les verrous, crée des propriétés et convertit les valeurs', () => {
-  const { store, context } = sampleContext();
-  const locked = runTool('set_property', { filters: [], property: 'Niveau', value: 'R+2' }, context);
-  assert.match(locked.note, /verrouillée/);
-  assert.equal(store.propsOf(0)?.Niveau, 'RDC');
-
-  const lot = runTool('set_property', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], property: 'Chantier / Lot', value: 'Gros œuvre' }, context);
-  assert.deepEqual(lot.result, { property: 'Chantier / Lot', value: 'Gros œuvre', elements: 2, changed: 2 });
-  assert.equal(store.propsOf(1)?.['Chantier / Lot'], 'Gros œuvre');
-  assert.equal(store.propsOf(2)?.['Chantier / Lot'], undefined);
-
-  const numeric = runTool('set_property', { filters: [], scope: 'selection', property: 'Pset_WallCommon / FireRating', value: '90' }, context);
-  assert.equal((numeric.result as { changed: number }).changed, 2);
-  assert.equal(store.propsOf(0)?.['Pset_WallCommon / FireRating'], 90);
-  const flag = runTool('set_property', { filters: [], scope: 'selection', property: 'Pset_WallCommon / IsExternal', value: 'true' }, context);
-  assert.equal((flag.result as { changed: number }).changed, 2);
-  assert.equal(store.propsOf(0)?.['Pset_WallCommon / IsExternal'], true);
-});
-
 test('select_elements et get_element agissent sur la vue et lisent une fiche', () => {
   const { context, selected, isolated } = sampleContext();
   const outcome = runTool('select_elements', { filters: [{ property: 'Matériaux', op: 'equals', value: 'Béton' }], isolate: true }, context);
@@ -135,6 +77,26 @@ test('select_elements et get_element agissent sur la vue et lisent une fiche', (
   assert.match((runTool('inconnu', {}, context).result as { error: string }).error, /inconnu/);
 });
 
+test('les comparaisons numériques excluent les propriétés absentes, vides, booléennes ou non numériques', () => {
+  const values: (PropValue | undefined)[] = [undefined, null, '', '   ', false, true, 'inconnu', '0x10', 0, '750,5', 1500];
+  const store = new PropertyStore(values.length);
+  values.forEach((value, index) => store.set(index, value === undefined ? {} : { CO2: value }));
+  store.finalize();
+  const context: ToolContext = {
+    store, count: values.length, keys: values.map((_, index) => String(index)),
+    labelOf: (index) => String(index), selection: new Set(), select: () => {},
+  };
+  const count = (op: 'less' | 'greater', value?: PropValue) => (runTool('find_elements', {
+    filters: [{ property: 'CO2', op, value }],
+  }, context).result as { count: number }).count;
+  assert.equal(count('less', 1000), 2);
+  assert.equal(count('greater', -1), 3);
+  for (const invalid of [undefined, null, '', '   ', false, true, 'inconnu', '0x10']) {
+    assert.equal(count('less', invalid), 0);
+    assert.equal(count('greater', invalid), 0);
+  }
+});
+
 test('le message système résume les propriétés sans dépasser quelques milliers de caractères', () => {
   const { store } = sampleContext();
   const summary = summarizeProperties(store);
@@ -143,7 +105,7 @@ test('le message système résume les propriétés sans dépasser quelques milli
   assert.match(summary, /Qto_WallBaseQuantities \[verrouillée\] \(2 éléments\) : NetVolume/);
   const prompt = buildSystemPrompt({ fileName: 'test.glb', count: 6, store });
   assert.match(prompt, /« test.glb », 6 éléments, 5 avec des propriétés/);
-  assert.match(prompt, /verrouillées .* : Classe IFC, Niveau, Matériaux, Qto_\*/);
+  assert.match(prompt, /Champs verrouillés .* : Classe IFC, Niveau, Matériaux, Qto_\*/);
 
   // Un modèle aux valeurs toutes différentes ne liste que des exemples, et la taille reste bornée.
   const wide = new PropertyStore(3000);
@@ -192,7 +154,7 @@ test('trimHistory garde le message système et des échanges complets', () => {
 
 test('les définitions d’outils sont au format OpenAI et nomment des outils implémentés', () => {
   const names = TOOL_DEFINITIONS.map((tool) => tool.function.name);
-  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'compute', 'move_elements', 'duplicate_elements', 'add_boxes', 'set_property']);
+  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'compute', 'get_view_settings', 'update_view']);
   for (const tool of TOOL_DEFINITIONS) {
     assert.equal(tool.type, 'function');
     assert.equal(tool.function.parameters.type, 'object');
@@ -270,60 +232,4 @@ test('compute : sommes et conditions calculées par le viewer, pas par le modèl
   assert.match(runTool('compute', { filters: [], expression: '[Inexistante] + 1' }, context).note, /introuvable/);
   assert.match(runTool('compute', { filters: [], expression: '[NetVolume] +' }, context).note, /illisible/);
   assert.match(runTool('compute', { filters: [] }, context).note, /manquante/);
-});
-
-test('les propriétés calculées depuis la 3D servent aux filtres, aux formules et aux fiches, jamais aux modifications', () => {
-  const { context } = sampleContext();
-  assert.equal(resolveProperty(context.store, 'haut'), 'Géométrie / Haut');
-  assert.equal(resolveProperty(context.store, 'hauteur'), 'Géométrie / Emprise Y (hauteur)');
-
-  const tall = runTool('find_elements', { filters: [{ property: 'Haut', op: 'greater', value: 3 }], properties: ['Emprise Y (hauteur)'] }, context);
-  const found = tall.result as { count: number; elements: Record<string, unknown>[] };
-  assert.equal(found.count, 1);
-  assert.equal(found.elements[0].label, 'Poteau');
-  assert.equal(found.elements[0]['Géométrie / Emprise Y (hauteur)'], 6);
-
-  const volume = runTool('compute', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], expression: '[Emprise X] * [Emprise Y (hauteur)] * [Emprise Z]' }, context).result as { computed: number; sum: number };
-  assert.equal(volume.computed, 2);
-  assert.ok(Math.abs(volume.sum - 11.2) < 1e-9);
-
-  // Un élément sans géométrie n'a pas de valeur calculée : il est ignoré, pas mis à zéro.
-  const all = runTool('compute', { filters: [], expression: '[Centre Y]' }, context).result as { computed: number; skipped: number };
-  assert.deepEqual([all.computed, all.skipped], [5, 1]);
-  const above = runTool('compute', { filters: [], where: '[Bas] >= 2.8' }, context).result as { matching: number; examples: { label: string }[] };
-  assert.deepEqual(above.examples.map((item) => item.label), ['Dalle']);
-
-  assert.match(runTool('count_by', { property: 'Centre X' }, context).note, /calculée/);
-  assert.match(runTool('set_property', { filters: [], property: 'Géométrie / Haut', value: '9' }, context).note, /calculée/);
-  assert.equal(context.store.paths.includes('Géométrie / Haut'), false);
-  const listed = runTool('list_properties', { search: 'géom' }, context).result as { total: number; properties: { property: string; computed?: boolean }[] };
-  assert.equal(listed.total, 8);
-  assert.ok(listed.properties.every((item) => item.computed));
-});
-
-test('move_elements, duplicate_elements et add_boxes passent par l’application avec des paramètres vérifiés', () => {
-  const { context, moves, created } = sampleContext();
-  const moved = runTool('move_elements', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], dx: 0, dy: '2,5', dz: 0 }, context);
-  assert.deepEqual(moves, [[2, 0, 2.5, 0]]);
-  assert.equal(moved.note, '2 éléments déplacés de (0, 2.5, 0) m');
-  assert.match(runTool('move_elements', { filters: [], dx: 'loin', dy: 0, dz: 0 }, context).note, /illisible/);
-  assert.match(runTool('move_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+9' }], dx: 1, dy: 0, dz: 0 }, context).note, /Aucun élément/);
-
-  const copies = runTool('duplicate_elements', { filters: [], scope: 'selection', dx: 5, dy: 0, dz: 0 }, context).result as { created: number };
-  assert.equal(copies.created, 2);
-
-  const room = runTool('add_boxes', {
-    boxes: [
-      { name: 'Mur nord', size: [4, 2.8, 0.2], center: [2, 1.4, 0], properties: { 'Classe IFC': 'IfcWall', Niveau: 'RDC' } },
-      { name: 'Sol', size: [4, 0.2, 4], center: [2, -0.1, 2], color: [120, 120, 120], rotation: '45' },
-    ],
-  }, context);
-  assert.equal((room.result as { created: number }).created, 2);
-  assert.equal(created[0].properties?.['Classe IFC'], 'IfcWall');
-  assert.deepEqual(created[1].color, [120, 120, 120]);
-  assert.equal(created[1].rotation, 45);
-  assert.match(room.note, /2 boîtes créées : Mur nord, Sol/);
-  assert.match(runTool('add_boxes', { boxes: [{ name: 'x', size: [1, 0, 1], center: [0, 0, 0] }] }, context).note, /positives/);
-  assert.match(runTool('add_boxes', { boxes: [{ name: 'x', size: [1, 1], center: [0, 0, 0] }] }, context).note, /\[x, y, z\]/);
-  assert.match(runTool('add_boxes', { boxes: '[{"name":"json","size":[1,1,1],"center":[0,0,0]}]' }, context).note, /1 boîte créée : json/);
 });

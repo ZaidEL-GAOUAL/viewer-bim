@@ -16,6 +16,8 @@ export interface Metadata {
   source?: string;
   /** Propriétés que le viewer ne doit pas laisser modifier (voir `isReadOnly`). */
   readOnly?: string[];
+  /** Complete snapshots replace embedded properties for matching elements. Older JSON merges. */
+  propertiesMode?: 'replace';
 }
 
 /**
@@ -123,6 +125,7 @@ export function parseMetadata(json: unknown): Metadata {
   if (elements.size === 0) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
   const metadata: Metadata = { version, elements };
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
+  if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
   return metadata;
 }
 
@@ -174,7 +177,7 @@ export function compareValues(a: string, b: string): number {
 
 /** Propriétés de tous les éléments d'un modèle, indexées par numéro d'élément. */
 export class PropertyStore {
-  count: number;
+  readonly count: number;
   paths: string[] = [];
   matched = 0;
   /** Motifs des propriétés non modifiables. */
@@ -184,6 +187,7 @@ export class PropertyStore {
   private readonly props: (FlatProps | undefined)[];
   private readonly labels: (string | undefined)[];
   private readonly groupCache = new Map<string, Map<string, number[]>>();
+  private coverageCache: Map<string, number> | null = null;
 
   constructor(count: number) {
     this.count = count;
@@ -191,32 +195,16 @@ export class PropertyStore {
     this.labels = new Array<string | undefined>(count).fill(undefined);
   }
 
-  set(index: number, props: FlatProps, label?: string): void {
+  set(index: number, props: FlatProps | undefined, label?: string): void {
+    this.coverageCache = null;
     this.props[index] = props;
     this.labels[index] = label;
-  }
-
-  /** Fait de la place pour des éléments ajoutés au modèle (sans propriétés pour l'instant). */
-  grow(count: number): void {
-    while (this.count < count) {
-      this.props.push(undefined);
-      this.labels.push(undefined);
-      this.count++;
-    }
-  }
-
-  /** Oublie les derniers éléments (après le retrait d'éléments ajoutés). */
-  shrink(count: number): void {
-    if (count >= this.count) return;
-    this.props.length = count;
-    this.labels.length = count;
-    for (const index of this.owned) if (index >= count) this.owned.delete(index);
-    this.count = count;
-    this.finalize();
+    this.owned.delete(index);
   }
 
   /** À appeler une fois toutes les propriétés enregistrées. */
   finalize(): void {
+    this.coverageCache = null;
     const paths = new Set<string>();
     this.matched = 0;
     for (const props of this.props) {
@@ -246,6 +234,7 @@ export class PropertyStore {
       this.owned.add(index);
     }
     if (Object.hasOwn(props, path) && props[path] === value) return false;
+    this.coverageCache = null;
     if (!this.owned.has(index)) {
       // Les propriétés reçues de `set` appartiennent au fichier chargé : on modifie une copie,
       // pour pouvoir y revenir.
@@ -274,7 +263,7 @@ export class PropertyStore {
       entry.properties = unflattenProperties(props);
       Object.defineProperty(elements, keys[i], { value: entry, enumerable: true, writable: true, configurable: true });
     }
-    const out: Record<string, unknown> = { version: SUPPORTED_VERSION };
+    const out: Record<string, unknown> = { version: SUPPORTED_VERSION, propertiesMode: 'replace' };
     if (this.readOnly.length > 0) out.readOnly = [...this.readOnly];
     out.elements = elements;
     return out;
@@ -282,6 +271,17 @@ export class PropertyStore {
 
   labelOf(index: number): string | undefined {
     return this.labels[index];
+  }
+
+  /** One scan of populated fields, shared by all property-picker coverage queries. */
+  coverageOf(path: string): number {
+    if (!this.coverageCache) {
+      this.coverageCache = new Map();
+      for (const props of this.props) if (props) for (const [key, value] of Object.entries(props)) {
+        if (value !== null && value !== '') this.coverageCache.set(key, (this.coverageCache.get(key) ?? 0) + 1);
+      }
+    }
+    return this.coverageCache.get(path) ?? 0;
   }
 
   displayValue(index: number, path: string): string {

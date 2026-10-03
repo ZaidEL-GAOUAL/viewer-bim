@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, DoubleSide, FrontSide, Mesh, MeshLambertMaterial, Vector3, type Box3, type Color, type Group, type IUniform, type Material, type Ray, type Texture } from 'three';
+import { Mesh, Vector3, type Box3, type Color, type Group, type IUniform, type Material, type Ray, type Texture } from 'three';
 import { FLAG_OPEN, applyElementState, depthPriority, type ElementState } from './elementState.ts';
 import type { IndexArray, MeshPart } from './meshMath.ts';
 import { BLOCK_TRIANGLES } from './triangleBlocks.ts';
@@ -35,28 +35,6 @@ export interface PickHit {
   backface: boolean;
   /** Vrai si le point a été ramené sur la section d'un plan de coupe (voir Viewer.pick). */
   cap: boolean;
-}
-
-/** Une pièce de géométrie d'un élément ajouté au modèle (voir Model.addElement). */
-export interface NewPart {
-  /** Positions recentrées (coordonnées du projet moins `Model.offset`). */
-  positions: Float32Array;
-  /** Normales unitaires, en flottants ou déjà quantifiées sur 8 bits. */
-  normals: Float32Array | Int8Array;
-  /** Couleur sRGB (RVBA, 0 à 255) par sommet ; une seule couleur vaut pour tous. */
-  colors: Uint8Array;
-  index: IndexArray;
-  transparent: boolean;
-  doubleSided: boolean;
-}
-
-export interface NewElement {
-  key: string;
-  name: string;
-  extras?: Record<string, unknown>;
-  parts: NewPart[];
-  /** Vrai si le maillage est un solide fermé (remplissage des coupes). */
-  closed: boolean;
 }
 
 export interface ModelData {
@@ -132,37 +110,32 @@ function slab(
 export class Model {
   readonly group: Group;
   readonly chunks: Chunk[];
-  /** Nombre d'éléments ; grandit avec `addElement`, revient en arrière avec `removeFrom`. */
-  count: number;
-  /** Nombre d'éléments du fichier chargé : ceux d'après ont été ajoutés dans le viewer. */
-  readonly originalCount: number;
+  /** Nombre d'éléments du fichier chargé ; la géométrie reste en lecture seule. */
+  readonly count: number;
   /** Identifiant de liaison avec les métadonnées, pour chaque élément. */
   readonly keys: string[];
   readonly names: string[];
   /** `extras` du nœud glTF (hors identifiant), utilisés si aucun JSON n'est fourni. */
   readonly extras: (Record<string, unknown> | undefined)[];
   /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. */
-  boxes: Float32Array;
+  readonly boxes: Float32Array;
   readonly ranges: ElementRange[][];
   readonly state: ElementState;
   readonly box: Box3;
   /** Décalage retiré aux coordonnées d'origine pour recentrer le modèle (précision des flottants). */
   readonly offset: Vector3;
-  triangleCount: number;
+  readonly triangleCount: number;
   readonly stencilBack: Material;
   readonly stencilFront: Material;
   private readonly materials: Material[];
   private readonly textures: Texture[];
-  private readonly selectColor: IUniform<Color>;
   private readonly candidates: Candidate[] = [];
-  /** Diagonale du modèle au chargement : référence des priorités d'affichage. */
-  private readonly diagonal: number;
+  private readonly appearanceMeshes: Mesh[] = [];
 
   constructor(data: ModelData) {
     this.group = data.group;
     this.chunks = data.chunks;
     this.count = data.keys.length;
-    this.originalCount = this.count;
     this.keys = data.keys;
     this.names = data.names;
     this.extras = data.extras;
@@ -176,213 +149,26 @@ export class Model {
     this.textures = data.textures;
     this.stencilBack = data.stencilBack;
     this.stencilFront = data.stencilFront;
-    this.selectColor = data.selectColor;
-    this.diagonal = data.box.isEmpty() ? 1 : data.box.getSize(new Vector3()).length() || 1;
-  }
-
-  // ------------------------------------------------------------- modifications
-
-  /** Déplace des éléments d'un même vecteur : sommets, boîtes et blocs suivent. */
-  translate(indices: Iterable<number>, dx: number, dy: number, dz: number): void {
-    const touched = new Set<number>();
-    for (const index of indices) {
-      const at = index * 6;
-      if (this.boxes[at] > this.boxes[at + 3]) continue;
-      for (const range of this.ranges[index]) {
-        const chunk = this.chunks[range.chunk];
-        const { positions, index: indexArray } = chunk;
-        // Un sommet partagé par plusieurs triangles ne bouge qu'une fois.
-        const moved = touched.has(range.chunk) ? this.movedOf(range.chunk) : this.movedOf(range.chunk, true);
-        for (let k = range.start, end = range.start + range.count; k < end; k++) {
-          const v = indexArray[k];
-          if (moved[v]) continue;
-          moved[v] = 1;
-          positions[v * 3] += dx;
-          positions[v * 3 + 1] += dy;
-          positions[v * 3 + 2] += dz;
+    this.state.onOpacityChange.add(() => {
+      if (this.state.hasTranslucency && this.appearanceMeshes.length === 0) {
+        for (const chunk of this.chunks) {
+          if (chunk.transparent) continue;
+          const material = (chunk.mesh.material as Material).clone();
+          material.transparent = true;
+          material.depthWrite = false;
+          applyElementState(material, this.state, data.selectColor, 'translucent');
+          const mesh = new Mesh(chunk.mesh.geometry, material);
+          mesh.matrixAutoUpdate = false;
+          mesh.matrix.copy(chunk.mesh.matrix);
+          mesh.layers.set(1);
+          mesh.renderOrder = 1;
+          this.materials.push(material);
+          this.appearanceMeshes.push(mesh);
+          this.group.add(mesh);
         }
-        if (range.blocks) {
-          for (let b = 0; b < range.blocks.length; b += 6) {
-            range.blocks[b] += dx;
-            range.blocks[b + 1] += dy;
-            range.blocks[b + 2] += dz;
-            range.blocks[b + 3] += dx;
-            range.blocks[b + 4] += dy;
-            range.blocks[b + 5] += dz;
-          }
-        }
-        touched.add(range.chunk);
       }
-      this.boxes[at] += dx;
-      this.boxes[at + 1] += dy;
-      this.boxes[at + 2] += dz;
-      this.boxes[at + 3] += dx;
-      this.boxes[at + 4] += dy;
-      this.boxes[at + 5] += dz;
-    }
-    for (const chunkIndex of touched) {
-      const geometry = this.chunks[chunkIndex].mesh.geometry;
-      (geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
-      this.movedScratch.delete(chunkIndex);
-    }
-    this.recomputeBox();
-  }
-
-  private readonly movedScratch = new Map<number, Uint8Array>();
-
-  private movedOf(chunk: number, reset = false): Uint8Array {
-    let moved = this.movedScratch.get(chunk);
-    const size = this.chunks[chunk].positions.length / 3;
-    if (!moved || moved.length !== size) {
-      moved = new Uint8Array(size);
-      this.movedScratch.set(chunk, moved);
-    } else if (reset) moved.fill(0);
-    return moved;
-  }
-
-  /** Matériau du modèle pour une pièce ajoutée : celui des lots équivalents, ou un nouveau. */
-  materialFor(transparent: boolean, doubleSided: boolean): Material {
-    for (const chunk of this.chunks) {
-      const material = chunk.mesh.material as MeshLambertMaterial;
-      if (chunk.transparent === transparent && chunk.doubleSided === doubleSided && !material.map) return material;
-    }
-    const material = new MeshLambertMaterial({
-      vertexColors: true,
-      side: doubleSided ? DoubleSide : FrontSide,
-      transparent,
-      depthWrite: !transparent,
+      for (const mesh of this.appearanceMeshes) mesh.visible = this.state.hasTranslucency;
     });
-    applyElementState(material, this.state, this.selectColor);
-    this.materials.push(material);
-    return material;
-  }
-
-  /** Ajoute un élément (un lot par pièce) à la fin du modèle et renvoie son indice. */
-  addElement(element: NewElement): number {
-    const index = this.count;
-    if ((index + 1) * 6 > this.boxes.length) {
-      const grown = new Float32Array(Math.max((index + 1) * 6, this.boxes.length * 2));
-      grown.set(this.boxes);
-      this.boxes = grown;
-    }
-    this.state.grow(index + 1);
-    const at = index * 6;
-    this.boxes.fill(Infinity, at, at + 3);
-    this.boxes.fill(-Infinity, at + 3, at + 6);
-    const ranges: ElementRange[] = [];
-    for (const part of element.parts) {
-      const vertexCount = part.positions.length / 3;
-      const normals = part.normals instanceof Int8Array ? part.normals : Int8Array.from(part.normals, (n) => Math.round(n * 127));
-      const colors = part.colors.length === vertexCount * 4 ? part.colors : new Uint8Array(vertexCount * 4);
-      if (colors !== part.colors) for (let i = 0; i < vertexCount; i++) colors.set(part.colors.subarray(0, 4), i * 4);
-      const ids = new Float32Array(vertexCount).fill(index);
-      const geometry = new BufferGeometry();
-      geometry.setAttribute('position', new BufferAttribute(part.positions, 3));
-      geometry.setAttribute('normal', new BufferAttribute(normals, 3, true));
-      geometry.setAttribute('color', new BufferAttribute(colors, 4, true));
-      geometry.setAttribute('aElement', new BufferAttribute(ids, 1));
-      geometry.setIndex(new BufferAttribute(part.index, 1));
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
-      const mesh = new Mesh(geometry, this.materialFor(part.transparent, part.doubleSided));
-      mesh.matrixAutoUpdate = false;
-      this.group.add(mesh);
-      this.chunks.push({ mesh, positions: part.positions, index: part.index, transparent: part.transparent, doubleSided: part.doubleSided });
-      ranges.push({ chunk: this.chunks.length - 1, start: 0, count: part.index.length, blocks: null });
-      this.triangleCount += part.index.length / 3;
-      for (let i = 0; i < part.positions.length; i += 3) {
-        const x = part.positions[i], y = part.positions[i + 1], z = part.positions[i + 2];
-        if (x < this.boxes[at]) this.boxes[at] = x;
-        if (y < this.boxes[at + 1]) this.boxes[at + 1] = y;
-        if (z < this.boxes[at + 2]) this.boxes[at + 2] = z;
-        if (x > this.boxes[at + 3]) this.boxes[at + 3] = x;
-        if (y > this.boxes[at + 4]) this.boxes[at + 4] = y;
-        if (z > this.boxes[at + 5]) this.boxes[at + 5] = z;
-      }
-    }
-    this.keys.push(element.key);
-    this.names.push(element.name);
-    this.extras.push(element.extras);
-    this.ranges.push(ranges);
-    this.count = index + 1;
-    this.state.setOpen(index, !element.closed);
-    const diagonal = Math.hypot(this.boxes[at + 3] - this.boxes[at], this.boxes[at + 4] - this.boxes[at + 1], this.boxes[at + 5] - this.boxes[at + 2]);
-    this.state.setPriority(index, diagonal > 0 ? -Math.log2(diagonal / this.diagonal) : 7);
-    this.state.commit();
-    this.recomputeBox();
-    return index;
-  }
-
-  /** Retire les éléments ajoutés à partir de `count` (jamais ceux du fichier chargé). */
-  removeFrom(count: number): void {
-    const from = Math.max(count, this.originalCount);
-    if (from >= this.count) return;
-    const firstChunk = this.ranges[from][0]?.chunk ?? this.chunks.length;
-    for (const chunk of this.chunks.splice(firstChunk)) {
-      this.group.remove(chunk.mesh);
-      chunk.mesh.geometry.dispose();
-      this.triangleCount -= chunk.index.length / 3;
-    }
-    this.keys.length = from;
-    this.names.length = from;
-    this.extras.length = from;
-    this.ranges.length = from;
-    this.count = from;
-    this.state.shrink(from);
-    this.recomputeBox();
-  }
-
-  /** Copie la géométrie d'un élément, décalée, sous la forme attendue par `addElement`. */
-  copyParts(index: number, dx: number, dy: number, dz: number): NewPart[] {
-    const parts: NewPart[] = [];
-    for (const range of this.ranges[index]) {
-      const chunk = this.chunks[range.chunk];
-      const geometry = chunk.mesh.geometry;
-      const srcNormals = geometry.getAttribute('normal').array as Int8Array;
-      const srcColors = geometry.getAttribute('color').array as Uint8Array;
-      const remap = new Map<number, number>();
-      const order: number[] = [];
-      const indexArray = new Uint32Array(range.count);
-      for (let k = 0; k < range.count; k++) {
-        const v = chunk.index[range.start + k];
-        let local = remap.get(v);
-        if (local === undefined) {
-          local = order.length;
-          remap.set(v, local);
-          order.push(v);
-        }
-        indexArray[k] = local;
-      }
-      const positions = new Float32Array(order.length * 3);
-      const normals = new Int8Array(order.length * 3);
-      const colors = new Uint8Array(order.length * 4);
-      order.forEach((v, local) => {
-        positions[local * 3] = chunk.positions[v * 3] + dx;
-        positions[local * 3 + 1] = chunk.positions[v * 3 + 1] + dy;
-        positions[local * 3 + 2] = chunk.positions[v * 3 + 2] + dz;
-        normals.set(srcNormals.subarray(v * 3, v * 3 + 3), local * 3);
-        colors.set(srcColors.subarray(v * 4, v * 4 + 4), local * 4);
-      });
-      parts.push({ positions, normals, colors, index: indexArray, transparent: chunk.transparent, doubleSided: chunk.doubleSided });
-    }
-    return parts;
-  }
-
-  recomputeBox(): void {
-    const box = this.box;
-    box.makeEmpty();
-    for (let i = 0; i < this.count; i++) {
-      const at = i * 6;
-      if (this.boxes[at] > this.boxes[at + 3]) continue;
-      if (this.boxes[at] < box.min.x) box.min.x = this.boxes[at];
-      if (this.boxes[at + 1] < box.min.y) box.min.y = this.boxes[at + 1];
-      if (this.boxes[at + 2] < box.min.z) box.min.z = this.boxes[at + 2];
-      if (this.boxes[at + 3] > box.max.x) box.max.x = this.boxes[at + 3];
-      if (this.boxes[at + 4] > box.max.y) box.max.y = this.boxes[at + 4];
-      if (this.boxes[at + 5] > box.max.z) box.max.z = this.boxes[at + 5];
-    }
   }
 
   elementBox(index: number, target: Box3): Box3 {
@@ -446,7 +232,7 @@ export class Model {
     let used = 0;
 
     for (let i = 0, n = this.count; i < n; i++) {
-      if ((flags[i * 4 + 3] & 1) === 0) continue;
+      if (!this.state.isRendered(i)) continue;
       const tmin = slab(boxes, i * 6, ox, oy, oz, dx, dy, dz, ix, iy, iz);
       if (tmin < 0) continue;
       if (used === candidates.length) candidates.push({ element: i, t: tmin });
@@ -471,7 +257,8 @@ export class Model {
         const { positions, index, doubleSided, transparent } = this.chunks[range.chunk];
         // det < 0 : le rayon arrive par l'envers du triangle. Les sections ne sont remplies que
         // pour les pièces opaques des solides fermés.
-        const skipBackfaces = !doubleSided && (!capBackfaces || transparent || (flags[candidate.element * 4 + 3] & FLAG_OPEN) !== 0);
+        const opacity = this.state.opacityOf(candidate.element);
+        const skipBackfaces = !doubleSided && (!capBackfaces || transparent || (opacity !== null && opacity < 1) || this.state.scheduleOpacityOf(candidate.element) < 1 || (flags[candidate.element * 4 + 3] & FLAG_OPEN) !== 0);
         const blocks = range.blocks;
         const end = range.start + range.count;
         const blockCount = blocks ? blocks.length / 6 : 1;

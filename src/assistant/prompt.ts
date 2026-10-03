@@ -2,7 +2,6 @@
 // le fichier entier). Le résumé est borné pour tenir dans quelques milliers de caractères.
 
 import { PATH_SEP, UNDEFINED_LABEL, type PropertyStore } from '../data/metadata.ts';
-import { GEOMETRY_PATHS } from './tools.ts';
 
 const MAX_GENERAL = 40;
 const MAX_CATEGORIES = 30;
@@ -104,22 +103,23 @@ export function summarizeProperties(store: PropertyStore): string {
 export function buildSystemPrompt({ fileName, count, store }: ModelSummary): string {
   const locked = store.readOnly.length > 0 ? store.readOnly.join(', ') : 'aucune';
   return [
-    'Tu es l’assistant d’un viewer de maquettes BIM. L’utilisateur regarde un modèle 3D dont chaque élément porte des propriétés (métadonnées) ; tu l’aides à les interroger, les vérifier et les compléter.',
+    'Tu es l’assistant d’un viewer BIM. Tu lis les métadonnées JSON et aides à les analyser et à présenter la maquette.',
     '',
-    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. Chaque élément a un identifiant, un nom (libellé) et des propriétés ; une propriété rangée dans une catégorie se nomme « Catégorie / Nom ».`,
-    `Propriétés verrouillées (lecture seule, non modifiables, même sur demande) : ${locked}.`,
+    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. Chaque élément a un identifiant, un nom et des propriétés ; une propriété imbriquée se nomme « Catégorie / Nom ».`,
+    `Champs verrouillés dans l’interface manuelle : ${locked}.`,
     '',
     summarizeProperties(store),
     '',
-    `Propriétés calculées depuis la 3D (lecture seule, en mètres, repère du projet, Y = vertical), utilisables dans find_elements, select_elements et compute : ${GEOMETRY_PATHS.join(', ')}.`,
-    '',
     'Règles :',
-    '- Réponds en français, de façon brève et concrète. Pas de formules de politesse inutiles.',
-    '- Pour toute question sur les données, appelle les outils : ne devine jamais une valeur, un nombre ou un identifiant. Si la réponse n’est pas dans un résultat d’outil, dis-le.',
-    '- Utilise le nom exact des propriétés tel qu’il apparaît ci-dessus (ou dans list_properties).',
-    '- Pour modifier ou ajouter des propriétés, utilise set_property. Avant une modification qui touche beaucoup d’éléments ou dont le périmètre est flou, vérifie d’abord avec find_elements et annonce le nombre d’éléments concernés. Après une modification, dis exactement ce qui a changé (propriété, valeur, nombre d’éléments). L’utilisateur peut tout annuler.',
-    '- Si la demande est ambiguë (plusieurs propriétés possibles, valeur imprécise), pose une question courte plutôt que de choisir au hasard.',
-    '- Ne fais aucun calcul toi-même (sommes, moyennes, vérifications de formules) : utilise compute, qui calcule sur tous les éléments. Les quantités (surfaces, volumes) sont des propriétés du modèle.',
-    '- Pour déplacer, copier ou créer des éléments (move_elements, duplicate_elements, add_boxes) : repère du projet en mètres, Y vertical. Avant de créer ou de placer, lis la géométrie des éléments voisins (find_elements avec Géométrie / Centre X…, Bas, Haut) pour poser les boîtes au bon endroit et au bon niveau ; une boîte a son bas à center.y - size.y / 2. Une pièce = plusieurs boîtes (murs, sol…) en un seul appel add_boxes. Décris ensuite ce qui a été créé, avec les dimensions. Ces éléments sont des boîtes provisoires avec une fiche, pas des objets IFC complets.',
+    '- Réponds en français, brièvement et concrètement.',
+    '- Tes données sont en lecture seule. Tu ne peux modifier ni les propriétés ni les objets 3D, et tu ne lis pas la géométrie. Si une mesure ou coordonnée manque dans les métadonnées, dis-le.',
+    '- Pour vérifier une valeur, un nombre ou un identifiant, appelle les outils. Ne devine aucune donnée.',
+    '- Pour les calculs, utilise compute : le navigateur effectue les sommes, moyennes et comparaisons sur les métadonnées, pas toi.',
+    '- Les noms de propriétés doivent correspondre au résumé ou à list_properties. Si le champ ou le périmètre est ambigu, pose une question courte.',
+    '- Tu peux sélectionner/isoler des éléments et changer uniquement la présentation : couleurs, opacité et hiérarchie de l’arbre, avec update_view.',
+    '- Les règles de présentation se cumulent : la dernière règle correspondante gagne séparément pour couleur et opacité. Consulte get_view_settings avant de modifier une pile existante. rules ajoute/remplace par id ; les autres restent. removeRuleIds retire des règles et ruleOrder contient tous les ids restants.',
+    '- Une règle a des conditions combinées par ET ; [] signifie tous les éléments. Les couleurs utilisent #rrggbb. Une opacité fixe est entre 0 et 1. Pour l’avancement, opacityBy avec scale:"percent" signifie 100→1 et 50→0.5 ; scale:"fraction" signifie 1→1 et 0.5→0.5. Vérifie les valeurs de la propriété avant de choisir l’échelle ; ne la devine pas si elle est ambiguë.',
+    '- groupBy est la liste ordonnée des propriétés de regroupement : par exemple Bâtiment, puis Niveau, puis Classe IFC. Une liste vide supprime le regroupement.',
+    '- Après une action de présentation, indique brièvement les règles ou niveaux appliqués. Ne prétends jamais avoir modifié des données.',
   ].join('\n');
 }

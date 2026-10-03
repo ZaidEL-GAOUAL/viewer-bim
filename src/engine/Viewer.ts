@@ -27,7 +27,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AdaptiveResolution } from './AdaptiveResolution.ts';
 import { TRANSPARENT_LAYER } from './buildModel.ts';
 import type { Model, PickHit, RaycastOptions } from './Model.ts';
-import { AXES, Sections, type Axis } from './Sections.ts';
+import { AXES, Sections } from './Sections.ts';
+import { SectionHandles } from './SectionHandles.ts';
 
 const NO_PLANES: Plane[] = [];
 const UNIT = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)];
@@ -49,6 +50,8 @@ export class Viewer {
   readonly camera = new PerspectiveCamera(45, 1, 0.1, 1000);
   readonly controls: OrbitControls;
   readonly sections = new Sections();
+  readonly sectionHandles: SectionHandles;
+  readonly onSectionsChange = new Set<() => void>();
   readonly selectColor: IUniform<Color> = { value: new Color(0x1d8bff) };
   /** Appelé après chaque image : sert à replacer les étiquettes HTML sur la vue 3D. */
   readonly afterRender = new Set<() => void>();
@@ -126,6 +129,7 @@ export class Viewer {
       this.outlines[axis] = outline;
       this.overlay.add(outline);
     }
+    this.sectionHandles = new SectionHandles(this);
 
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
@@ -151,25 +155,16 @@ export class Viewer {
   }
 
   setModel(model: Model | null): void {
+    this.sectionHandles.select(null);
     if (this.model) this.scene.remove(this.model.group);
     this.model = model;
     if (model) {
       this.scene.add(model.group);
-      model.box.getBoundingSphere(this.sphere);
-      this.sections.setBounds(model.box);
+      (model.box.isEmpty() ? new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5)) : model.box).getBoundingSphere(this.sphere);
+      this.sections.setBounds(model.box.isEmpty() ? new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5)) : model.box);
       this.sectionsChanged();
       this.fit(model.box, DEFAULT_DIRECTION);
     }
-    this.invalidate();
-  }
-
-  /** Après une modification de la géométrie (éléments déplacés ou ajoutés) : bornes et rendu à jour. */
-  modelChanged(): void {
-    const model = this.model;
-    if (!model) return;
-    model.box.getBoundingSphere(this.sphere);
-    this.sections.extendBounds(model.box);
-    this.sectionsChanged();
     this.invalidate();
   }
 
@@ -192,24 +187,19 @@ export class Viewer {
 
   /** À appeler après toute modification des plans de coupe. */
   sectionsChanged(): void {
-    const { min, max, position, enabled } = this.sections;
+    const { enabled } = this.sections;
     for (const axis of AXES) {
       const outline = this.outlines[axis];
       outline.visible = enabled[axis];
       if (!enabled[axis]) continue;
-      const b = ((axis + 1) % 3) as Axis;
-      const c = ((axis + 2) % 3) as Axis;
       const attribute = outline.geometry.getAttribute('position') as BufferAttribute;
-      const corners = [[min[b], min[c]], [max[b], min[c]], [max[b], max[c]], [min[b], max[c]]];
-      corners.forEach(([vb, vc], i) => {
-        const point = [0, 0, 0];
-        point[axis] = position[axis];
-        point[b] = vb;
-        point[c] = vc;
-        attribute.setXYZ(i, point[0], point[1], point[2]);
+      this.sections.outline(axis).forEach((point, i) => {
+        attribute.setXYZ(i, point.x, point.y, point.z);
       });
       attribute.needsUpdate = true;
     }
+    this.sectionHandles.sync();
+    for (const callback of this.onSectionsChange) callback();
     this.invalidate();
   }
 
@@ -233,7 +223,8 @@ export class Viewer {
       const hit = model.raycast(ray, options);
       if (!hit || !hit.backface) return hit;
       const { doubleSided, transparent } = model.chunks[hit.chunk];
-      if (filled && !transparent && !model.state.isOpen(hit.element) && this.moveToCap(hit, ray)) return hit;
+      const opacity = model.state.opacityOf(hit.element);
+      if (filled && !transparent && (opacity === null || opacity === 1) && model.state.scheduleOpacityOf(hit.element) === 1 && !model.state.isOpen(hit.element) && this.moveToCap(hit, ray)) return hit;
       if (doubleSided) return hit;
       options.minDistance = hit.distance;
     }
@@ -398,8 +389,8 @@ export class Viewer {
           this.otherPlanes[0] = sections.planes[(axis + 1) % 3];
           this.otherPlanes[1] = sections.planes[(axis + 2) % 3];
           renderer.clippingPlanes = this.otherPlanes;
-          this.cap.position.copy(this.sphere.center).setComponent(axis, sections.position[axis]);
-          this.cap.quaternion.setFromUnitVectors(UNIT[2], UNIT[axis]);
+          sections.planes[axis].projectPoint(this.sphere.center, this.cap.position);
+          this.cap.quaternion.setFromUnitVectors(UNIT[2], sections.planes[axis].normal);
           this.cap.scale.setScalar(this.sphere.radius * 4);
           renderer.render(this.capScene, camera);
         }

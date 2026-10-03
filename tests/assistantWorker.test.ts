@@ -52,6 +52,7 @@ test('Workers AI accepte le retour d’outil avec un contenu vide et conserve le
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     content: 'Le mur mesure 2,77 m.', tool_calls: [], provider: 'Cloudflare Workers AI', model: MODEL,
+    usage: { inputTokens: null, outputTokens: null, totalTokens: null },
   });
 });
 

@@ -1,8 +1,10 @@
-import { AssistantError, assistantUrl, fetchStatus, runTurn, type Message } from '../assistant/client.ts';
+import { AssistantError, assistantUrl, fetchStatus, runTurn, type ApiSettings, type Message } from '../assistant/client.ts';
+import { SessionUsage } from '../assistant/usage.ts';
 import { buildSystemPrompt } from '../assistant/prompt.ts';
 import type { ToolContext } from '../assistant/tools.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
+import { AssistantSettings } from './AssistantSettings.ts';
 
 const SUGGESTIONS = [
   'Résume ce modèle en quelques lignes.',
@@ -11,7 +13,7 @@ const SUGGESTIONS = [
 ];
 
 /**
- * Conversation avec un assistant (LLM) qui interroge et complète les métadonnées du modèle au
+ * Conversation avec un assistant (LLM) qui interroge les métadonnées et ajuste l'affichage au
  * moyen d'outils exécutés ici ; seuls les résultats partent vers le service d'IA.
  */
 export class AssistantPanel {
@@ -26,13 +28,17 @@ export class AssistantPanel {
   private messages: Message[] = [];
   private busy: AbortController | null = null;
   private provider = '';
+  private api: ApiSettings | null = null;
+  private readonly usage = new SessionUsage();
+  private readonly usageEl: HTMLElement;
+  private readonly settings: AssistantSettings;
 
   constructor(app: App) {
     this.app = app;
     this.status = h('p', { class: 'assistant-status' });
     this.log = h('div', { class: 'assistant-log', attrs: { 'aria-live': 'polite' } });
     this.suggestions = h('div', { class: 'assistant-suggestions' });
-    this.input = h('textarea', { attrs: { rows: '2', placeholder: 'Posez une question sur le modèle, ou demandez une modification…', 'aria-label': 'Message à l’assistant' } });
+    this.input = h('textarea', { attrs: { rows: '2', placeholder: 'Interrogez le modèle ou ajustez son affichage…', 'aria-label': 'Message à l’assistant' } });
     this.input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -41,9 +47,18 @@ export class AssistantPanel {
     });
     this.send = button('Envoyer', () => void this.submit(), { title: 'Envoyer (Entrée)' });
     const reset = button('Nouvelle conversation', () => this.reset(), { class: 'subtle' });
+    this.usageEl = h('p', { class: 'assistant-usage', attrs: { 'aria-live': 'polite' } });
+    this.settings = new AssistantSettings((settings) => {
+      this.api = settings;
+      this.provider = settings ? `${new URL(settings.endpoint).hostname} (${settings.model})` : '';
+      this.reset();
+      if (!settings) void this.checkService();
+    });
 
     this.el = h('section', { class: 'panel assistant-panel' },
       h('div', { class: 'assistant-header' }, this.status, reset),
+      this.usageEl,
+      this.settings.el,
       this.log,
       this.suggestions,
       h('div', { class: 'assistant-input' }, this.input, this.send),
@@ -52,6 +67,7 @@ export class AssistantPanel {
 
     app.on('model', () => this.reset());
     this.reset();
+    this.syncUsage();
     void this.checkService();
   }
 
@@ -63,9 +79,10 @@ export class AssistantPanel {
     if (!this.url) return;
     try {
       const status = await fetchStatus(this.url);
+      if (this.api) return;
       this.provider = status.providers.map((item) => item.name).join(', ');
     } catch {
-      this.provider = '';
+      if (!this.api) this.provider = '';
     }
     this.syncStatus();
   }
@@ -82,9 +99,16 @@ export class AssistantPanel {
       this.status.classList.remove('warning');
     }
     const enabled = this.ready && this.busy === null;
+    this.settings.setBusy(this.busy !== null);
     this.input.disabled = !this.ready;
     this.send.disabled = !enabled;
     this.suggestions.hidden = !this.ready || this.messages.length > 1;
+  }
+
+  private syncUsage(): void {
+    this.usageEl.textContent = `Jetons · Entrée ${this.usage.display('inputTokens')} · Sortie ${this.usage.display('outputTokens')} · Total ${this.usage.display('totalTokens')}`;
+    this.usageEl.title = 'Session de cet onglet, toutes conversations comprises. Compteurs communiqués par les fournisseurs ; « ? » signifie qu’un appel n’a pas communiqué ce compteur. Aucune estimation.';
+    if (Object.values(this.usage.missing).some((count) => count > 0)) this.usageEl.append(h('span', { class: 'assistant-usage-unknown', text: ' ? : usage non communiqué, totaux incomplets.' }));
   }
 
   private reset(): void {
@@ -105,46 +129,23 @@ export class AssistantPanel {
   /** Le contexte des outils : lecture du magasin de propriétés et actions sur la vue. */
   private context(): ToolContext {
     const { app } = this;
-    const model = app.model!;
+    const initialModel = app.model;
     return {
-      store: app.store,
-      count: model.count,
-      keys: model.keys,
+      isCurrent: () => app.model === initialModel,
+      get store() { return app.store; },
+      get count() { return app.model?.count ?? 0; },
+      get keys() { return app.model?.keys ?? []; },
       labelOf: (index) => app.elementLabel(index),
-      geometry: (index) => {
-        // Les boîtes sont stockées recentrées ; le décalage redonne les coordonnées du projet.
-        const b = model.boxes;
-        const at = index * 6;
-        if (b[at] > b[at + 3]) return null;
-        const { x, y, z } = model.offset;
-        return { min: [b[at] + x, b[at + 1] + y, b[at + 2] + z], max: [b[at + 3] + x, b[at + 4] + y, b[at + 5] + z] };
-      },
-      selection: app.selection,
+      get selection() { return app.selection; },
       select: (indices, isolate) => {
         app.select(indices, 'panel');
         if (isolate) app.isolate(indices);
         if (indices.length > 0) app.fitTo(indices);
       },
-      edit: (indices, path, value) => {
-        if (!app.store.isEditable(path)) return 'locked';
-        const before = app.edits;
-        app.editProperty(indices, path, value);
-        return app.edits - before;
-      },
-      move: (indices, dx, dy, dz) => app.moveElements(indices, dx, dy, dz),
-      duplicate: (indices, dx, dy, dz) => {
-        const created = app.duplicateElements(indices, dx, dy, dz);
-        if (created.length > 0) app.select(created, 'panel');
-        return created;
-      },
-      addBoxes: (boxes) => {
-        const created = app.addBoxes(boxes);
-        if (created.length > 0) {
-          app.select(created, 'panel');
-          app.fitTo(created);
-        }
-        return created;
-      },
+      get appearanceRules() { return app.appearanceRules; },
+      setAppearanceRules: (rules) => app.setAppearanceRules(rules),
+      get grouping() { return app.grouping; },
+      groupBy: (paths) => app.groupBy(paths),
     };
   }
 
@@ -159,9 +160,10 @@ export class AssistantPanel {
     const text = this.input.value.trim();
     if (!text || !this.ready || this.busy) return;
     const { app } = this;
-    if (this.messages.length === 0) {
-      this.messages.push({ role: 'system', content: buildSystemPrompt({ fileName: app.fileName, count: app.model!.count, store: app.store }) });
-    }
+    const count = app.model!.count;
+    const system: Message = { role: 'system', content: buildSystemPrompt({ fileName: app.fileName, count, store: app.store }) };
+    if (this.messages.length === 0) this.messages.push(system);
+    else this.messages[0] = system;
     this.input.value = '';
     this.line('user', text);
     const pending = this.line('note', 'Réflexion…');
@@ -178,19 +180,24 @@ export class AssistantPanel {
         onProvider: (provider, model) => {
           this.provider = `${provider} (${model.replace(/^@cf\//, '')})`;
         },
-      }, controller.signal);
+        onUsage: (usage) => { this.usage.add(usage); this.syncUsage(); },
+      }, controller.signal, this.api ?? undefined);
+      if (this.busy !== controller) return;
       pending.remove();
       this.line('assistant', answer);
     } catch (error) {
+      if (this.busy !== controller) return;
       pending.remove();
       if (error instanceof DOMException && error.name === 'AbortError') return;
       // La question reste dans l'historique ; un message d'erreur orphelin le fausserait.
       if (this.messages[this.messages.length - 1]?.role === 'user') this.messages.pop();
       this.line('error', error instanceof AssistantError ? error.message : `Erreur : ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      if (this.busy === controller) this.busy = null;
-      this.syncStatus();
-      this.input.focus();
+      if (this.busy === controller) {
+        this.busy = null;
+        this.syncStatus();
+        this.input.focus();
+      }
     }
   }
 }

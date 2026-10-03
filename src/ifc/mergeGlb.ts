@@ -3,6 +3,7 @@
 
 interface Gltf {
   asset: unknown;
+  extras?: Record<string, unknown>;
   scene?: number;
   scenes?: { nodes: number[] }[];
   nodes: GltfNode[];
@@ -44,6 +45,7 @@ export function mergeGlb(parts: ArrayBuffer[]): ArrayBuffer {
   const root: GltfNode = { ...first.nodes[0], children: [] };
   const merged = {
     asset: first.asset,
+    ...(first.extras ? { extras: first.extras } : {}),
     scene: 0,
     scenes: [{ nodes: [0] }],
     nodes: [root],
@@ -130,8 +132,9 @@ export function mergeGlb(parts: ArrayBuffer[]): ArrayBuffer {
 /** Réunit les métadonnées de plusieurs tranches en un seul document du contrat. */
 export function mergeMetadata(parts: string[]): string {
   if (parts.length === 1) return parts[0];
-  const documents = parts.map((part) => JSON.parse(part) as { version: number; elements: Record<string, unknown> });
+  const documents = parts.map((part) => JSON.parse(part) as { version: number; elements: Record<string, unknown>; readOnly?: string[] });
   const elements: Record<string, unknown> = {};
   for (const document of documents) Object.assign(elements, document.elements);
-  return JSON.stringify({ version: documents[0].version, elements });
+  const readOnly = [...new Set(documents.flatMap((document) => document.readOnly ?? []))];
+  return JSON.stringify({ ...documents[0], elements, ...(readOnly.length ? { readOnly } : {}) });
 }

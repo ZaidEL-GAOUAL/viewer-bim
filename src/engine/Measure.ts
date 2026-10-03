@@ -27,6 +27,8 @@ interface Entry extends Measurement {
   mesh: Mesh | null;
 }
 
+interface LabelBox { left: number; right: number; top: number; bottom: number }
+
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const SNAP_PIXELS = 12;
 const large = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
@@ -75,6 +77,7 @@ export class Measure {
   private readonly b = new Vector3();
   private readonly c = new Vector3();
   private readonly screen = { x: 0, y: 0 };
+  private readonly labelSizes = new WeakMap<HTMLElement, { width: number; height: number }>();
 
   constructor(viewer: Viewer, root: HTMLElement) {
     this.viewer = viewer;
@@ -208,8 +211,19 @@ export class Measure {
 
   private addEntry(kind: MeasureKind, value: number, text: string, note: string, approximate: boolean, points: Vector3[]): Entry {
     const label = this.createLabel(`measure-label ${kind}`);
-    label.textContent = approximate ? `≈ ${text}` : text;
+    const kindLabel = { distance: 'Distance', area: 'Surface', volume: 'Volume' }[kind];
+    const valueLabel = document.createElement('span');
+    valueLabel.textContent = approximate ? `≈ ${text}` : text;
+    valueLabel.title = `${kindLabel} · ${note}`;
+    label.setAttribute('role', 'group');
+    label.setAttribute('aria-label', `${kindLabel} : ${valueLabel.textContent}. ${note}`);
     const entry: Entry = { id: this.nextId++, kind, value, text, note, approximate, element: -1, points, label, line: null, dots: [], mesh: null };
+    const remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'measure-label-remove'; remove.textContent = '×';
+    remove.title = `Supprimer cette mesure de ${kindLabel.toLocaleLowerCase('fr')}`;
+    remove.setAttribute('aria-label', `Supprimer la mesure ${kindLabel} ${text}`);
+    remove.addEventListener('click', (event) => { event.stopPropagation(); this.remove(entry.id); });
+    label.append(valueLabel, remove);
     this.entries.push(entry);
     this.results.push(entry);
     return entry;
@@ -282,10 +296,29 @@ export class Measure {
     }
   }
 
-  private placeLabel(label: HTMLElement, point: Vector3): void {
+  private placeLabel(label: HTMLElement, point: Vector3, occupied?: LabelBox[]): void {
     if (this.viewer.toScreen(point, this.screen)) {
       label.style.display = '';
-      label.style.transform = `translate(-50%, -50%) translate(${this.screen.x.toFixed(1)}px, ${this.screen.y.toFixed(1)}px)`;
+      let { x, y } = this.screen;
+      if (occupied) {
+        // Completed labels never change size. Cache it to avoid layout reads on every frame.
+        let size = this.labelSizes.get(label);
+        if (!size) {
+          size = { width: label.offsetWidth, height: label.offsetHeight };
+          this.labelSizes.set(label, size);
+        }
+        const { width, height } = this.viewer.size;
+        const halfW = size.width / 2, halfH = size.height / 2, gap = 4;
+        x = Math.max(halfW, Math.min(width - halfW, x));
+        y = Math.max(halfH, Math.min(height - halfH, y));
+        const neighbours = occupied.filter((box) => x + halfW + gap > box.left && x - halfW - gap < box.right);
+        const candidates = [y, ...neighbours.flatMap((box) => [box.top - halfH - gap, box.bottom + halfH + gap])];
+        candidates.sort((a, b) => Math.abs(a - y) - Math.abs(b - y));
+        y = candidates.find((candidate) => candidate >= halfH && candidate <= height - halfH
+          && neighbours.every((box) => candidate + halfH + gap <= box.top || candidate - halfH - gap >= box.bottom)) ?? y;
+        occupied.push({ left: x - halfW, right: x + halfW, top: y - halfH, bottom: y + halfH });
+      }
+      label.style.transform = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     } else {
       label.style.display = 'none';
     }
@@ -314,14 +347,15 @@ export class Measure {
   }
 
   private updateOverlay(): void {
+    const occupied: LabelBox[] = [];
     for (const entry of this.entries) {
       if (entry.line) {
         this.placeLine(entry.line, entry.points[0], entry.points[1]);
         this.placeDot(entry.dots[0], entry.points[0]);
         this.placeDot(entry.dots[1], entry.points[1]);
-        this.placeLabel(entry.label, this.c.copy(entry.points[0]).add(entry.points[1]).multiplyScalar(0.5));
+        this.placeLabel(entry.label, this.c.copy(entry.points[0]).add(entry.points[1]).multiplyScalar(0.5), occupied);
       } else {
-        this.placeLabel(entry.label, entry.points[0]);
+        this.placeLabel(entry.label, entry.points[0], occupied);
       }
     }
 

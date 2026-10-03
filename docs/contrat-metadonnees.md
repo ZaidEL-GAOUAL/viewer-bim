@@ -55,6 +55,7 @@ Règles :
 | --- | --- | --- |
 | `version` | non (1 par défaut) | Version du format. Le viewer refuse une version plus récente que celle qu'il connaît. |
 | `readOnly` | non | Liste des propriétés que le viewer affiche sans permettre de les modifier (voir § 2 bis). |
+| `propertiesMode` | non | `"replace"` indique un état complet des propriétés pour chaque élément présent. Sans ce champ, le JSON complète les propriétés du GLB. |
 | `elements` | oui | Objet indexé par identifiant : la même valeur que `extras.id` dans le GLB. |
 | `label` | non | Nom affiché dans l'arborescence et la fiche. À défaut, le `name` du nœud glTF. |
 | `properties` | non | Propriétés libres de l'élément. |
@@ -90,12 +91,19 @@ Le viewer les réunit avec celles du JSON :
 - pour une propriété de même nom des deux côtés, la valeur du JSON l'emporte ;
 - sans fichier JSON, ou pour un élément absent du JSON, seules les propriétés du GLB s'affichent.
 
-Le fichier GLB lui-même n'est jamais modifié.
+Les JSON exportés par le viewer portent `"propertiesMode": "replace"`. Pour les identifiants
+présents, leurs propriétés remplacent celles embarquées dans le modèle : une propriété supprimée
+ne réapparaît donc pas à la réouverture. Les éléments absents gardent leurs propriétés d’origine.
+Les anciens JSON et les fichiers complémentaires sans ce marqueur conservent la fusion décrite
+ci-dessus. Un import effectué après chargement reste annulable, y compris les verrous ajoutés.
+
+Le fichier ouvert sur disque n’est pas modifié. Lors d’un téléchargement GLB, les métadonnées
+courantes peuvent être réinjectées dans les extras du fichier exporté.
 
 ## 2 bis. Modification des métadonnées dans le viewer
 
 Dans la fiche d'un élément (ou d'une sélection de plusieurs éléments), chaque propriété est un
-champ : texte, nombre ou case à cocher selon la valeur en place. Une valeur modifiée s'applique
+champ : texte, nombre, booléen ou date selon la valeur en place. Une valeur modifiée s'applique
 à toute la sélection ; « Ajouter une propriété » en crée une nouvelle, avec `Catégorie / Nom`
 pour la ranger dans une catégorie. Les modifications ne vivent que dans la page : le bouton
 « JSON ↓ » télécharge les métadonnées courantes dans le format ci-dessus (propriétés du GLB,
@@ -119,15 +127,30 @@ plutôt que d'une saisie : la classe, le type, l'emplacement (site, bâtiment, n
 matériaux et les quantités calculées. Le nom, la description, le repère et les jeux de
 propriétés (`Pset_…`) restent modifiables.
 
-## 2 ter. Éléments créés dans le viewer
+## 2 ter. Lecture seule pour l’assistant et règles de présentation
 
-Un élément dupliqué ou créé (une boîte) reçoit un identifiant neuf au format `GlobalId` de
-l'IFC (22 caractères), présent dans le GLB réécrit (`extras.id`) et dans le JSON exporté. Une
-boîte garde ses paramètres dans sa fiche, catégorie « Boîte » : `Centre X`, `Centre Y`,
-`Centre Z` (coordonnées du projet, mètres, Y vertical), `Taille X`, `Taille Y (hauteur)`,
-`Taille Z`, `Rotation` (degrés autour de la verticale) et `Créée dans le viewer`. Un outil qui
-voudrait en faire de vrais objets IFC (IfcOpenShell, par exemple) a tout ce qu'il lui faut. Si le
-fichier range le nom des éléments dans une propriété `Nom`, l'élément créé la reçoit aussi.
+Seuls les contrôles manuels modifient les propriétés : ajout, valeur, date, suppression,
+annulation et rétablissement. L’assistant consulte les métadonnées et ne dispose d’aucun outil
+de modification des propriétés ou de la géométrie. Les coordonnées et mesures non présentes
+dans le JSON ne sont pas calculées depuis le maillage pour lui.
+
+Les règles de présentation lisent les propriétés sans les modifier. Leur ordre est significatif :
+la dernière règle correspondante gagne pour chaque attribut (couleur et opacité séparément).
+Elles sont partagées par le panneau manuel et les outils de l’assistant.
+
+```json
+[
+  {"id":"co2","enabled":true,"conditions":[{"property":"CO2","op":"greater","value":1000}],"color":"#808080"},
+  {"id":"batiment","enabled":true,"conditions":[{"property":"Bâtiment","op":"equals","value":"A"}],"color":"#3366ff"},
+  {"id":"avancement","enabled":true,"conditions":[],"opacityBy":{"property":"Avancement","scale":"percent"}}
+]
+```
+
+Les conditions d’une règle sont combinées par ET ; une liste vide concerne tous les éléments.
+Une opacité fixe utilise `opacity` entre 0 et 1. Pour `opacityBy`, l’échelle `percent` signifie
+0–100 et `fraction` signifie 0–1 ; les valeurs numériques ne sont pas devinées. Les valeurs
+absentes ou non numériques ne remplacent pas une opacité déjà définie. Les règles, comme les
+filtres de visibilité, concernent la vue courante et ne modifient pas les matériaux exportés.
 
 ## 3. Groupes et sous-groupes
 

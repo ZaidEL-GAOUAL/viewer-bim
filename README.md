@@ -45,8 +45,9 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 
 - **Ouverture d'un IFC** : converti sur place dans le navigateur, sans serveur. Le convertisseur
   (Python et IfcOpenShell en WebAssembly, environ 30 Mo) n'est téléchargé qu'au premier IFC
-  ouvert. La conversion est répartie sur plusieurs cœurs (jusqu'à quatre, selon la machine et la
-  taille du fichier). Le GLB et le JSON produits peuvent être téléchargés.
+  ouvert. La conversion utilise plusieurs workers (jusqu’à quatre, selon les ressources
+  signalées par le navigateur et la taille du fichier) ; il ne s’agit pas de cœurs physiques
+  réservés. Le GLB et le JSON produits peuvent être téléchargés.
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
   y compris compressés (Draco, Meshopt), et de fichiers USD (`.usdz`, `.usda`) : ceux du
   convertisseur, avec leurs métadonnées embarquées, ou des scènes USD simples venues d'ailleurs.
@@ -57,29 +58,50 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   par catégories repliables.
 - **Métadonnées** : le JSON peut être fourni avec le modèle, dans son dossier, ou ajouté après
   coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
-- **Modification des métadonnées** : dans la fiche, chaque propriété se modifie sur place (texte,
-  nombre, case à cocher), pour un élément ou pour toute la sélection, et « Ajouter une propriété »
-  en crée de nouvelles. Les propriétés que le fichier déclare `readOnly` (pour un IFC : classe,
+- **Modification manuelle des métadonnées** : dans la fiche, chaque propriété se modifie sur place
+  (texte, nombre, booléen ou date), pour un élément ou pour toute la sélection. On peut ajouter
+  ou supprimer une propriété et annuler/rétablir ces changements depuis la barre d’outils. Les propriétés `readOnly` (pour un IFC : classe,
   type, niveau, matériaux, quantités…) s'affichent avec un cadenas. « JSON ↓ » télécharge les
   métadonnées modifiées ; « Annuler les modifications » revient aux fichiers chargés.
 - **Arborescence** calculée à partir d'une ou plusieurs propriétés choisies dans « Grouper par » :
-  la première donne les groupes, les suivantes les sous-groupes.
-- **Couleurs et filtres** : pour une propriété, chaque valeur distincte reçoit une couleur
-  (modifiable) et une case pour afficher ou masquer ses éléments.
-- **Coupes** : trois plans alignés sur les axes, chacun avec sa position et son sens, et le
-  remplissage des sections coupées.
+  la première donne les groupes, les suivantes les sous-groupes. Le sélecteur présente d’abord
+  les propriétés générales et partagées. La recherche et « Toutes les propriétés » donnent aussi
+  accès aux champs rares propres à quelques objets, sans supprimer ni renommer les données IFC.
+- **Règles de couleur et d’opacité** : une seule pile de règles, avec deux entrées de création :
+  « Par valeur de propriété » et « Par condition ». Les règles sont modifiables, activables,
+  supprimables et réordonnables. Les conditions lisent les propriétés (égalité, texte, comparaisons numériques,
+  valeurs absentes). La dernière règle correspondante gagne séparément pour la couleur et
+  l’opacité : « CO2 > 1 000 → gris », puis « Bâtiment A → bleu », puis « Avancement → opacité ».
+  Pour une propriété en pourcentage, 100 donne une opacité de 1 et 50 une opacité de 0,5 ;
+  l’échelle 0–1 est aussi proposée explicitement. Une valeur manquante laisse l’opacité précédente.
+  La palette par valeur ajoute des règles à cette même liste. Une section **Visibilité** distincte
+  permet d’afficher ou masquer les objets par valeur de propriété.
+- **Planning 4D** : un Gantt repliable en bas du viewer relie un planning JSON séparé aux IDs
+  des objets ou à une propriété commune. Des dates déjà présentes dans les métadonnées peuvent
+  aussi être utilisées après choix explicite des champs. Lecture/pause, date, curseur et vitesse
+  montrent les travaux prévus : objets futurs masqués, travaux en cours en orange, puis couleurs
+  habituelles. Un fondu discret accompagne l’apparition des objets, sans croissance. Les filtres
+  manuels sont conservés et les objets hors planning restent contrôlables. L’exemple propose
+  six lots dépliables et 220 tâches par objet, avec des dates fictives décalées et des lots simultanés.
+  Tout s’exécute localement sans IA ni modification de géométrie ; voir le
+  [contrat du planning et ses exemples](docs/contrat-planning.md).
+- **Coupes** : trois plans initialement alignés sur les axes, chacun avec sa position et son sens,
+  et le remplissage des sections coupées. La flèche de déplacement et les cercles de rotation
+  coexistent sur le plan actif ; tourner conserve le centre de la poignée. « Réaligner » restaure
+  l’orientation de l’axe sans déplacer ce centre.
 - **Mesures** : distance entre deux points (avec accroche aux sommets), surface d'une face plane,
-  volume et surface totale d'un élément.
+  volume et surface totale d'un élément. Les outils sont des icônes dans la barre d’outils avec
+  une aide au survol. Chaque résultat dans la vue porte une croix pour le supprimer ; ses détails
+  sont accessibles au survol. Une icône de la barre efface toutes les mesures.
 
 - **Isoler** : n'affiche que la sélection ; un second clic sur le même bouton rétablit
   l'affichage d'avant. **Masquer** cache la sélection ; le même bouton devient « Démasquer » et
   la fait revenir, même après avoir désélectionné. **Tout afficher** réaffiche tous les éléments
   et recadre le modèle entier.
-- **Téléchargement** : « GLB ↓ » (ou « USD ↓ », selon le format choisi) télécharge le fichier 3D
-  dès qu'un modèle est affiché. Après la conversion d'un IFC, c'est le fichier produit ; dès que
-  la géométrie a changé (déplacements, ajouts) ou pour un modèle ouvert tel quel, le viewer
-  réécrit le fichier depuis ce qui est affiché (couleurs par sommet, sans textures). « JSON ↓ »
-  télécharge les métadonnées, modifications comprises.
+- **Téléchargement** : « GLB ↓ » / « USD ↓ » et « JSON ↓ » incluent les métadonnées courantes.
+  Quand le GLB source est disponible, ses métadonnées sont actualisées sans réécrire les buffers
+  de géométrie et de textures. Les autres sources nécessitent une réécriture en couleurs par sommet.
+  Les règles de présentation ne modifient pas la géométrie ni les matériaux des fichiers exportés.
 - **Aperçu Apple** : « Voir sur Apple » ouvre Quick Look dans Safari sur iPhone et iPad.
   Sur Mac avec Safari 27 ou ultérieur, il affiche le USDZ dans un aperçu natif intégré à la page
   (élément HTML `model`). Si le navigateur ne dispose pas de cet aperçu, le bouton explique
@@ -88,28 +110,25 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   Quick Look sur mobile nécessite alors un second clic. Le fichier reste local, sans envoi à un serveur.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
-- **Assistant** (onglet de gauche) : une conversation avec un modèle de langage qui interroge
-  et complète les métadonnées — « combien d'éléments par niveau ? », « quels murs n'ont pas de
-  résistance au feu ? », « mets le lot Gros œuvre sur les murs du RDC », « surface totale des
-  dalles du R+1 ? », « quels murs ont un volume incohérent avec leurs dimensions ? ». Le modèle
-  ne reçoit jamais le fichier : il appelle des outils (compter, chercher, lire une fiche,
-  sélectionner, calculer une formule sur tous les éléments, modifier) exécutés dans le
-  navigateur, et seuls leurs résultats lui sont envoyés — les chiffres viennent du code. Il lit
-  aussi la géométrie (centre, emprise, bas et haut de chaque élément) et peut **déplacer,
-  dupliquer et créer des éléments** : « ajoute une pièce de 4 × 4 m avec quatre murs et un sol
-  à côté du bâtiment ». Les propriétés verrouillées lui sont interdites comme à tout le monde,
-  ses modifications se comptent et s'annulent comme les vôtres. Le service tourne sur un worker
-  Cloudflare gratuit (voir `worker/README.md`) ; sans lui, l'onglet le signale et tout le reste
-  fonctionne.
-- **Déplacer, dupliquer, créer** : dans la fiche, « Déplacer ou dupliquer » décale la sélection
-  d'un vecteur en mètres ou en fait une copie décalée (propriétés comprises). Les éléments créés
-  (boîtes : murs provisoires, réservations, zones, mobilier simplifié) reçoivent un identifiant
-  au format IFC et une fiche qui garde leurs paramètres (`Boîte / Centre X`, `Taille X`,
-  `Rotation`…), de quoi les recréer ailleurs — dans un IFC, par exemple. « Annuler les
-  modifications » défait tout.
+- **Assistant en lecture seule sur les données** : recherches, comptages et calculs utilisent
+  exclusivement les métadonnées ; l’assistant n’accède pas aux maillages et ne modifie aucune
+  propriété ni aucun objet. Il peut sélectionner/isoler des éléments, configurer les mêmes règles
+  de couleur/opacité que le panneau manuel et organiser l’arbre par propriétés (« Bâtiment,
+  puis Niveau, puis Classe IFC »). Les calculs et règles s’exécutent dans le navigateur ; seuls
+  le résumé, la conversation et des résultats bornés sont envoyés au modèle. Les contrôles
+  manuels ne consomment aucun jeton d’IA.
+- **Usage et API** : l’assistant affiche les jetons d’entrée/sortie/total communiqués pendant
+  la session ; `?` signale une mesure indisponible, sans estimation inventée. Les réglages permettent
+  d’utiliser une API compatible personnelle ou d’entreprise via le relais. Les paramètres et
+  la clé restent en mémoire dans l’onglet. Les adresses d’entreprise doivent être autorisées
+  par `AI_ALLOWED_ENDPOINTS` côté relais ; voir [worker/README.md](worker/README.md).
 
 Raccourcis : `F` cadrer, `H` masquer ou démasquer, `I` isoler ou ne plus isoler, `A` tout
 afficher, `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.
+
+Le viewer ne propose pas de création, déplacement, duplication ou suppression d’objets 3D,
+ni d’export IFC d’auteur. L’édition porte uniquement sur les métadonnées via les contrôles manuels.
+Les tests de l’assistant utilisent des réponses simulées, sans appeler de modèle réel.
 
 ## Mise en ligne
 
@@ -190,12 +209,13 @@ sur un Apple M4 Pro :
 | Mode | Durée |
 | --- | --- |
 | Ligne de commande, tous les cœurs | 2 s |
-| Navigateur, 4 cœurs, premier IFC de la session | 11,5 s (dont 6 s de mise en route du convertisseur) |
-| Navigateur, 4 cœurs, IFC suivants | 5 s |
-| Navigateur, 1 cœur volontairement bridé (cœurs économes en basse priorité) | 108 s |
+| Navigateur, 4 workers, premier IFC de la session | 11,5 s (dont 6 s de mise en route du convertisseur) |
+| Navigateur, 4 workers, moteur déjà initialisé | 5 s |
 
 Chaque convertisseur occupe en mémoire environ quinze fois la taille de l'IFC (320 Mo pour ce
 fichier). Le viewer en lance d'autant moins que le fichier est gros et la mémoire limitée.
+Ces mesures historiques ne comparent pas le parallélisme à conditions identiques. Les workers
+supplémentaires sont libérés après la conversion et le dernier après 30 secondes d’inactivité.
 
 ### Précautions d'affichage
 

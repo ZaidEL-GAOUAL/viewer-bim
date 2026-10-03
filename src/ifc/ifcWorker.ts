@@ -27,6 +27,7 @@ export interface UsdRequest {
   wheelUrl: string;
 }
 
+
 export type ConvertMessage =
   | { id: number; type: 'status'; message: string }
   | { id: number; type: 'progress'; percent: number }
@@ -52,9 +53,9 @@ const post = (message: ConvertMessage, transfer: Transferable[] = []) => scope.p
 
 let runtime: Promise<Pyodide> | null = null;
 
-/** Télécharge et prépare Python, IfcOpenShell et le convertisseur : une seule fois par session. */
+/** Télécharge et prépare Python, IfcOpenShell et le convertisseur pour ce worker. */
 async function prepare(id: number, wheelUrl: string): Promise<Pyodide> {
-  post({ id, type: 'status', message: 'Téléchargement du convertisseur IFC (une seule fois)…' });
+  post({ id, type: 'status', message: 'Chargement du moteur de conversion…' });
   const { loadPyodide } = (await import(/* @vite-ignore */ `${PYODIDE_URL}pyodide.mjs`)) as {
     loadPyodide(options: { indexURL: string }): Promise<Pyodide>;
   };
@@ -96,7 +97,7 @@ with open('/tmp/model.usdz', 'wb') as _out:
 del _scene, _metadata
 `;
 
-scope.onmessage = async (event: MessageEvent<ConvertRequest | UsdRequest>) => {
+async function handle(event: MessageEvent<ConvertRequest | UsdRequest>): Promise<void> {
   const { id, wheelUrl } = event.data;
   try {
     runtime ??= prepare(id, wheelUrl);
@@ -110,9 +111,8 @@ scope.onmessage = async (event: MessageEvent<ConvertRequest | UsdRequest>) => {
       pyodide.FS.writeFile('/tmp/merged.glb', new Uint8Array(event.data.glb));
       pyodide.FS.writeFile('/tmp/merged.json', event.data.metadata);
       pyodide.runPython(PACKAGE_USD);
-      const usdz = (pyodide.FS.readFile('/tmp/model.usdz') as Uint8Array).slice().buffer as ArrayBuffer;
-      for (const path of ['/tmp/merged.glb', '/tmp/merged.json', '/tmp/model.usdz']) pyodide.FS.unlink(path);
-      post({ id, type: 'usd', usdz }, [usdz]);
+      const output = (pyodide.FS.readFile('/tmp/model.usdz') as Uint8Array).slice().buffer as ArrayBuffer;
+      post({ id, type: 'usd', usdz: output }, [output]);
       return;
     }
     const { buffer, shard } = event.data;
@@ -132,5 +132,22 @@ scope.onmessage = async (event: MessageEvent<ConvertRequest | UsdRequest>) => {
     post({ id, type: 'done', glb: copy, metadata, report }, [copy]);
   } catch (error) {
     post({ id, type: 'error', message: error instanceof Error ? error.message : String(error) });
+  } finally {
+    // A failed job must not retain its IFC/mesh buffers in the WebAssembly filesystem.
+    const pyodide = await runtime?.catch(() => null);
+    if (pyodide) {
+      for (const path of ['/tmp/model.ifc', '/tmp/model.glb', '/tmp/model.json', '/tmp/merged.glb', '/tmp/merged.json', '/tmp/model.usdz']) {
+        try { pyodide.FS.unlink(path); } catch { /* already removed / not produced */ }
+      }
+      pyodide.runPython("import gc\nfor _name in ('_result', '_scene', '_metadata', '_glb'):\n    globals().pop(_name, None)\ngc.collect()");
+    }
   }
+}
+
+// Runtime preparation is asynchronous: serialise messages before they can share /tmp paths.
+let jobs = Promise.resolve();
+scope.onmessage = (event: MessageEvent<ConvertRequest | UsdRequest>) => {
+  jobs = jobs.then(() => handle(event)).catch((error: unknown) => {
+    post({ id: event.data.id, type: 'error', message: error instanceof Error ? error.message : String(error) });
+  });
 };

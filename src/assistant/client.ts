@@ -2,6 +2,10 @@
 // appels d'outils demandés par le modèle, jusqu'à sa réponse finale.
 
 import { TOOL_DEFINITIONS, runTool, type ToolContext } from './tools.ts';
+import { normalizeUsage, type TokenUsage } from './usage.ts';
+
+/** Kept only by the current panel instance; never placed in conversation history or storage. */
+export interface ApiSettings { endpoint: string; apiKey: string; model: string }
 
 export interface ToolCall {
   id: string;
@@ -20,6 +24,8 @@ export interface Reply {
   tool_calls: ToolCall[];
   provider: string;
   model: string;
+  usage?: TokenUsage;
+  unreportedAttempts?: number;
 }
 
 export interface ServiceStatus {
@@ -31,6 +37,7 @@ export interface TurnEvents {
   /** Un outil vient d'être exécuté : ligne à afficher. */
   onTool(note: string, name: string): void;
   onProvider(provider: string, model: string): void;
+  onUsage?(usage: TokenUsage | null): void;
 }
 
 const MAX_ROUNDS = 6;
@@ -47,38 +54,51 @@ export function assistantUrl(): string {
   return import.meta.env.DEV ? 'http://localhost:8787' : '';
 }
 
-export class AssistantError extends Error {}
+export class AssistantError extends Error {
+  readonly unreportedAttempts: number;
+  constructor(message: string, unreportedAttempts = 0) {
+    super(message);
+    this.unreportedAttempts = unreportedAttempts;
+  }
+}
 
-async function readError(response: Response): Promise<string> {
+async function readError(response: Response): Promise<AssistantError> {
   try {
-    const body = (await response.json()) as { error?: string };
-    if (body.error) return body.error;
+    const body = (await response.json()) as { error?: string; unreportedAttempts?: number };
+    const attempts = typeof body.unreportedAttempts === 'number' && Number.isInteger(body.unreportedAttempts) && body.unreportedAttempts >= 0 ? Math.min(10, body.unreportedAttempts) : response.status >= 500 ? 1 : 0;
+    if (typeof body.error === 'string') return new AssistantError(body.error, attempts);
   } catch {
     // pas de JSON : message générique
   }
-  return `Le service d’IA a répondu ${response.status}.`;
+  return new AssistantError(`Le service d’IA a répondu ${response.status}.`, response.status >= 500 ? 1 : 0);
 }
 
 export async function fetchStatus(url: string, signal?: AbortSignal): Promise<ServiceStatus> {
   const response = await fetch(url, { signal });
-  if (!response.ok) throw new AssistantError(await readError(response));
+  if (!response.ok) throw await readError(response);
   return (await response.json()) as ServiceStatus;
 }
 
-export async function chat(url: string, messages: Message[], signal?: AbortSignal): Promise<Reply> {
+export async function chat(url: string, messages: Message[], signal?: AbortSignal, api?: ApiSettings): Promise<Reply> {
+  if (api) {
+    const relay = new URL(url);
+    if (relay.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(relay.hostname)) throw new AssistantError('Le relais doit utiliser HTTPS pour transmettre votre clé API.');
+  }
   let response: Response;
   try {
     response = await fetch(`${url}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, tools: TOOL_DEFINITIONS }),
+      body: JSON.stringify({ messages, tools: TOOL_DEFINITIONS, ...(api ? { api } : {}) }),
+      redirect: 'error',
+      credentials: 'omit',
       signal,
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new AssistantError('Impossible de joindre le service d’IA. Vérifiez la connexion, ou réessayez plus tard.');
+    throw new AssistantError('Impossible de joindre le service d’IA. Vérifiez la connexion, ou réessayez plus tard.', 1);
   }
-  if (!response.ok) throw new AssistantError(await readError(response));
+  if (!response.ok) throw await readError(response);
   return (await response.json()) as Reply;
 }
 
@@ -111,11 +131,25 @@ export function compactHistory(messages: Message[]): void {
  * Un tour de conversation : la question de l'utilisateur, les appels d'outils que le modèle
  * demande (exécutés ici, dans le navigateur), puis sa réponse. `messages` est complété en place.
  */
-export async function runTurn(url: string, messages: Message[], userText: string, context: ToolContext, events: TurnEvents, signal?: AbortSignal): Promise<string> {
+export async function runTurn(url: string, messages: Message[], userText: string, context: ToolContext, events: TurnEvents, signal?: AbortSignal, api?: ApiSettings): Promise<string> {
   compactHistory(messages);
   messages.push({ role: 'user', content: userText });
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const reply = await chat(url, trimHistory(messages), signal);
+    signal?.throwIfAborted();
+    if (context.isCurrent?.() === false) throw new AssistantError('Le projet a changé. Relancez votre demande.');
+    let reply: Reply;
+    try { reply = await chat(url, trimHistory(messages), signal, api); }
+    catch (error) {
+      const attempts = error instanceof AssistantError ? error.unreportedAttempts : 1;
+      for (let i = 0; i < attempts; i++) events.onUsage?.(null);
+      throw error;
+    }
+    // Count a received provider response even if its model was replaced while it was in flight.
+    events.onUsage?.(normalizeUsage(reply.usage));
+    const attempts = typeof reply.unreportedAttempts === 'number' && Number.isInteger(reply.unreportedAttempts) ? Math.max(0, Math.min(10, reply.unreportedAttempts)) : 0;
+    for (let i = 0; i < attempts; i++) events.onUsage?.(null);
+    signal?.throwIfAborted();
+    if (context.isCurrent?.() === false) throw new AssistantError('Le projet a changé. Relancez votre demande.');
     events.onProvider(reply.provider, reply.model);
     if (reply.tool_calls.length === 0) {
       const content = reply.content.trim() || 'Je n’ai pas de réponse à donner.';
@@ -128,9 +162,14 @@ export async function runTurn(url: string, messages: Message[], userText: string
       tool_calls: reply.tool_calls.map((call) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: JSON.stringify(call.arguments) } })),
     });
     for (const call of reply.tool_calls) {
+      // Keep one tool response per call even if a user switches model or cancels between calls.
+      if (signal?.aborted || context.isCurrent?.() === false) {
+        messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify({ error: 'Opération interrompue avant son exécution.' }) });
+        continue;
+      }
       const outcome = runTool(call.name, call.arguments, context);
-      events.onTool(outcome.note, call.name);
       messages.push({ role: 'tool', tool_call_id: call.id, content: truncate(JSON.stringify(outcome.result)) });
+      events.onTool(outcome.note, call.name);
     }
   }
   const content = 'Je n’ai pas réussi à conclure : reformulez la demande, ou découpez-la en étapes.';

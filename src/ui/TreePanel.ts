@@ -1,4 +1,4 @@
-import { buildTree, suggestGrouping, type TreeGroup } from '../data/grouping.ts';
+import { buildTree, groupingProperties, suggestGrouping, type TreeGroup } from '../data/grouping.ts';
 import type { App } from './App.ts';
 import { button, clear, h, integer } from './dom.ts';
 
@@ -46,6 +46,8 @@ export class TreePanel {
   private readonly header: HTMLElement;
   private readonly list: HTMLElement;
   private paths: string[] = [];
+  private propertyQuery = '';
+  private allProperties = false;
   private root: ListView | null = null;
 
   constructor(app: App) {
@@ -55,22 +57,24 @@ export class TreePanel {
     this.el = h('section', { class: 'panel tree-panel' }, this.header, this.list);
 
     app.on('model', () => {
+      this.propertyQuery = ''; this.allProperties = false;
       const suggestion = suggestGrouping(app.store);
       this.paths = suggestion ? [suggestion] : [];
+      app.groupingPaths = [...this.paths];
       this.rebuild();
     });
     // Une propriété modifiée ne refait l'arbre que si elle sert au regroupement ; sinon seuls
     // les libellés changent, et les groupes ouverts le restent.
     app.on('metadata', () => {
       const edit = app.lastEdit;
-      if (edit && this.paths.includes(edit.path)) this.rebuild(true);
+      if (edit && (edit.path === '*' || this.paths.includes(edit.path))) this.rebuild(true);
       else {
         this.renderHeader(); // une propriété nouvelle devient proposable comme niveau
         this.refreshLabels();
       }
     });
-    // Éléments ajoutés ou retirés : l'arbre est refait, groupes ouverts conservés.
-    app.on('structure', () => this.rebuild(true));
+    // Un regroupement change uniquement la présentation de l'arbre.
+    app.on('grouping', () => { this.paths = [...app.groupingPaths]; this.rebuild(true); });
     app.on('visibility', () => this.refresh());
     app.on('selection', () => {
       this.refresh();
@@ -95,26 +99,37 @@ export class TreePanel {
           h('span', { class: 'chip-level', text: String(index + 1) }),
           h('span', { class: 'chip-text', text: path, title: path }),
           button('×', () => {
-            this.paths.splice(index, 1);
-            this.rebuild();
+            this.app.groupBy(this.paths.filter((_, i) => i !== index));
           }, { class: 'chip-remove', title: 'Retirer ce niveau' }),
         ),
       );
     });
 
-    const available = store.paths.filter((path) => !this.paths.includes(path));
-    const add = h('select', { class: 'add-level', attrs: { 'aria-label': 'Ajouter un niveau de regroupement' } },
-      h('option', { text: this.paths.length === 0 ? 'Choisir une propriété…' : '+ Ajouter un sous-niveau', attrs: { value: '' } }),
-      ...available.map((path) => h('option', { text: path, attrs: { value: path } })),
-    );
-    add.disabled = available.length === 0;
+    const { common, detailed } = groupingProperties(store);
+    const search = h('input', { class: 'grouping-search', attrs: { type: 'search', placeholder: 'Rechercher une propriété…', 'aria-label': 'Rechercher une propriété de regroupement', value: this.propertyQuery } });
+    const all = h('input', { attrs: { type: 'checkbox' } }); all.checked = this.allProperties;
+    const add = h('select', { class: 'add-level', attrs: { 'aria-label': 'Ajouter un niveau de regroupement' } });
+    const fold = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+    const options = () => {
+      const query = fold(this.propertyQuery.trim());
+      const available = (this.allProperties || query ? store.paths : common).filter((path) => !this.paths.includes(path) && (!query || fold(path).includes(query)));
+      add.replaceChildren(h('option', { text: available.length ? this.paths.length === 0 ? 'Choisir une propriété…' : '+ Ajouter un sous-niveau' : 'Aucune propriété correspondante', attrs: { value: '' } }),
+        ...available.map((path) => h('option', { text: path, attrs: { value: path } })));
+      add.disabled = available.length === 0;
+    };
+    search.addEventListener('input', () => { this.propertyQuery = search.value; options(); });
+    all.addEventListener('change', () => { this.allProperties = all.checked; options(); });
+    options();
     add.addEventListener('change', () => {
       if (!add.value) return;
-      this.paths.push(add.value);
-      this.rebuild();
+      this.app.groupBy([...this.paths, add.value]);
     });
 
-    this.header.append(h('div', { class: 'field-label', text: 'Grouper par' }), chips, add);
+    this.header.append(h('div', { class: 'field-label', text: 'Grouper par' }), chips);
+    if (store.paths.length) {
+      this.header.append(search, add);
+      if (detailed.length) this.header.append(h('label', { class: 'grouping-all', title: 'Inclure les propriétés détaillées présentes sur peu d’éléments. La recherche porte toujours sur toutes les propriétés.' }, all, `Toutes les propriétés (${integer.format(store.paths.length)})`));
+    }
     if (store.paths.length === 0) {
       this.header.append(
         h('p', { class: 'hint', text: 'Ce modèle n’a aucune propriété. Ajoutez son fichier JSON de métadonnées pour regrouper, colorer et filtrer les éléments.' }),
@@ -129,6 +144,7 @@ export class TreePanel {
     // Les propriétés de regroupement qui n'existent plus (nouvelles métadonnées) sont retirées
     // avant d'afficher l'en-tête, pour que les pastilles correspondent à l'arbre.
     this.paths = this.paths.filter((path) => store.paths.includes(path));
+    this.app.groupingPaths = [...this.paths];
     this.renderHeader();
     clear(this.list);
     this.root = null;

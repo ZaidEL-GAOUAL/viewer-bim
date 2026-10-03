@@ -264,7 +264,7 @@ def scene_from_glb(glb: bytes) -> Scene:
         entry = document["accessors"][index]
         view = document["bufferViews"][entry["bufferView"]]
         start = view.get("byteOffset", 0) + entry.get("byteOffset", 0)
-        width = {"SCALAR": 1, "VEC3": 3}[entry["type"]]
+        width = {"SCALAR": 1, "VEC3": 3, "VEC4": 4}[entry["type"]]
         array = np.frombuffer(binary, dtype=dtype, count=entry["count"] * width, offset=start)
         return array.reshape(-1, width) if width > 1 else array
 
@@ -273,6 +273,7 @@ def scene_from_glb(glb: bytes) -> Scene:
         pbr = material.get("pbrMetallicRoughness", {})
         rgba = tuple(pbr.get("baseColorFactor", [1, 1, 1, 1]))
         scene.materials.append(MaterialData(material.get("name", "Défaut"), rgba, bool(material.get("doubleSided"))))  # type: ignore[arg-type]
+    colour_materials: dict[tuple, int] = {}
     for mesh in document.get("meshes", []):
         primitives = []
         triangles = 0
@@ -281,19 +282,73 @@ def scene_from_glb(glb: bytes) -> Scene:
             index_entry = document["accessors"][primitive["indices"]]
             indices = accessor(primitive["indices"], np.uint16 if index_entry["componentType"] == 5123 else np.uint32).astype(np.int32)
             normals = accessor(attributes["NORMAL"], np.float32) if "NORMAL" in attributes else None
-            primitives.append(Primitive(accessor(attributes["POSITION"], np.float32), normals, indices, primitive.get("material", 0)))
+            positions = accessor(attributes["POSITION"], np.float32)
+            material_index = primitive.get("material", 0)
+            if not scene.materials:
+                scene.materials.append(MaterialData("Défaut", (1, 1, 1, 1), False))
+            if "COLOR_0" in attributes:
+                entry = document["accessors"][attributes["COLOR_0"]]
+                dtype = {5121: np.uint8, 5123: np.uint16, 5126: np.float32}[entry["componentType"]]
+                colors = accessor(attributes["COLOR_0"], dtype).astype(float)
+                if entry.get("normalized") and dtype != np.float32:
+                    colors /= np.iinfo(dtype).max
+                if colors.shape[1] == 3:
+                    colors = np.c_[colors, np.ones(len(colors))]
+                material = scene.materials[material_index]
+                face_colors = colors[indices.reshape(-1, 3)].mean(axis=1) * np.array(material.rgba)
+                # glTF colours are linear floats. Quantising them to bytes darkens subtle
+                # colours; retain float precision when grouping uniform triangle colours.
+                palette, groups = np.unique(np.round(np.clip(face_colors, 0, 1), 8), axis=0, return_inverse=True)
+                for group, color in enumerate(palette):
+                    selected = indices.reshape(-1, 3)[groups == group].flatten()
+                    vertices, remapped = np.unique(selected, return_inverse=True)
+                    rgba = tuple(float(v) for v in color)
+                    key = (material.name, rgba, material.double_sided)
+                    if key not in colour_materials:
+                        colour_materials[key] = len(scene.materials)
+                        scene.materials.append(MaterialData(material.name, rgba, material.double_sided))
+                    color_material = colour_materials[key]
+                    primitives.append(Primitive(positions[vertices], normals[vertices] if normals is not None else None, remapped.astype(np.int32), color_material))
+            else:
+                primitives.append(Primitive(positions, normals, indices, material_index))
             triangles += len(indices) // 3
         scene.meshes.append(MeshData(primitives, triangles))
 
+    # Both converter GLBs (one axis-conversion root) and edited GLBs (flat scene roots) are
+    # valid inputs. Accumulate all transforms, including translation/rotation/scale, then
+    # convert glTF Y-up metres back to IFC/USD Z-up metres.
     nodes = document["nodes"]
-    identity = tuple(float(v) for v in (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1))
-    matrix_of = lambda node: tuple(float(v) for v in node.get("matrix", identity))
-    for index in nodes[0].get("children", []):
+    y_to_z = np.array([[1, 0, 0, 0], [0, 0, -1, 0], [0, 1, 0, 0], [0, 0, 0, 1]], dtype=float)
+    elements: dict[str, tuple[str | None, list]] = {}
+    def matrix_of(node: dict) -> np.ndarray:
+        if "matrix" in node:
+            return np.array(node["matrix"], dtype=float).reshape(4, 4).T
+        matrix = np.eye(4)
+        x, y, z, w = node.get("rotation", [0, 0, 0, 1])
+        rotation = np.array([[1-2*y*y-2*z*z, 2*x*y-2*z*w, 2*x*z+2*y*w],
+                             [2*x*y+2*z*w, 1-2*x*x-2*z*z, 2*y*z-2*x*w],
+                             [2*x*z-2*y*w, 2*y*z+2*x*w, 1-2*x*x-2*y*y]])
+        matrix[:3, :3] = rotation @ np.diag(node.get("scale", [1, 1, 1]))
+        matrix[:3, 3] = node.get("translation", [0, 0, 0])
+        return matrix
+    def visit(index: int, parent: np.ndarray, owner: str | None, ancestors: set[int]) -> None:
+        if index in ancestors:
+            raise ValueError("Hiérarchie GLB cyclique.")
         node = nodes[index]
-        guid = str(node.get("extras", {}).get("id", node.get("name", f"node-{index}")))
+        world = parent @ matrix_of(node)
+        identifier = node.get("extras", {}).get("id")
+        if identifier is not None:
+            owner = str(identifier)
+            elements.setdefault(owner, (node.get("name"), []))
         if "mesh" in node:
-            placements = [(node["mesh"], matrix_of(node))]
-        else:
-            placements = [(nodes[child]["mesh"], matrix_of(nodes[child])) for child in node.get("children", []) if "mesh" in nodes[child]]
-        scene.element(guid, node.get("name"), placements)
+            if owner is None:
+                owner = str(node.get("name") or f"node-{index}")
+            elements.setdefault(owner, (node.get("name"), []))[1].append((node["mesh"], tuple((y_to_z @ world).T.flatten())))
+        for child in node.get("children", []):
+            visit(child, world, owner, ancestors | {index})
+    roots = document.get("scenes", [{}])[document.get("scene", 0)].get("nodes", [])
+    for index in roots:
+        visit(index, np.eye(4), None, set())
+    for guid, (name, placements) in elements.items():
+        scene.element(guid, name, placements)
     return scene

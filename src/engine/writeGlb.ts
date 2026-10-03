@@ -1,5 +1,5 @@
-// Écriture d'un GLB à partir du modèle affiché, modifications comprises (éléments déplacés,
-// dupliqués, ajoutés). Un nœud par élément, avec `extras.id` pour le lien avec les métadonnées ;
+// Écriture d'un GLB à partir du modèle affiché, avec les propriétés actuelles.
+// Un nœud par élément, avec `extras.id` pour le lien avec les métadonnées ;
 // les coordonnées du projet sont rendues par la translation des nœuds (voir Model.offset).
 // Les textures ne sont pas réécrites : la couleur de chaque sommet l'est.
 
@@ -23,7 +23,6 @@ interface Primitive {
 }
 
 const FLOAT = 5126;
-const UNSIGNED_BYTE = 5121;
 const UNSIGNED_SHORT = 5123;
 const UNSIGNED_INT = 5125;
 const ARRAY_BUFFER = 34962;
@@ -33,7 +32,12 @@ function align(length: number): number {
   return (length + 3) & ~3;
 }
 
-export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
+export interface GlbExportOptions {
+  /** Propriétés actuelles par identifiant stable, en remplacement des extras du fichier source. */
+  properties?: ReadonlyMap<string, Record<string, unknown>> | Record<string, Record<string, unknown>>;
+}
+
+export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExportOptions = {}): ArrayBuffer {
   const bufferViews: { buffer: 0; byteOffset: number; byteLength: number; target: number }[] = [];
   const accessors: Accessor[] = [];
   const parts: ArrayBufferView[] = [];
@@ -94,7 +98,8 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
       const vertexCount = order.length;
       const positions = new Float32Array(vertexCount * 3);
       const normals = new Float32Array(vertexCount * 3);
-      const colors = new Uint8Array(vertexCount * 4);
+      // Le renderer conserve le sRGB en octets ; glTF exige des couleurs de sommet linéaires.
+      const colors = new Float32Array(vertexCount * 4);
       const min = [Infinity, Infinity, Infinity];
       const max = [-Infinity, -Infinity, -Infinity];
       order.forEach((v, local) => {
@@ -105,7 +110,11 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
           if (value > max[axis]) max[axis] = value;
           normals[local * 3 + axis] = Math.max(-1, srcNormals[v * 3 + axis] / 127);
         }
-        colors.set(srcColors.subarray(v * 4, v * 4 + 4), local * 4);
+        for (let channel = 0; channel < 3; channel++) {
+          const value = srcColors[v * 4 + channel] / 255;
+          colors[local * 4 + channel] = value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        }
+        colors[local * 4 + 3] = srcColors[v * 4 + 3] / 255;
       });
       const indexData = vertexCount <= 65535 ? Uint16Array.from(indices) : indices;
 
@@ -114,7 +123,7 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
       attributes.POSITION = accessors.length - 1;
       accessors.push({ bufferView: view(normals, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC3' });
       attributes.NORMAL = accessors.length - 1;
-      accessors.push({ bufferView: view(colors, ARRAY_BUFFER), componentType: UNSIGNED_BYTE, count: vertexCount, type: 'VEC4', normalized: true });
+      accessors.push({ bufferView: view(colors, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC4' });
       attributes.COLOR_0 = accessors.length - 1;
       accessors.push({
         bufferView: view(indexData, ELEMENT_ARRAY_BUFFER),
@@ -125,7 +134,13 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
       primitives.push({ attributes, indices: accessors.length - 1, material: materialFor(chunk.transparent, chunk.doubleSided) });
     }
 
-    const node: Record<string, unknown> = { name: model.names[element], translation, extras: { ...(model.extras[element] ?? {}), id: model.keys[element] } };
+    const key = model.keys[element];
+    const properties = options.properties instanceof Map
+      ? options.properties.get(key)
+      : options.properties && Object.hasOwn(options.properties, key)
+        ? (options.properties as Record<string, Record<string, unknown>>)[key]
+        : undefined;
+    const node: Record<string, unknown> = { name: model.names[element], translation, extras: { ...(properties ?? model.extras[element] ?? {}), id: key } };
     if (primitives.length > 0) {
       meshes.push({ name: model.names[element], primitives });
       node.mesh = meshes.length - 1;
@@ -136,18 +151,14 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
   const gltf = {
     asset: { version: '2.0', generator },
     scene: 0,
-    scenes: [{ nodes: nodes.map((_, i) => i) }],
-    nodes,
-    meshes,
-    materials,
-    accessors,
-    bufferViews,
-    buffers: [{ byteLength }],
+    scenes: [nodes.length > 0 ? { nodes: nodes.map((_, i) => i) } : {}],
+    ...(nodes.length > 0 ? { nodes } : {}),
+    ...(byteLength > 0 ? { meshes, materials, accessors, bufferViews, buffers: [{ byteLength }] } : {}),
   };
 
   const json = new TextEncoder().encode(JSON.stringify(gltf));
   const jsonLength = align(json.byteLength);
-  const total = 12 + 8 + jsonLength + 8 + byteLength;
+  const total = 12 + 8 + jsonLength + (byteLength > 0 ? 8 + byteLength : 0);
   const out = new ArrayBuffer(total);
   const bytes = new Uint8Array(out);
   const header = new DataView(out);
@@ -159,12 +170,14 @@ export function writeGlb(model: Model, generator = 'viewer-bim'): ArrayBuffer {
   bytes.set(json, 20);
   bytes.fill(0x20, 20 + json.byteLength, 20 + jsonLength);
   let at = 20 + jsonLength;
-  header.setUint32(at, byteLength, true);
-  header.setUint32(at + 4, 0x004e4942, true);
-  at += 8;
-  for (const part of parts) {
-    bytes.set(new Uint8Array(part.buffer, part.byteOffset, part.byteLength), at);
-    at = align(at + part.byteLength);
+  if (byteLength > 0) {
+    header.setUint32(at, byteLength, true);
+    header.setUint32(at + 4, 0x004e4942, true);
+    at += 8;
+    for (const part of parts) {
+      bytes.set(new Uint8Array(part.buffer, part.byteOffset, part.byteLength), at);
+      at = align(at + part.byteLength);
+    }
   }
   return out;
 }

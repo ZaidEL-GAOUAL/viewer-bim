@@ -47,11 +47,36 @@ l'indique) ; tout le reste fonctionne.
 - `ALLOWED_ORIGINS` (`wrangler.toml`) : seuls ces sites peuvent appeler le worker. À compléter
   si le viewer est servi ailleurs.
 
+## API personnelle ou d’entreprise
+
+Dans l’onglet Assistant, ouvrir **Paramètres de l’API**, choisir un fournisseur puis renseigner
+l’adresse de base, le modèle et la clé. Les appels passent toujours par le worker. La clé
+reste en mémoire dans l’onglet et accompagne chaque requête HTTPS au relais ; elle n’est
+enregistrée ni dans le navigateur, ni dans la conversation, ni par le worker. Recharger
+la page ou choisir **Service du site** efface cette configuration. Aucun appel au modèle
+n’est effectué lors de l’enregistrement des réglages.
+
+Les endpoints OpenAI, Groq et Cerebras proposés sont autorisés par défaut. Pour un autre
+service compatible avec `chat/completions`, l’administrateur ajoute son URL HTTPS complète
+dans la variable Cloudflare **`AI_ALLOWED_ENDPOINTS`** (plusieurs URLs séparées par des
+virgules), par exemple `https://gateway.example.com/openai/v1/chat/completions`.
+L’URL doit correspondre exactement : les hôtes locaux, adresses IP, paramètres d’URL,
+identifiants intégrés et redirections sont refusés. Une configuration personnelle ne
+bascule pas vers les fournisseurs du site en cas d’erreur.
+
+Le compteur affiche les jetons d’entrée, de sortie et le total déclarés par les fournisseurs
+pendant la session, y compris les étapes d’outils. Un `?` indique une consommation non
+communiquée (réponse sans usage, requête interrompue ou tentative échouée) ; aucune
+estimation n’est inventée. **Nouvelle conversation** conserve ce compteur ; recharger
+la page le remet à zéro.
+
 ## Protection du quota
 
 - Origine vérifiée (`Origin`), 20 requêtes par minute et par adresse (binding « rate limit »),
   corps limité à 256 Ko, 80 messages, 20 outils.
-- Les clés ne quittent jamais le worker.
+- Les clés du service restent dans le worker. Une clé personnelle est transmise uniquement
+  au relais puis à l’endpoint autorisé choisi, sans journalisation de la clé ou des erreurs
+  brutes du fournisseur.
 
 ## En local
 
@@ -65,5 +90,9 @@ exécute le worker chez Cloudflare (nécessaire pour Workers AI).
 ## Protocole
 
 - `GET /` → `{ ok, providers: [{ name, model }] }`.
-- `POST /chat` avec `{ messages, tools }` au format « chat completions » (OpenAI) →
-  `{ content, tool_calls: [{ id, name, arguments }], provider, model }`.
+- `POST /chat` avec `{ messages, tools, api? }` au format « chat completions » (OpenAI).
+  `api`, facultatif, vaut `{ endpoint, apiKey, model }` et ne fait jamais partie des messages.
+- Réponse : `{ content, tool_calls: [{ id, name, arguments }], provider, model, usage }`.
+  `usage` contient `{ inputTokens, outputTokens, totalTokens }` ; chaque valeur est un entier
+  mesuré ou `null` si elle n’est pas disponible. `unreportedAttempts`, facultatif, compte
+  les tentatives précédentes sans mesure retournée.

@@ -57,6 +57,30 @@ function isMemoryError(error: unknown): boolean {
 }
 const pool: Worker[] = [];
 let nextId = 1;
+let operations: Promise<unknown> = Promise.resolve();
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+  const next = operations.then(async () => {
+    clearTimeout(idleTimer);
+    try { return await operation(); }
+    catch (error) {
+      // A worker error may leave a dead runtime which cannot answer the next queued job.
+      for (const worker of pool.splice(0)) worker.terminate();
+      throw error;
+    }
+    finally {
+      // Only one warm runtime is useful between operations; release shard heaps immediately.
+      for (const worker of pool.splice(1)) worker.terminate();
+      idleTimer = setTimeout(() => {
+        for (const worker of pool.splice(0)) worker.terminate();
+      }, 30_000);
+    }
+  });
+  // Keep only completion in the queue, never the last model's large buffers.
+  operations = next.then(() => undefined, () => undefined);
+  return next;
+}
 
 export function isIfcFile(name: string): boolean {
   return /\.ifc$/i.test(name);
@@ -125,6 +149,10 @@ function convertShard(
  * ligne de commande : pipeline/usd_writer.py).
  */
 export function packageUsd(glb: ArrayBuffer, metadata: string, onStatus: (message: string) => void): Promise<ArrayBuffer> {
+  return enqueue(() => packageModel(glb, metadata, onStatus));
+}
+
+function packageModel(glb: ArrayBuffer, metadata: string, onStatus: (message: string) => void): Promise<ArrayBuffer> {
   if (pool.length === 0) pool.push(new Worker(new URL('./ifcWorker.ts', import.meta.url), { type: 'module' }));
   const worker = pool[0];
   const id = nextId++;
@@ -158,17 +186,21 @@ export function packageUsd(glb: ArrayBuffer, metadata: string, onStatus: (messag
 
 /**
  * Convertit un fichier IFC en GLB + métadonnées, dans le navigateur. Le convertisseur (Python et
- * IfcOpenShell en WebAssembly) n'est téléchargé qu'au premier IFC ouvert, puis reste en mémoire.
+ * IfcOpenShell en WebAssembly) est chargé à la demande et libéré après une période d'inactivité.
  * Le fichier n'est envoyé à aucun serveur.
  *
  * Les éléments sont répartis entre plusieurs convertisseurs, chacun dans son fil d'exécution :
- * l'interface reste fluide et tous les cœurs disponibles travaillent. Si la mémoire vient à
+ * l'interface reste disponible, dans la limite de quatre tâches simultanées. Si la mémoire vient à
  * manquer, la conversion est retentée avec un seul convertisseur avant d'abandonner.
  */
 export async function convertIfc(file: File, onStatus: (message: string) => void): Promise<IfcConversion> {
   if (file.size > MAX_IFC_BYTES) {
     throw tooLarge(file, `dépasse la limite de ${megabytes(MAX_IFC_BYTES)} Mo pour une conversion dans le navigateur.`);
   }
+  return enqueue(() => convertIfcNow(file, onStatus));
+}
+
+async function convertIfcNow(file: File, onStatus: (message: string) => void): Promise<IfcConversion> {
   const started = performance.now();
   const memoryGB = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
   let count = workerCount(file.size, navigator.hardwareConcurrency || 2, memoryGB);
@@ -224,7 +256,7 @@ async function convertWith(count: number, source: ArrayBuffer, onStatus: (messag
           converting = true;
           progress[index] = percent;
           const average = Math.round(progress.reduce((total, value) => total + value, 0) / count);
-          onStatus(`Conversion de la géométrie : ${average} %${count > 1 ? ` (${count} cœurs)` : ''}`);
+          onStatus(`Conversion de la géométrie : ${average} %${count > 1 ? ` (${count} tâches parallèles)` : ''}`);
         },
       ),
     ),

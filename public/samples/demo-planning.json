@@ -1,0 +1,2495 @@
+{
+  "type": "bim-schedule",
+  "version": 1,
+  "name": "Chantier R+2 · lots, postes et objets — dates fictives",
+  "tasks": [
+    {
+      "id": "lot-00",
+      "name": "00 · Dalle RDC — plateforme de départ",
+      "start": "2026-01-05",
+      "end": "2026-01-07"
+    },
+    {
+      "id": "object:RMpIvF5jLado8i5KMrQscB",
+      "name": "Dalle RDC — état initial de la plateforme",
+      "start": "2026-01-05",
+      "end": "2026-01-07",
+      "elementIds": [
+        "RMpIvF5jLado8i5KMrQscB"
+      ],
+      "parentId": "lot-00"
+    },
+    {
+      "id": "lot-01",
+      "name": "01 · Gros œuvre — élévation par niveau",
+      "start": "2026-01-09",
+      "end": "2026-04-22"
+    },
+    {
+      "id": "structure-rdc",
+      "name": "RDC",
+      "parentId": "lot-01",
+      "start": "2026-01-09",
+      "end": "2026-02-03"
+    },
+    {
+      "id": "columns-rdc",
+      "name": "Poteaux — progression par travée",
+      "parentId": "structure-rdc",
+      "start": "2026-01-09",
+      "end": "2026-01-19"
+    },
+    {
+      "id": "object:fqM8rZYDoJITb_5bL0o8lu",
+      "name": "Poteau 1-3 — RDC",
+      "start": "2026-01-09",
+      "end": "2026-01-12",
+      "elementIds": [
+        "fqM8rZYDoJITb_5bL0o8lu"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:$OFyB0tnL9$1l0uelyUrBR",
+      "name": "Poteau 1-6 — RDC",
+      "start": "2026-01-09",
+      "end": "2026-01-12",
+      "elementIds": [
+        "$OFyB0tnL9$1l0uelyUrBR"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:nCug0xeWAoEEwhoycgC05k",
+      "name": "Poteau 1-9 — RDC",
+      "start": "2026-01-12",
+      "end": "2026-01-13",
+      "elementIds": [
+        "nCug0xeWAoEEwhoycgC05k"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:Tbi0WDGxL4BVyJ6yAcYGRf",
+      "name": "Poteau 2-3 — RDC",
+      "start": "2026-01-12",
+      "end": "2026-01-13",
+      "elementIds": [
+        "Tbi0WDGxL4BVyJ6yAcYGRf"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:GJBkleJyw8uGZI44YM4Dl3",
+      "name": "Poteau 2-6 — RDC",
+      "start": "2026-01-13",
+      "end": "2026-01-14",
+      "elementIds": [
+        "GJBkleJyw8uGZI44YM4Dl3"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:Je7VHoCE_uP1SQeR5UwMvw",
+      "name": "Poteau 2-9 — RDC",
+      "start": "2026-01-13",
+      "end": "2026-01-14",
+      "elementIds": [
+        "Je7VHoCE_uP1SQeR5UwMvw"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:NAWPhEljihH0wrR$Ci7yTP",
+      "name": "Poteau 3-3 — RDC",
+      "start": "2026-01-14",
+      "end": "2026-01-15",
+      "elementIds": [
+        "NAWPhEljihH0wrR$Ci7yTP"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:l8qTIJzM2$pWjr$3qPOrZ2",
+      "name": "Poteau 3-6 — RDC",
+      "start": "2026-01-14",
+      "end": "2026-01-15",
+      "elementIds": [
+        "l8qTIJzM2$pWjr$3qPOrZ2"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:vAgeGuxZTPL$0m$UQ0MQEK",
+      "name": "Poteau 3-9 — RDC",
+      "start": "2026-01-15",
+      "end": "2026-01-16",
+      "elementIds": [
+        "vAgeGuxZTPL$0m$UQ0MQEK"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:RlmnrBQe8etZbgt5HHONX8",
+      "name": "Poteau 4-3 — RDC",
+      "start": "2026-01-15",
+      "end": "2026-01-16",
+      "elementIds": [
+        "RlmnrBQe8etZbgt5HHONX8"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:BzdG35XegmCJCgPybqLy5z",
+      "name": "Poteau 4-6 — RDC",
+      "start": "2026-01-16",
+      "end": "2026-01-19",
+      "elementIds": [
+        "BzdG35XegmCJCgPybqLy5z"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "object:OYAnvND4kjRQuC9Gmeu5PQ",
+      "name": "Poteau 4-9 — RDC",
+      "start": "2026-01-16",
+      "end": "2026-01-19",
+      "elementIds": [
+        "OYAnvND4kjRQuC9Gmeu5PQ"
+      ],
+      "parentId": "columns-rdc"
+    },
+    {
+      "id": "facade-rdc-sud",
+      "name": "Façade sud — trumeaux, allèges et linteaux",
+      "parentId": "structure-rdc",
+      "start": "2026-01-15",
+      "end": "2026-01-30"
+    },
+    {
+      "id": "object:TRDbtlpQJGsF0aLvpfQu93",
+      "name": "Mur façade sud 1 gauche — RDC",
+      "start": "2026-01-15",
+      "end": "2026-01-16",
+      "elementIds": [
+        "TRDbtlpQJGsF0aLvpfQu93"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:u4N3ttLlFoiA03VTXjh9JF",
+      "name": "Mur façade sud 1 droit — RDC",
+      "start": "2026-01-16",
+      "end": "2026-01-19",
+      "elementIds": [
+        "u4N3ttLlFoiA03VTXjh9JF"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:_Czh2c8rtU00uxGNDIot_K",
+      "name": "Allège façade sud 1 — RDC",
+      "start": "2026-01-19",
+      "end": "2026-01-19",
+      "elementIds": [
+        "_Czh2c8rtU00uxGNDIot_K"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:Q9boMtYFpbi6KfL0FmmmKm",
+      "name": "Mur façade sud 2 gauche — RDC",
+      "start": "2026-01-19",
+      "end": "2026-01-20",
+      "elementIds": [
+        "Q9boMtYFpbi6KfL0FmmmKm"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:gGrdpqrJjaJZ_KjuZmMwzJ",
+      "name": "Linteau façade sud 1 — RDC",
+      "start": "2026-01-20",
+      "end": "2026-01-20",
+      "elementIds": [
+        "gGrdpqrJjaJZ_KjuZmMwzJ"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:M7yZKLxmii9HO0LPc_xjZk",
+      "name": "Mur façade sud 2 droit — RDC",
+      "start": "2026-01-20",
+      "end": "2026-01-21",
+      "elementIds": [
+        "M7yZKLxmii9HO0LPc_xjZk"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:f2R1NKBzP0L$3SByVDnztd",
+      "name": "Allège façade sud 2 — RDC",
+      "start": "2026-01-21",
+      "end": "2026-01-21",
+      "elementIds": [
+        "f2R1NKBzP0L$3SByVDnztd"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:b0CFZTrXq8UMKLjC956DgV",
+      "name": "Mur façade sud 3 gauche — RDC",
+      "start": "2026-01-21",
+      "end": "2026-01-22",
+      "elementIds": [
+        "b0CFZTrXq8UMKLjC956DgV"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:mfObvH2rs5bpdce3VOVxhO",
+      "name": "Linteau façade sud 2 — RDC",
+      "start": "2026-01-22",
+      "end": "2026-01-22",
+      "elementIds": [
+        "mfObvH2rs5bpdce3VOVxhO"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:W0gNfwwT0Njf5x91mrMm0D",
+      "name": "Mur façade sud 3 droit — RDC",
+      "start": "2026-01-22",
+      "end": "2026-01-23",
+      "elementIds": [
+        "W0gNfwwT0Njf5x91mrMm0D"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:sAcQiH85JqjquhDTtxos44",
+      "name": "Allège façade sud 3 — RDC",
+      "start": "2026-01-23",
+      "end": "2026-01-23",
+      "elementIds": [
+        "sAcQiH85JqjquhDTtxos44"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:oNRG5hKbL7rRzeYGXsNCAz",
+      "name": "Mur façade sud 4 gauche — RDC",
+      "start": "2026-01-23",
+      "end": "2026-01-26",
+      "elementIds": [
+        "oNRG5hKbL7rRzeYGXsNCAz"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:8x2Gew8PT$He7RAKCLjrEQ",
+      "name": "Linteau façade sud 3 — RDC",
+      "start": "2026-01-26",
+      "end": "2026-01-26",
+      "elementIds": [
+        "8x2Gew8PT$He7RAKCLjrEQ"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:TaGfhaAzHMnt7DTcXVLIYE",
+      "name": "Mur façade sud 4 droit — RDC",
+      "start": "2026-01-26",
+      "end": "2026-01-27",
+      "elementIds": [
+        "TaGfhaAzHMnt7DTcXVLIYE"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:BRAwFA$h_SG1BU7bH6jpn7",
+      "name": "Allège façade sud 4 — RDC",
+      "start": "2026-01-27",
+      "end": "2026-01-27",
+      "elementIds": [
+        "BRAwFA$h_SG1BU7bH6jpn7"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:hNBlh6wjsMlbW2c6a2a14t",
+      "name": "Mur façade sud 5 gauche — RDC",
+      "start": "2026-01-27",
+      "end": "2026-01-28",
+      "elementIds": [
+        "hNBlh6wjsMlbW2c6a2a14t"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:WVqLgOhGjdWchFikEaZ9uv",
+      "name": "Linteau façade sud 4 — RDC",
+      "start": "2026-01-28",
+      "end": "2026-01-28",
+      "elementIds": [
+        "WVqLgOhGjdWchFikEaZ9uv"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:Z1qPQ8cvCRDKcvfhqYfx2A",
+      "name": "Mur façade sud 5 droit — RDC",
+      "start": "2026-01-28",
+      "end": "2026-01-29",
+      "elementIds": [
+        "Z1qPQ8cvCRDKcvfhqYfx2A"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:LpfXbNfcNG3JH71pwHCPn0",
+      "name": "Allège façade sud 5 — RDC",
+      "start": "2026-01-29",
+      "end": "2026-01-29",
+      "elementIds": [
+        "LpfXbNfcNG3JH71pwHCPn0"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "object:SQ9qxpgcFHsa21nKOkbYl1",
+      "name": "Linteau façade sud 5 — RDC",
+      "start": "2026-01-30",
+      "end": "2026-01-30",
+      "elementIds": [
+        "SQ9qxpgcFHsa21nKOkbYl1"
+      ],
+      "parentId": "facade-rdc-sud"
+    },
+    {
+      "id": "facade-rdc-nord",
+      "name": "Façade nord — trumeaux, allèges et linteaux",
+      "parentId": "structure-rdc",
+      "start": "2026-01-19",
+      "end": "2026-02-03"
+    },
+    {
+      "id": "object:$ZcwL7YkGFlxOlDY6kFeG$",
+      "name": "Mur façade nord 1 gauche — RDC",
+      "start": "2026-01-19",
+      "end": "2026-01-20",
+      "elementIds": [
+        "$ZcwL7YkGFlxOlDY6kFeG$"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:HgQBvvWsyq5Kx2j3lw3pvz",
+      "name": "Mur façade nord 1 droit — RDC",
+      "start": "2026-01-20",
+      "end": "2026-01-21",
+      "elementIds": [
+        "HgQBvvWsyq5Kx2j3lw3pvz"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:ru1le$Ps43Q9DTjMsj0nDo",
+      "name": "Allège façade nord 1 — RDC",
+      "start": "2026-01-21",
+      "end": "2026-01-21",
+      "elementIds": [
+        "ru1le$Ps43Q9DTjMsj0nDo"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:$xK38RV90ibNxSBfXIj4Zh",
+      "name": "Mur façade nord 2 gauche — RDC",
+      "start": "2026-01-21",
+      "end": "2026-01-22",
+      "elementIds": [
+        "$xK38RV90ibNxSBfXIj4Zh"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:6RGIPQQL1ijkUzV47L1WAl",
+      "name": "Linteau façade nord 1 — RDC",
+      "start": "2026-01-22",
+      "end": "2026-01-22",
+      "elementIds": [
+        "6RGIPQQL1ijkUzV47L1WAl"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:nMV84R1U1XA45MiQQHCNZn",
+      "name": "Mur façade nord 2 droit — RDC",
+      "start": "2026-01-22",
+      "end": "2026-01-23",
+      "elementIds": [
+        "nMV84R1U1XA45MiQQHCNZn"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:fFxFiAWAnW9Jvc53gbnUqS",
+      "name": "Allège façade nord 2 — RDC",
+      "start": "2026-01-23",
+      "end": "2026-01-23",
+      "elementIds": [
+        "fFxFiAWAnW9Jvc53gbnUqS"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:$zAmBwwIUDXzSmOtq7tDQu",
+      "name": "Mur façade nord 3 gauche — RDC",
+      "start": "2026-01-23",
+      "end": "2026-01-26",
+      "elementIds": [
+        "$zAmBwwIUDXzSmOtq7tDQu"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:3cSPMkfJMGHgLwyP9XieVp",
+      "name": "Linteau façade nord 2 — RDC",
+      "start": "2026-01-26",
+      "end": "2026-01-26",
+      "elementIds": [
+        "3cSPMkfJMGHgLwyP9XieVp"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:WTCTbjGQK$WhQdSSVbJNxy",
+      "name": "Mur façade nord 3 droit — RDC",
+      "start": "2026-01-26",
+      "end": "2026-01-27",
+      "elementIds": [
+        "WTCTbjGQK$WhQdSSVbJNxy"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:TTySwvvw1aQG5$SwO_kDfO",
+      "name": "Allège façade nord 3 — RDC",
+      "start": "2026-01-27",
+      "end": "2026-01-27",
+      "elementIds": [
+        "TTySwvvw1aQG5$SwO_kDfO"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:v_oG9_4bNxynglf4n_$6Cs",
+      "name": "Mur façade nord 4 gauche — RDC",
+      "start": "2026-01-27",
+      "end": "2026-01-28",
+      "elementIds": [
+        "v_oG9_4bNxynglf4n_$6Cs"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:$18RxYni16DmFbO5kQGUjZ",
+      "name": "Linteau façade nord 3 — RDC",
+      "start": "2026-01-28",
+      "end": "2026-01-28",
+      "elementIds": [
+        "$18RxYni16DmFbO5kQGUjZ"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:9QhupsKiJqWhr1DVh8mtMM",
+      "name": "Mur façade nord 4 droit — RDC",
+      "start": "2026-01-28",
+      "end": "2026-01-29",
+      "elementIds": [
+        "9QhupsKiJqWhr1DVh8mtMM"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:cyn47A1qPYUQHlr3KM_LcA",
+      "name": "Allège façade nord 4 — RDC",
+      "start": "2026-01-29",
+      "end": "2026-01-29",
+      "elementIds": [
+        "cyn47A1qPYUQHlr3KM_LcA"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:7SGC2rTVJPTjZupWTREJW8",
+      "name": "Mur façade nord 5 gauche — RDC",
+      "start": "2026-01-29",
+      "end": "2026-01-30",
+      "elementIds": [
+        "7SGC2rTVJPTjZupWTREJW8"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:E$BVjfkmfV$_wJjeLx3LGt",
+      "name": "Linteau façade nord 4 — RDC",
+      "start": "2026-01-30",
+      "end": "2026-01-30",
+      "elementIds": [
+        "E$BVjfkmfV$_wJjeLx3LGt"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:iExx$L7i5DJvS2Iy6tmz3e",
+      "name": "Mur façade nord 5 droit — RDC",
+      "start": "2026-01-30",
+      "end": "2026-02-02",
+      "elementIds": [
+        "iExx$L7i5DJvS2Iy6tmz3e"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:DyJ3aNbsGdmEx2GFLD078t",
+      "name": "Allège façade nord 5 — RDC",
+      "start": "2026-02-02",
+      "end": "2026-02-02",
+      "elementIds": [
+        "DyJ3aNbsGdmEx2GFLD078t"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "object:vmPii$7mlCKH9Z837y8yiG",
+      "name": "Linteau façade nord 5 — RDC",
+      "start": "2026-02-03",
+      "end": "2026-02-03",
+      "elementIds": [
+        "vmPii$7mlCKH9Z837y8yiG"
+      ],
+      "parentId": "facade-rdc-nord"
+    },
+    {
+      "id": "gables-rdc",
+      "name": "Murs pignons",
+      "parentId": "structure-rdc",
+      "start": "2026-01-16",
+      "end": "2026-01-29"
+    },
+    {
+      "id": "object:6OscA1Hql0B7JwBbutqtu4",
+      "name": "Mur pignon ouest — RDC",
+      "start": "2026-01-16",
+      "end": "2026-01-20",
+      "elementIds": [
+        "6OscA1Hql0B7JwBbutqtu4"
+      ],
+      "parentId": "gables-rdc"
+    },
+    {
+      "id": "object:aqVq54MkDCf3HrytuyNtD0",
+      "name": "Mur pignon est — RDC",
+      "start": "2026-01-27",
+      "end": "2026-01-29",
+      "elementIds": [
+        "aqVq54MkDCf3HrytuyNtD0"
+      ],
+      "parentId": "gables-rdc"
+    },
+    {
+      "id": "structure-r1",
+      "name": "R+1",
+      "parentId": "lot-01",
+      "start": "2026-02-06",
+      "end": "2026-03-13"
+    },
+    {
+      "id": "object:AJis$8Z560MyO89ZptxeBJ",
+      "name": "Plancher R+1 — coffrage, ferraillage et coulage",
+      "start": "2026-02-06",
+      "end": "2026-02-12",
+      "elementIds": [
+        "AJis$8Z560MyO89ZptxeBJ"
+      ],
+      "parentId": "structure-r1"
+    },
+    {
+      "id": "columns-r1",
+      "name": "Poteaux — progression par travée",
+      "parentId": "structure-r1",
+      "start": "2026-02-18",
+      "end": "2026-02-26"
+    },
+    {
+      "id": "object:A99lwF9TZkuee4pJJNUqq8",
+      "name": "Poteau 1-3 — R+1",
+      "start": "2026-02-18",
+      "end": "2026-02-19",
+      "elementIds": [
+        "A99lwF9TZkuee4pJJNUqq8"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:v4i$zXN2xl1wQ8K0HqZgO2",
+      "name": "Poteau 1-6 — R+1",
+      "start": "2026-02-18",
+      "end": "2026-02-19",
+      "elementIds": [
+        "v4i$zXN2xl1wQ8K0HqZgO2"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:KqFcqk0zJryCFR3vUEtq1n",
+      "name": "Poteau 1-9 — R+1",
+      "start": "2026-02-19",
+      "end": "2026-02-20",
+      "elementIds": [
+        "KqFcqk0zJryCFR3vUEtq1n"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:lbh6QyOSKZ$k8q5wVmiwqd",
+      "name": "Poteau 2-3 — R+1",
+      "start": "2026-02-19",
+      "end": "2026-02-20",
+      "elementIds": [
+        "lbh6QyOSKZ$k8q5wVmiwqd"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:KOklWOR8r6DNC7l4UUq6R$",
+      "name": "Poteau 2-6 — R+1",
+      "start": "2026-02-20",
+      "end": "2026-02-23",
+      "elementIds": [
+        "KOklWOR8r6DNC7l4UUq6R$"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:zuwQmw$F18kd2hHAhRx3p8",
+      "name": "Poteau 2-9 — R+1",
+      "start": "2026-02-20",
+      "end": "2026-02-23",
+      "elementIds": [
+        "zuwQmw$F18kd2hHAhRx3p8"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:8ia3cPSW_JyuxWYYGjD9f9",
+      "name": "Poteau 3-3 — R+1",
+      "start": "2026-02-23",
+      "end": "2026-02-24",
+      "elementIds": [
+        "8ia3cPSW_JyuxWYYGjD9f9"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:aDCnSecYXzuUTMo5EVduz0",
+      "name": "Poteau 3-6 — R+1",
+      "start": "2026-02-23",
+      "end": "2026-02-24",
+      "elementIds": [
+        "aDCnSecYXzuUTMo5EVduz0"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:eFX8gCKlaHJmGyDl$DIHs7",
+      "name": "Poteau 3-9 — R+1",
+      "start": "2026-02-24",
+      "end": "2026-02-25",
+      "elementIds": [
+        "eFX8gCKlaHJmGyDl$DIHs7"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:88UmefrRedJRObReQdJaid",
+      "name": "Poteau 4-3 — R+1",
+      "start": "2026-02-24",
+      "end": "2026-02-25",
+      "elementIds": [
+        "88UmefrRedJRObReQdJaid"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:0wDz4WzvbJa9PrbUlCIE4d",
+      "name": "Poteau 4-6 — R+1",
+      "start": "2026-02-25",
+      "end": "2026-02-26",
+      "elementIds": [
+        "0wDz4WzvbJa9PrbUlCIE4d"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "object:hBtyp6$qf_cPMaceO4givq",
+      "name": "Poteau 4-9 — R+1",
+      "start": "2026-02-25",
+      "end": "2026-02-26",
+      "elementIds": [
+        "hBtyp6$qf_cPMaceO4givq"
+      ],
+      "parentId": "columns-r1"
+    },
+    {
+      "id": "facade-r1-sud",
+      "name": "Façade sud — trumeaux, allèges et linteaux",
+      "parentId": "structure-r1",
+      "start": "2026-02-24",
+      "end": "2026-03-11"
+    },
+    {
+      "id": "object:b1TN1ywSuA0ZM50B79Wwki",
+      "name": "Mur façade sud 1 gauche — R+1",
+      "start": "2026-02-24",
+      "end": "2026-02-25",
+      "elementIds": [
+        "b1TN1ywSuA0ZM50B79Wwki"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:F4FbLQm2UCRI6ayyF4X9tq",
+      "name": "Mur façade sud 1 droit — R+1",
+      "start": "2026-02-25",
+      "end": "2026-02-26",
+      "elementIds": [
+        "F4FbLQm2UCRI6ayyF4X9tq"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:N0jVUv6PkaE1P3Zwf0t_hv",
+      "name": "Allège façade sud 1 — R+1",
+      "start": "2026-02-26",
+      "end": "2026-02-26",
+      "elementIds": [
+        "N0jVUv6PkaE1P3Zwf0t_hv"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:UVlRzMJlBQEPVO8vMjpMmG",
+      "name": "Mur façade sud 2 gauche — R+1",
+      "start": "2026-02-26",
+      "end": "2026-02-27",
+      "elementIds": [
+        "UVlRzMJlBQEPVO8vMjpMmG"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:pHK$j0cTjOQiqIDihJRKIB",
+      "name": "Linteau façade sud 1 — R+1",
+      "start": "2026-02-27",
+      "end": "2026-02-27",
+      "elementIds": [
+        "pHK$j0cTjOQiqIDihJRKIB"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:hvCDhK_DHO_dvF8DOBLmyZ",
+      "name": "Mur façade sud 2 droit — R+1",
+      "start": "2026-02-27",
+      "end": "2026-03-02",
+      "elementIds": [
+        "hvCDhK_DHO_dvF8DOBLmyZ"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:SJfJZHm1sLExb01S6KYPru",
+      "name": "Allège façade sud 2 — R+1",
+      "start": "2026-03-02",
+      "end": "2026-03-02",
+      "elementIds": [
+        "SJfJZHm1sLExb01S6KYPru"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:X0o2dkoHoNrPzjh111mlnh",
+      "name": "Mur façade sud 3 gauche — R+1",
+      "start": "2026-03-02",
+      "end": "2026-03-03",
+      "elementIds": [
+        "X0o2dkoHoNrPzjh111mlnh"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:nZoQIUtMGr9LkQsQFdhUMI",
+      "name": "Linteau façade sud 2 — R+1",
+      "start": "2026-03-03",
+      "end": "2026-03-03",
+      "elementIds": [
+        "nZoQIUtMGr9LkQsQFdhUMI"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:MOqa9grrktFwAhZACHr1HN",
+      "name": "Mur façade sud 3 droit — R+1",
+      "start": "2026-03-03",
+      "end": "2026-03-04",
+      "elementIds": [
+        "MOqa9grrktFwAhZACHr1HN"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:u1ZoBltvngnhbdgOnzTUCy",
+      "name": "Allège façade sud 3 — R+1",
+      "start": "2026-03-04",
+      "end": "2026-03-04",
+      "elementIds": [
+        "u1ZoBltvngnhbdgOnzTUCy"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:88mS2Uvu3MgIDdHmf0Pqfl",
+      "name": "Mur façade sud 4 gauche — R+1",
+      "start": "2026-03-04",
+      "end": "2026-03-05",
+      "elementIds": [
+        "88mS2Uvu3MgIDdHmf0Pqfl"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:xX42LtNhT0i9M_NWSMEUjL",
+      "name": "Linteau façade sud 3 — R+1",
+      "start": "2026-03-05",
+      "end": "2026-03-05",
+      "elementIds": [
+        "xX42LtNhT0i9M_NWSMEUjL"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:WozrL51dod_FdgNIss9daF",
+      "name": "Mur façade sud 4 droit — R+1",
+      "start": "2026-03-05",
+      "end": "2026-03-06",
+      "elementIds": [
+        "WozrL51dod_FdgNIss9daF"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:E$UShNePZg7CdVREc61Fsf",
+      "name": "Allège façade sud 4 — R+1",
+      "start": "2026-03-06",
+      "end": "2026-03-06",
+      "elementIds": [
+        "E$UShNePZg7CdVREc61Fsf"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:YDjnQHStiu$vmg6jSjSlTP",
+      "name": "Mur façade sud 5 gauche — R+1",
+      "start": "2026-03-06",
+      "end": "2026-03-09",
+      "elementIds": [
+        "YDjnQHStiu$vmg6jSjSlTP"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:EIPUXjoskPFgmJ_k4aqwe5",
+      "name": "Linteau façade sud 4 — R+1",
+      "start": "2026-03-09",
+      "end": "2026-03-09",
+      "elementIds": [
+        "EIPUXjoskPFgmJ_k4aqwe5"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:IsGR9tJd0E$u0cRRdZKHdH",
+      "name": "Mur façade sud 5 droit — R+1",
+      "start": "2026-03-09",
+      "end": "2026-03-10",
+      "elementIds": [
+        "IsGR9tJd0E$u0cRRdZKHdH"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:8QTDaSx66E3boCjdyBO6Bn",
+      "name": "Allège façade sud 5 — R+1",
+      "start": "2026-03-10",
+      "end": "2026-03-10",
+      "elementIds": [
+        "8QTDaSx66E3boCjdyBO6Bn"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "object:zhzzmdoEuzMNgde0y5bAJo",
+      "name": "Linteau façade sud 5 — R+1",
+      "start": "2026-03-11",
+      "end": "2026-03-11",
+      "elementIds": [
+        "zhzzmdoEuzMNgde0y5bAJo"
+      ],
+      "parentId": "facade-r1-sud"
+    },
+    {
+      "id": "facade-r1-nord",
+      "name": "Façade nord — trumeaux, allèges et linteaux",
+      "parentId": "structure-r1",
+      "start": "2026-02-26",
+      "end": "2026-03-13"
+    },
+    {
+      "id": "object:i_foH1fR$KoFhGjmSa1quS",
+      "name": "Mur façade nord 1 gauche — R+1",
+      "start": "2026-02-26",
+      "end": "2026-02-27",
+      "elementIds": [
+        "i_foH1fR$KoFhGjmSa1quS"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:M0XnAx8HzUESVudb2EHji$",
+      "name": "Mur façade nord 1 droit — R+1",
+      "start": "2026-02-27",
+      "end": "2026-03-02",
+      "elementIds": [
+        "M0XnAx8HzUESVudb2EHji$"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:fUXM$0wkn1IUzPKyfe4EdL",
+      "name": "Allège façade nord 1 — R+1",
+      "start": "2026-03-02",
+      "end": "2026-03-02",
+      "elementIds": [
+        "fUXM$0wkn1IUzPKyfe4EdL"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:WTzwOrwmTL3tjNfkBR0L1l",
+      "name": "Mur façade nord 2 gauche — R+1",
+      "start": "2026-03-02",
+      "end": "2026-03-03",
+      "elementIds": [
+        "WTzwOrwmTL3tjNfkBR0L1l"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:tBevfrX6N_P$Nkci_JAfwF",
+      "name": "Linteau façade nord 1 — R+1",
+      "start": "2026-03-03",
+      "end": "2026-03-03",
+      "elementIds": [
+        "tBevfrX6N_P$Nkci_JAfwF"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:92QUOjUbRPqfS39OoAFml4",
+      "name": "Mur façade nord 2 droit — R+1",
+      "start": "2026-03-03",
+      "end": "2026-03-04",
+      "elementIds": [
+        "92QUOjUbRPqfS39OoAFml4"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:AcOXNbIlLcl0h5kT$ovkku",
+      "name": "Allège façade nord 2 — R+1",
+      "start": "2026-03-04",
+      "end": "2026-03-04",
+      "elementIds": [
+        "AcOXNbIlLcl0h5kT$ovkku"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:Mzv2xnRD_$xQ8Q_1eW_Y3H",
+      "name": "Mur façade nord 3 gauche — R+1",
+      "start": "2026-03-04",
+      "end": "2026-03-05",
+      "elementIds": [
+        "Mzv2xnRD_$xQ8Q_1eW_Y3H"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:9h6mZ4ecuGpYt05QzECsC_",
+      "name": "Linteau façade nord 2 — R+1",
+      "start": "2026-03-05",
+      "end": "2026-03-05",
+      "elementIds": [
+        "9h6mZ4ecuGpYt05QzECsC_"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:53YBJksJo5Z0x8nYi8SWVo",
+      "name": "Mur façade nord 3 droit — R+1",
+      "start": "2026-03-05",
+      "end": "2026-03-06",
+      "elementIds": [
+        "53YBJksJo5Z0x8nYi8SWVo"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:9_VFqk5lz3wR1mkCLi_gdi",
+      "name": "Allège façade nord 3 — R+1",
+      "start": "2026-03-06",
+      "end": "2026-03-06",
+      "elementIds": [
+        "9_VFqk5lz3wR1mkCLi_gdi"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:bsY40G872$opKXViKoGeML",
+      "name": "Mur façade nord 4 gauche — R+1",
+      "start": "2026-03-06",
+      "end": "2026-03-09",
+      "elementIds": [
+        "bsY40G872$opKXViKoGeML"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:vroqVuxJZ7Maw5GDKbSwbX",
+      "name": "Linteau façade nord 3 — R+1",
+      "start": "2026-03-09",
+      "end": "2026-03-09",
+      "elementIds": [
+        "vroqVuxJZ7Maw5GDKbSwbX"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:4pif77D4VcA3iJ3TJ46F4_",
+      "name": "Mur façade nord 4 droit — R+1",
+      "start": "2026-03-09",
+      "end": "2026-03-10",
+      "elementIds": [
+        "4pif77D4VcA3iJ3TJ46F4_"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:7e3gJvSP81RoEzFj2V1YdT",
+      "name": "Allège façade nord 4 — R+1",
+      "start": "2026-03-10",
+      "end": "2026-03-10",
+      "elementIds": [
+        "7e3gJvSP81RoEzFj2V1YdT"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:NiPcN4_QA090LEKJyEqUhw",
+      "name": "Mur façade nord 5 gauche — R+1",
+      "start": "2026-03-10",
+      "end": "2026-03-11",
+      "elementIds": [
+        "NiPcN4_QA090LEKJyEqUhw"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:EsyQ_HPRC3VxYbwsguU8Cs",
+      "name": "Linteau façade nord 4 — R+1",
+      "start": "2026-03-11",
+      "end": "2026-03-11",
+      "elementIds": [
+        "EsyQ_HPRC3VxYbwsguU8Cs"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:4$PLOBQe5nDyJLQro6sOcf",
+      "name": "Mur façade nord 5 droit — R+1",
+      "start": "2026-03-11",
+      "end": "2026-03-12",
+      "elementIds": [
+        "4$PLOBQe5nDyJLQro6sOcf"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:T5Ua9KA_ui9ffzUv7zbjxu",
+      "name": "Allège façade nord 5 — R+1",
+      "start": "2026-03-12",
+      "end": "2026-03-12",
+      "elementIds": [
+        "T5Ua9KA_ui9ffzUv7zbjxu"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "object:XYA_i$VGAFg$EiksfX_Kp3",
+      "name": "Linteau façade nord 5 — R+1",
+      "start": "2026-03-13",
+      "end": "2026-03-13",
+      "elementIds": [
+        "XYA_i$VGAFg$EiksfX_Kp3"
+      ],
+      "parentId": "facade-r1-nord"
+    },
+    {
+      "id": "gables-r1",
+      "name": "Murs pignons",
+      "parentId": "structure-r1",
+      "start": "2026-02-25",
+      "end": "2026-03-10"
+    },
+    {
+      "id": "object:d95cuGk8N2PvbExFFjOC5Z",
+      "name": "Mur pignon ouest — R+1",
+      "start": "2026-02-25",
+      "end": "2026-02-27",
+      "elementIds": [
+        "d95cuGk8N2PvbExFFjOC5Z"
+      ],
+      "parentId": "gables-r1"
+    },
+    {
+      "id": "object:Kug$zJrX72nRr_rZNPqvdq",
+      "name": "Mur pignon est — R+1",
+      "start": "2026-03-06",
+      "end": "2026-03-10",
+      "elementIds": [
+        "Kug$zJrX72nRr_rZNPqvdq"
+      ],
+      "parentId": "gables-r1"
+    },
+    {
+      "id": "structure-r2",
+      "name": "R+2",
+      "parentId": "lot-01",
+      "start": "2026-03-18",
+      "end": "2026-04-22"
+    },
+    {
+      "id": "object:LBn2ABYYZBwbAnqDRNKL4I",
+      "name": "Plancher R+2 — coffrage, ferraillage et coulage",
+      "start": "2026-03-18",
+      "end": "2026-03-24",
+      "elementIds": [
+        "LBn2ABYYZBwbAnqDRNKL4I"
+      ],
+      "parentId": "structure-r2"
+    },
+    {
+      "id": "columns-r2",
+      "name": "Poteaux — progression par travée",
+      "parentId": "structure-r2",
+      "start": "2026-03-30",
+      "end": "2026-04-07"
+    },
+    {
+      "id": "object:0LLrGAd5di7mNnZQHPvYsp",
+      "name": "Poteau 1-3 — R+2",
+      "start": "2026-03-30",
+      "end": "2026-03-31",
+      "elementIds": [
+        "0LLrGAd5di7mNnZQHPvYsp"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:_nfXFvabwQ7Tg9yT9mNhNR",
+      "name": "Poteau 1-6 — R+2",
+      "start": "2026-03-30",
+      "end": "2026-03-31",
+      "elementIds": [
+        "_nfXFvabwQ7Tg9yT9mNhNR"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:ZeT_dAR7iY7ivM7Bhziawe",
+      "name": "Poteau 1-9 — R+2",
+      "start": "2026-03-31",
+      "end": "2026-04-01",
+      "elementIds": [
+        "ZeT_dAR7iY7ivM7Bhziawe"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:jfvRG8sUUCrRkY013hn4jV",
+      "name": "Poteau 2-3 — R+2",
+      "start": "2026-03-31",
+      "end": "2026-04-01",
+      "elementIds": [
+        "jfvRG8sUUCrRkY013hn4jV"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:8L7sLFXAg6K0uWdBm4gsfS",
+      "name": "Poteau 2-6 — R+2",
+      "start": "2026-04-01",
+      "end": "2026-04-02",
+      "elementIds": [
+        "8L7sLFXAg6K0uWdBm4gsfS"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:Fk6p1IqXVeeG6MFdaavmeA",
+      "name": "Poteau 2-9 — R+2",
+      "start": "2026-04-01",
+      "end": "2026-04-02",
+      "elementIds": [
+        "Fk6p1IqXVeeG6MFdaavmeA"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:75WNQY_zPK$ClxvF1_o5K3",
+      "name": "Poteau 3-3 — R+2",
+      "start": "2026-04-02",
+      "end": "2026-04-03",
+      "elementIds": [
+        "75WNQY_zPK$ClxvF1_o5K3"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:ot1i8GI68IJNniv9IrS32g",
+      "name": "Poteau 3-6 — R+2",
+      "start": "2026-04-02",
+      "end": "2026-04-03",
+      "elementIds": [
+        "ot1i8GI68IJNniv9IrS32g"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:zWa84MUNvolMFQYemKerZW",
+      "name": "Poteau 3-9 — R+2",
+      "start": "2026-04-03",
+      "end": "2026-04-06",
+      "elementIds": [
+        "zWa84MUNvolMFQYemKerZW"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:rf$HJa45Wo2HHm1U1VigIW",
+      "name": "Poteau 4-3 — R+2",
+      "start": "2026-04-03",
+      "end": "2026-04-06",
+      "elementIds": [
+        "rf$HJa45Wo2HHm1U1VigIW"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:SBEAOCHZTXkH8RY0ZDdJQb",
+      "name": "Poteau 4-6 — R+2",
+      "start": "2026-04-06",
+      "end": "2026-04-07",
+      "elementIds": [
+        "SBEAOCHZTXkH8RY0ZDdJQb"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "object:ZHU5Uzp0gs7jhKWBVQ3M06",
+      "name": "Poteau 4-9 — R+2",
+      "start": "2026-04-06",
+      "end": "2026-04-07",
+      "elementIds": [
+        "ZHU5Uzp0gs7jhKWBVQ3M06"
+      ],
+      "parentId": "columns-r2"
+    },
+    {
+      "id": "facade-r2-sud",
+      "name": "Façade sud — trumeaux, allèges et linteaux",
+      "parentId": "structure-r2",
+      "start": "2026-04-03",
+      "end": "2026-04-20"
+    },
+    {
+      "id": "object:WKOn6fgylVH0RoUt0LtchA",
+      "name": "Mur façade sud 1 gauche — R+2",
+      "start": "2026-04-03",
+      "end": "2026-04-06",
+      "elementIds": [
+        "WKOn6fgylVH0RoUt0LtchA"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:UcdN7grnsB_k0Fv$$Swdge",
+      "name": "Mur façade sud 1 droit — R+2",
+      "start": "2026-04-06",
+      "end": "2026-04-07",
+      "elementIds": [
+        "UcdN7grnsB_k0Fv$$Swdge"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:M4CkmHnoZ5JUSUGrkU$49b",
+      "name": "Allège façade sud 1 — R+2",
+      "start": "2026-04-07",
+      "end": "2026-04-07",
+      "elementIds": [
+        "M4CkmHnoZ5JUSUGrkU$49b"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:YCNAANXQ1B5ZDMx22AMFvC",
+      "name": "Mur façade sud 2 gauche — R+2",
+      "start": "2026-04-07",
+      "end": "2026-04-08",
+      "elementIds": [
+        "YCNAANXQ1B5ZDMx22AMFvC"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:Sa1C5azGG1ALRfGa1C4PuV",
+      "name": "Linteau façade sud 1 — R+2",
+      "start": "2026-04-08",
+      "end": "2026-04-08",
+      "elementIds": [
+        "Sa1C5azGG1ALRfGa1C4PuV"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:b8io1Xq5QqSVh4XcAre4MB",
+      "name": "Mur façade sud 2 droit — R+2",
+      "start": "2026-04-08",
+      "end": "2026-04-09",
+      "elementIds": [
+        "b8io1Xq5QqSVh4XcAre4MB"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:w3OlJ54c6e1mVUBwWuxHiA",
+      "name": "Allège façade sud 2 — R+2",
+      "start": "2026-04-09",
+      "end": "2026-04-09",
+      "elementIds": [
+        "w3OlJ54c6e1mVUBwWuxHiA"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:nFdrh06pr5vA8awrUP4hFO",
+      "name": "Mur façade sud 3 gauche — R+2",
+      "start": "2026-04-09",
+      "end": "2026-04-10",
+      "elementIds": [
+        "nFdrh06pr5vA8awrUP4hFO"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:UWG0DoglD2uPGQdGqfSBp6",
+      "name": "Linteau façade sud 2 — R+2",
+      "start": "2026-04-10",
+      "end": "2026-04-10",
+      "elementIds": [
+        "UWG0DoglD2uPGQdGqfSBp6"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:fP4ZJmsq4kbFVTSU2Fy2Gr",
+      "name": "Mur façade sud 3 droit — R+2",
+      "start": "2026-04-10",
+      "end": "2026-04-13",
+      "elementIds": [
+        "fP4ZJmsq4kbFVTSU2Fy2Gr"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:JTLkJf9MJxnP4YFKiWnCpM",
+      "name": "Allège façade sud 3 — R+2",
+      "start": "2026-04-13",
+      "end": "2026-04-13",
+      "elementIds": [
+        "JTLkJf9MJxnP4YFKiWnCpM"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:k7ZdAzF_JfH$ne9lBxD4F3",
+      "name": "Mur façade sud 4 gauche — R+2",
+      "start": "2026-04-13",
+      "end": "2026-04-14",
+      "elementIds": [
+        "k7ZdAzF_JfH$ne9lBxD4F3"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:3Kf051xhiuWuu89YN31AEW",
+      "name": "Linteau façade sud 3 — R+2",
+      "start": "2026-04-14",
+      "end": "2026-04-14",
+      "elementIds": [
+        "3Kf051xhiuWuu89YN31AEW"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:ocsSRr8h0fMyWHWqSP8VNz",
+      "name": "Mur façade sud 4 droit — R+2",
+      "start": "2026-04-14",
+      "end": "2026-04-15",
+      "elementIds": [
+        "ocsSRr8h0fMyWHWqSP8VNz"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:Aj2wMJu0KsHGMxIkXFJmbC",
+      "name": "Allège façade sud 4 — R+2",
+      "start": "2026-04-15",
+      "end": "2026-04-15",
+      "elementIds": [
+        "Aj2wMJu0KsHGMxIkXFJmbC"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:uEHGpT$WZlEIGZCLT9nUVC",
+      "name": "Mur façade sud 5 gauche — R+2",
+      "start": "2026-04-15",
+      "end": "2026-04-16",
+      "elementIds": [
+        "uEHGpT$WZlEIGZCLT9nUVC"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:UqzrsdhT$4_zvG1szh1lB5",
+      "name": "Linteau façade sud 4 — R+2",
+      "start": "2026-04-16",
+      "end": "2026-04-16",
+      "elementIds": [
+        "UqzrsdhT$4_zvG1szh1lB5"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:LveswR30KkMqUWIfXP7$Kc",
+      "name": "Mur façade sud 5 droit — R+2",
+      "start": "2026-04-16",
+      "end": "2026-04-17",
+      "elementIds": [
+        "LveswR30KkMqUWIfXP7$Kc"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:RDKoY2$zj4G$yvh61SIgso",
+      "name": "Allège façade sud 5 — R+2",
+      "start": "2026-04-17",
+      "end": "2026-04-17",
+      "elementIds": [
+        "RDKoY2$zj4G$yvh61SIgso"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "object:MsgQQEHmOFjWg8msNlGxKK",
+      "name": "Linteau façade sud 5 — R+2",
+      "start": "2026-04-20",
+      "end": "2026-04-20",
+      "elementIds": [
+        "MsgQQEHmOFjWg8msNlGxKK"
+      ],
+      "parentId": "facade-r2-sud"
+    },
+    {
+      "id": "facade-r2-nord",
+      "name": "Façade nord — trumeaux, allèges et linteaux",
+      "parentId": "structure-r2",
+      "start": "2026-04-07",
+      "end": "2026-04-22"
+    },
+    {
+      "id": "object:sNFXMjuX_kWaqOGGxNFjd3",
+      "name": "Mur façade nord 1 gauche — R+2",
+      "start": "2026-04-07",
+      "end": "2026-04-08",
+      "elementIds": [
+        "sNFXMjuX_kWaqOGGxNFjd3"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:XjaLcB3p8laXIal2kUFYx5",
+      "name": "Mur façade nord 1 droit — R+2",
+      "start": "2026-04-08",
+      "end": "2026-04-09",
+      "elementIds": [
+        "XjaLcB3p8laXIal2kUFYx5"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:FGmbWfFH5kt3Oo7O0H_Ydb",
+      "name": "Allège façade nord 1 — R+2",
+      "start": "2026-04-09",
+      "end": "2026-04-09",
+      "elementIds": [
+        "FGmbWfFH5kt3Oo7O0H_Ydb"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:JyW_kwpkqlDk3AnHKa8j56",
+      "name": "Mur façade nord 2 gauche — R+2",
+      "start": "2026-04-09",
+      "end": "2026-04-10",
+      "elementIds": [
+        "JyW_kwpkqlDk3AnHKa8j56"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:RCe7QMkajZJodrKFZON6nX",
+      "name": "Linteau façade nord 1 — R+2",
+      "start": "2026-04-10",
+      "end": "2026-04-10",
+      "elementIds": [
+        "RCe7QMkajZJodrKFZON6nX"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:3Z6NjIPjWnJHIeaP7T0DHT",
+      "name": "Mur façade nord 2 droit — R+2",
+      "start": "2026-04-10",
+      "end": "2026-04-13",
+      "elementIds": [
+        "3Z6NjIPjWnJHIeaP7T0DHT"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:27wzE0augzS4d3JF6PKf$Z",
+      "name": "Allège façade nord 2 — R+2",
+      "start": "2026-04-13",
+      "end": "2026-04-13",
+      "elementIds": [
+        "27wzE0augzS4d3JF6PKf$Z"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:lqBcBvxGj88DJrvfhVwwcd",
+      "name": "Mur façade nord 3 gauche — R+2",
+      "start": "2026-04-13",
+      "end": "2026-04-14",
+      "elementIds": [
+        "lqBcBvxGj88DJrvfhVwwcd"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:z322INoLk4HyVU99CFRZ4h",
+      "name": "Linteau façade nord 2 — R+2",
+      "start": "2026-04-14",
+      "end": "2026-04-14",
+      "elementIds": [
+        "z322INoLk4HyVU99CFRZ4h"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:rhxUFdI2LXkmMKozw6RRNa",
+      "name": "Mur façade nord 3 droit — R+2",
+      "start": "2026-04-14",
+      "end": "2026-04-15",
+      "elementIds": [
+        "rhxUFdI2LXkmMKozw6RRNa"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:Ir13sUiRZU7E3D612oOnLo",
+      "name": "Allège façade nord 3 — R+2",
+      "start": "2026-04-15",
+      "end": "2026-04-15",
+      "elementIds": [
+        "Ir13sUiRZU7E3D612oOnLo"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:yC0K4bnsSXZoR9S4FX96Sa",
+      "name": "Mur façade nord 4 gauche — R+2",
+      "start": "2026-04-15",
+      "end": "2026-04-16",
+      "elementIds": [
+        "yC0K4bnsSXZoR9S4FX96Sa"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:gfKaJnfrWUyP7UA7NlOb$3",
+      "name": "Linteau façade nord 3 — R+2",
+      "start": "2026-04-16",
+      "end": "2026-04-16",
+      "elementIds": [
+        "gfKaJnfrWUyP7UA7NlOb$3"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:v26SrVwYnd_dZpx1VBhhan",
+      "name": "Mur façade nord 4 droit — R+2",
+      "start": "2026-04-16",
+      "end": "2026-04-17",
+      "elementIds": [
+        "v26SrVwYnd_dZpx1VBhhan"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:pVE5VNHGgpzFQ$Ic2g8lML",
+      "name": "Allège façade nord 4 — R+2",
+      "start": "2026-04-17",
+      "end": "2026-04-17",
+      "elementIds": [
+        "pVE5VNHGgpzFQ$Ic2g8lML"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:buySzWpUqcdhU59medNZ8C",
+      "name": "Mur façade nord 5 gauche — R+2",
+      "start": "2026-04-17",
+      "end": "2026-04-20",
+      "elementIds": [
+        "buySzWpUqcdhU59medNZ8C"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:u03XPY69k4gDmB4LtHY01i",
+      "name": "Linteau façade nord 4 — R+2",
+      "start": "2026-04-20",
+      "end": "2026-04-20",
+      "elementIds": [
+        "u03XPY69k4gDmB4LtHY01i"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:7bX76_KlhqlDpsR3Cv8CeD",
+      "name": "Mur façade nord 5 droit — R+2",
+      "start": "2026-04-20",
+      "end": "2026-04-21",
+      "elementIds": [
+        "7bX76_KlhqlDpsR3Cv8CeD"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:gzk4RxsvIx$3rKWr2OLRxl",
+      "name": "Allège façade nord 5 — R+2",
+      "start": "2026-04-21",
+      "end": "2026-04-21",
+      "elementIds": [
+        "gzk4RxsvIx$3rKWr2OLRxl"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "object:$uyqNOqjLCPKRFfQNCfszP",
+      "name": "Linteau façade nord 5 — R+2",
+      "start": "2026-04-22",
+      "end": "2026-04-22",
+      "elementIds": [
+        "$uyqNOqjLCPKRFfQNCfszP"
+      ],
+      "parentId": "facade-r2-nord"
+    },
+    {
+      "id": "gables-r2",
+      "name": "Murs pignons",
+      "parentId": "structure-r2",
+      "start": "2026-04-06",
+      "end": "2026-04-17"
+    },
+    {
+      "id": "object:jBcedkOGt1kWDePJDDvBRl",
+      "name": "Mur pignon ouest — R+2",
+      "start": "2026-04-06",
+      "end": "2026-04-08",
+      "elementIds": [
+        "jBcedkOGt1kWDePJDDvBRl"
+      ],
+      "parentId": "gables-r2"
+    },
+    {
+      "id": "object:1LVqDbHM1SRg8h_tXAXntZ",
+      "name": "Mur pignon est — R+2",
+      "start": "2026-04-15",
+      "end": "2026-04-17",
+      "elementIds": [
+        "1LVqDbHM1SRg8h_tXAXntZ"
+      ],
+      "parentId": "gables-r2"
+    },
+    {
+      "id": "lot-02",
+      "name": "02 · Toiture-terrasse — clos et couvert",
+      "start": "2026-04-27",
+      "end": "2026-05-04"
+    },
+    {
+      "id": "object:KMbUu6NYOZWbsk2Kwv0vhp",
+      "name": "Toiture-terrasse — support, étanchéité et contrôle",
+      "start": "2026-04-27",
+      "end": "2026-05-04",
+      "elementIds": [
+        "KMbUu6NYOZWbsk2Kwv0vhp"
+      ],
+      "parentId": "lot-02"
+    },
+    {
+      "id": "lot-03",
+      "name": "03 · Menuiseries extérieures",
+      "start": "2026-02-27",
+      "end": "2026-05-29"
+    },
+    {
+      "id": "windows-rdc",
+      "name": "RDC",
+      "parentId": "lot-03",
+      "start": "2026-02-27",
+      "end": "2026-03-12"
+    },
+    {
+      "id": "windows-rdc-sud",
+      "name": "Pose des châssis — façade sud",
+      "parentId": "windows-rdc",
+      "start": "2026-02-27",
+      "end": "2026-03-05"
+    },
+    {
+      "id": "object:JDvdMRvsLm6AXXJxuEZk$g",
+      "name": "Fenêtre façade sud 1 — RDC",
+      "start": "2026-02-27",
+      "end": "2026-02-27",
+      "elementIds": [
+        "JDvdMRvsLm6AXXJxuEZk$g"
+      ],
+      "parentId": "windows-rdc-sud"
+    },
+    {
+      "id": "object:GduFUALu3oKBRj$x9L14RZ",
+      "name": "Fenêtre façade sud 2 — RDC",
+      "start": "2026-03-02",
+      "end": "2026-03-02",
+      "elementIds": [
+        "GduFUALu3oKBRj$x9L14RZ"
+      ],
+      "parentId": "windows-rdc-sud"
+    },
+    {
+      "id": "object:pbtEg2m8T_$rwnzrAtmorU",
+      "name": "Fenêtre façade sud 3 — RDC",
+      "start": "2026-03-03",
+      "end": "2026-03-03",
+      "elementIds": [
+        "pbtEg2m8T_$rwnzrAtmorU"
+      ],
+      "parentId": "windows-rdc-sud"
+    },
+    {
+      "id": "object:QQ7e06oG5nbXUu0VsQLtIR",
+      "name": "Fenêtre façade sud 4 — RDC",
+      "start": "2026-03-04",
+      "end": "2026-03-04",
+      "elementIds": [
+        "QQ7e06oG5nbXUu0VsQLtIR"
+      ],
+      "parentId": "windows-rdc-sud"
+    },
+    {
+      "id": "object:Z2QtrDdOKDo2uDiTJhN7Wc",
+      "name": "Fenêtre façade sud 5 — RDC",
+      "start": "2026-03-05",
+      "end": "2026-03-05",
+      "elementIds": [
+        "Z2QtrDdOKDo2uDiTJhN7Wc"
+      ],
+      "parentId": "windows-rdc-sud"
+    },
+    {
+      "id": "windows-rdc-nord",
+      "name": "Pose des châssis — façade nord",
+      "parentId": "windows-rdc",
+      "start": "2026-03-06",
+      "end": "2026-03-12"
+    },
+    {
+      "id": "object:0X$aevofajvpJ7SeRA654o",
+      "name": "Fenêtre façade nord 1 — RDC",
+      "start": "2026-03-06",
+      "end": "2026-03-06",
+      "elementIds": [
+        "0X$aevofajvpJ7SeRA654o"
+      ],
+      "parentId": "windows-rdc-nord"
+    },
+    {
+      "id": "object:gu4htYbA_jsjXSOr09E7rm",
+      "name": "Fenêtre façade nord 2 — RDC",
+      "start": "2026-03-09",
+      "end": "2026-03-09",
+      "elementIds": [
+        "gu4htYbA_jsjXSOr09E7rm"
+      ],
+      "parentId": "windows-rdc-nord"
+    },
+    {
+      "id": "object:sIKsKQwgBQMglTC2I2eraO",
+      "name": "Fenêtre façade nord 3 — RDC",
+      "start": "2026-03-10",
+      "end": "2026-03-10",
+      "elementIds": [
+        "sIKsKQwgBQMglTC2I2eraO"
+      ],
+      "parentId": "windows-rdc-nord"
+    },
+    {
+      "id": "object:HCX4ceyyiIqqS72vZt$7QT",
+      "name": "Fenêtre façade nord 4 — RDC",
+      "start": "2026-03-11",
+      "end": "2026-03-11",
+      "elementIds": [
+        "HCX4ceyyiIqqS72vZt$7QT"
+      ],
+      "parentId": "windows-rdc-nord"
+    },
+    {
+      "id": "object:xr$VYBqHCHCKhV73BDfZKL",
+      "name": "Fenêtre façade nord 5 — RDC",
+      "start": "2026-03-12",
+      "end": "2026-03-12",
+      "elementIds": [
+        "xr$VYBqHCHCKhV73BDfZKL"
+      ],
+      "parentId": "windows-rdc-nord"
+    },
+    {
+      "id": "windows-r1",
+      "name": "R+1",
+      "parentId": "lot-03",
+      "start": "2026-04-08",
+      "end": "2026-04-21"
+    },
+    {
+      "id": "windows-r1-sud",
+      "name": "Pose des châssis — façade sud",
+      "parentId": "windows-r1",
+      "start": "2026-04-08",
+      "end": "2026-04-14"
+    },
+    {
+      "id": "object:Mak_8OrVLKIXZNQKakz6A9",
+      "name": "Fenêtre façade sud 1 — R+1",
+      "start": "2026-04-08",
+      "end": "2026-04-08",
+      "elementIds": [
+        "Mak_8OrVLKIXZNQKakz6A9"
+      ],
+      "parentId": "windows-r1-sud"
+    },
+    {
+      "id": "object:qCY0cTpGo6p31MB_eWlq5P",
+      "name": "Fenêtre façade sud 2 — R+1",
+      "start": "2026-04-09",
+      "end": "2026-04-09",
+      "elementIds": [
+        "qCY0cTpGo6p31MB_eWlq5P"
+      ],
+      "parentId": "windows-r1-sud"
+    },
+    {
+      "id": "object:N39Rd3gMmzJPVi8KtETNf6",
+      "name": "Fenêtre façade sud 3 — R+1",
+      "start": "2026-04-10",
+      "end": "2026-04-10",
+      "elementIds": [
+        "N39Rd3gMmzJPVi8KtETNf6"
+      ],
+      "parentId": "windows-r1-sud"
+    },
+    {
+      "id": "object:OEJ5LG3Gj60UGMezEmNi0x",
+      "name": "Fenêtre façade sud 4 — R+1",
+      "start": "2026-04-13",
+      "end": "2026-04-13",
+      "elementIds": [
+        "OEJ5LG3Gj60UGMezEmNi0x"
+      ],
+      "parentId": "windows-r1-sud"
+    },
+    {
+      "id": "object:ycYMEu0Hy5buxqSOlyuVx3",
+      "name": "Fenêtre façade sud 5 — R+1",
+      "start": "2026-04-14",
+      "end": "2026-04-14",
+      "elementIds": [
+        "ycYMEu0Hy5buxqSOlyuVx3"
+      ],
+      "parentId": "windows-r1-sud"
+    },
+    {
+      "id": "windows-r1-nord",
+      "name": "Pose des châssis — façade nord",
+      "parentId": "windows-r1",
+      "start": "2026-04-15",
+      "end": "2026-04-21"
+    },
+    {
+      "id": "object:$Us$smYMy6GLyRRVJIrdNi",
+      "name": "Fenêtre façade nord 1 — R+1",
+      "start": "2026-04-15",
+      "end": "2026-04-15",
+      "elementIds": [
+        "$Us$smYMy6GLyRRVJIrdNi"
+      ],
+      "parentId": "windows-r1-nord"
+    },
+    {
+      "id": "object:ReWFNSZIFJsUwYw59uWBcG",
+      "name": "Fenêtre façade nord 2 — R+1",
+      "start": "2026-04-16",
+      "end": "2026-04-16",
+      "elementIds": [
+        "ReWFNSZIFJsUwYw59uWBcG"
+      ],
+      "parentId": "windows-r1-nord"
+    },
+    {
+      "id": "object:xb8Qc24rAT5r$36TlfcllT",
+      "name": "Fenêtre façade nord 3 — R+1",
+      "start": "2026-04-17",
+      "end": "2026-04-17",
+      "elementIds": [
+        "xb8Qc24rAT5r$36TlfcllT"
+      ],
+      "parentId": "windows-r1-nord"
+    },
+    {
+      "id": "object:WkIqpQvTIA5VkrtRPWXNSb",
+      "name": "Fenêtre façade nord 4 — R+1",
+      "start": "2026-04-20",
+      "end": "2026-04-20",
+      "elementIds": [
+        "WkIqpQvTIA5VkrtRPWXNSb"
+      ],
+      "parentId": "windows-r1-nord"
+    },
+    {
+      "id": "object:UQdwvtCcZhHyO81M$3x9ws",
+      "name": "Fenêtre façade nord 5 — R+1",
+      "start": "2026-04-21",
+      "end": "2026-04-21",
+      "elementIds": [
+        "UQdwvtCcZhHyO81M$3x9ws"
+      ],
+      "parentId": "windows-r1-nord"
+    },
+    {
+      "id": "windows-r2",
+      "name": "R+2",
+      "parentId": "lot-03",
+      "start": "2026-05-18",
+      "end": "2026-05-29"
+    },
+    {
+      "id": "windows-r2-sud",
+      "name": "Pose des châssis — façade sud",
+      "parentId": "windows-r2",
+      "start": "2026-05-18",
+      "end": "2026-05-22"
+    },
+    {
+      "id": "object:utNj95mtH1WgbgS5BNwNFt",
+      "name": "Fenêtre façade sud 1 — R+2",
+      "start": "2026-05-18",
+      "end": "2026-05-18",
+      "elementIds": [
+        "utNj95mtH1WgbgS5BNwNFt"
+      ],
+      "parentId": "windows-r2-sud"
+    },
+    {
+      "id": "object:d$XSqkZCLLnoMPpkBnP4wG",
+      "name": "Fenêtre façade sud 2 — R+2",
+      "start": "2026-05-19",
+      "end": "2026-05-19",
+      "elementIds": [
+        "d$XSqkZCLLnoMPpkBnP4wG"
+      ],
+      "parentId": "windows-r2-sud"
+    },
+    {
+      "id": "object:pLH3H_oI0Pf7TetQX7GDSG",
+      "name": "Fenêtre façade sud 3 — R+2",
+      "start": "2026-05-20",
+      "end": "2026-05-20",
+      "elementIds": [
+        "pLH3H_oI0Pf7TetQX7GDSG"
+      ],
+      "parentId": "windows-r2-sud"
+    },
+    {
+      "id": "object:VRj5mpdxagMRgoOylozZp3",
+      "name": "Fenêtre façade sud 4 — R+2",
+      "start": "2026-05-21",
+      "end": "2026-05-21",
+      "elementIds": [
+        "VRj5mpdxagMRgoOylozZp3"
+      ],
+      "parentId": "windows-r2-sud"
+    },
+    {
+      "id": "object:KsHLYHWeAQynhn6GA5urUH",
+      "name": "Fenêtre façade sud 5 — R+2",
+      "start": "2026-05-22",
+      "end": "2026-05-22",
+      "elementIds": [
+        "KsHLYHWeAQynhn6GA5urUH"
+      ],
+      "parentId": "windows-r2-sud"
+    },
+    {
+      "id": "windows-r2-nord",
+      "name": "Pose des châssis — façade nord",
+      "parentId": "windows-r2",
+      "start": "2026-05-25",
+      "end": "2026-05-29"
+    },
+    {
+      "id": "object:iTzAgDJiqePDUe2YeChIbW",
+      "name": "Fenêtre façade nord 1 — R+2",
+      "start": "2026-05-25",
+      "end": "2026-05-25",
+      "elementIds": [
+        "iTzAgDJiqePDUe2YeChIbW"
+      ],
+      "parentId": "windows-r2-nord"
+    },
+    {
+      "id": "object:$hLyj641mxx6Lfgr5Q3Soi",
+      "name": "Fenêtre façade nord 2 — R+2",
+      "start": "2026-05-26",
+      "end": "2026-05-26",
+      "elementIds": [
+        "$hLyj641mxx6Lfgr5Q3Soi"
+      ],
+      "parentId": "windows-r2-nord"
+    },
+    {
+      "id": "object:OAxbV83vJE4MDtFa5xodWW",
+      "name": "Fenêtre façade nord 3 — R+2",
+      "start": "2026-05-27",
+      "end": "2026-05-27",
+      "elementIds": [
+        "OAxbV83vJE4MDtFa5xodWW"
+      ],
+      "parentId": "windows-r2-nord"
+    },
+    {
+      "id": "object:xS9cmLaPz1s8SzQsJHfv7s",
+      "name": "Fenêtre façade nord 4 — R+2",
+      "start": "2026-05-28",
+      "end": "2026-05-28",
+      "elementIds": [
+        "xS9cmLaPz1s8SzQsJHfv7s"
+      ],
+      "parentId": "windows-r2-nord"
+    },
+    {
+      "id": "object:VSl6QpZtOYd$1SyPrQIRlc",
+      "name": "Fenêtre façade nord 5 — R+2",
+      "start": "2026-05-29",
+      "end": "2026-05-29",
+      "elementIds": [
+        "VSl6QpZtOYd$1SyPrQIRlc"
+      ],
+      "parentId": "windows-r2-nord"
+    },
+    {
+      "id": "lot-04",
+      "name": "04 · Cloisons et impostes",
+      "start": "2026-05-07",
+      "end": "2026-06-10"
+    },
+    {
+      "id": "partitions-rdc",
+      "name": "RDC",
+      "parentId": "lot-04",
+      "start": "2026-05-07",
+      "end": "2026-05-15"
+    },
+    {
+      "id": "partitions-rdc-6",
+      "name": "Zone 1 — axe 6 m",
+      "parentId": "partitions-rdc",
+      "start": "2026-05-07",
+      "end": "2026-05-12"
+    },
+    {
+      "id": "object:lGK$IFD8Roa98mJKuccNyF",
+      "name": "Cloison 6 A — RDC",
+      "start": "2026-05-07",
+      "end": "2026-05-08",
+      "elementIds": [
+        "lGK$IFD8Roa98mJKuccNyF"
+      ],
+      "parentId": "partitions-rdc-6"
+    },
+    {
+      "id": "object:mOijH3EtwuM7bQpwQIHdGy",
+      "name": "Cloison 6 B — RDC",
+      "start": "2026-05-08",
+      "end": "2026-05-11",
+      "elementIds": [
+        "mOijH3EtwuM7bQpwQIHdGy"
+      ],
+      "parentId": "partitions-rdc-6"
+    },
+    {
+      "id": "object:YyeCm1dwumUeb7ouCfVOa$",
+      "name": "Imposte 6 — RDC",
+      "start": "2026-05-11",
+      "end": "2026-05-12",
+      "elementIds": [
+        "YyeCm1dwumUeb7ouCfVOa$"
+      ],
+      "parentId": "partitions-rdc-6"
+    },
+    {
+      "id": "partitions-rdc-14",
+      "name": "Zone 2 — axe 14 m",
+      "parentId": "partitions-rdc",
+      "start": "2026-05-12",
+      "end": "2026-05-15"
+    },
+    {
+      "id": "object:k5uDKWUPKIr6kkRCP7S0id",
+      "name": "Cloison 14 A — RDC",
+      "start": "2026-05-12",
+      "end": "2026-05-13",
+      "elementIds": [
+        "k5uDKWUPKIr6kkRCP7S0id"
+      ],
+      "parentId": "partitions-rdc-14"
+    },
+    {
+      "id": "object:QFi8AueiZcB$6otOk6$G_2",
+      "name": "Cloison 14 B — RDC",
+      "start": "2026-05-13",
+      "end": "2026-05-14",
+      "elementIds": [
+        "QFi8AueiZcB$6otOk6$G_2"
+      ],
+      "parentId": "partitions-rdc-14"
+    },
+    {
+      "id": "object:EZSFK1UKVU5E1vu$kRQv_a",
+      "name": "Imposte 14 — RDC",
+      "start": "2026-05-14",
+      "end": "2026-05-15",
+      "elementIds": [
+        "EZSFK1UKVU5E1vu$kRQv_a"
+      ],
+      "parentId": "partitions-rdc-14"
+    },
+    {
+      "id": "partitions-r1",
+      "name": "R+1",
+      "parentId": "lot-04",
+      "start": "2026-05-15",
+      "end": "2026-05-25"
+    },
+    {
+      "id": "partitions-r1-6",
+      "name": "Zone 1 — axe 6 m",
+      "parentId": "partitions-r1",
+      "start": "2026-05-15",
+      "end": "2026-05-20"
+    },
+    {
+      "id": "object:$cMO8Htvrfhg9FnlhF8Gt3",
+      "name": "Cloison 6 A — R+1",
+      "start": "2026-05-15",
+      "end": "2026-05-18",
+      "elementIds": [
+        "$cMO8Htvrfhg9FnlhF8Gt3"
+      ],
+      "parentId": "partitions-r1-6"
+    },
+    {
+      "id": "object:p$o3ZFhS5hFZHyNZgvlmap",
+      "name": "Cloison 6 B — R+1",
+      "start": "2026-05-18",
+      "end": "2026-05-19",
+      "elementIds": [
+        "p$o3ZFhS5hFZHyNZgvlmap"
+      ],
+      "parentId": "partitions-r1-6"
+    },
+    {
+      "id": "object:XwQA0_pfDY$ONhQj43S9dP",
+      "name": "Imposte 6 — R+1",
+      "start": "2026-05-19",
+      "end": "2026-05-20",
+      "elementIds": [
+        "XwQA0_pfDY$ONhQj43S9dP"
+      ],
+      "parentId": "partitions-r1-6"
+    },
+    {
+      "id": "partitions-r1-14",
+      "name": "Zone 2 — axe 14 m",
+      "parentId": "partitions-r1",
+      "start": "2026-05-20",
+      "end": "2026-05-25"
+    },
+    {
+      "id": "object:VeXjfZ$2CCl3BSvTQVv$6U",
+      "name": "Cloison 14 A — R+1",
+      "start": "2026-05-20",
+      "end": "2026-05-21",
+      "elementIds": [
+        "VeXjfZ$2CCl3BSvTQVv$6U"
+      ],
+      "parentId": "partitions-r1-14"
+    },
+    {
+      "id": "object:t8l$9P5I98SLw5iLpGumFu",
+      "name": "Cloison 14 B — R+1",
+      "start": "2026-05-21",
+      "end": "2026-05-22",
+      "elementIds": [
+        "t8l$9P5I98SLw5iLpGumFu"
+      ],
+      "parentId": "partitions-r1-14"
+    },
+    {
+      "id": "object:7giUDWuALdH2TQExagB5rY",
+      "name": "Imposte 14 — R+1",
+      "start": "2026-05-22",
+      "end": "2026-05-25",
+      "elementIds": [
+        "7giUDWuALdH2TQExagB5rY"
+      ],
+      "parentId": "partitions-r1-14"
+    },
+    {
+      "id": "partitions-r2",
+      "name": "R+2",
+      "parentId": "lot-04",
+      "start": "2026-06-02",
+      "end": "2026-06-10"
+    },
+    {
+      "id": "partitions-r2-6",
+      "name": "Zone 1 — axe 6 m",
+      "parentId": "partitions-r2",
+      "start": "2026-06-02",
+      "end": "2026-06-05"
+    },
+    {
+      "id": "object:YxGSgUvmxu6hYx3WF1zpwN",
+      "name": "Cloison 6 A — R+2",
+      "start": "2026-06-02",
+      "end": "2026-06-03",
+      "elementIds": [
+        "YxGSgUvmxu6hYx3WF1zpwN"
+      ],
+      "parentId": "partitions-r2-6"
+    },
+    {
+      "id": "object:hAXCvPhsIfZ8d2jVLvKIHR",
+      "name": "Cloison 6 B — R+2",
+      "start": "2026-06-03",
+      "end": "2026-06-04",
+      "elementIds": [
+        "hAXCvPhsIfZ8d2jVLvKIHR"
+      ],
+      "parentId": "partitions-r2-6"
+    },
+    {
+      "id": "object:ZMXUPBatxtGD3OAZ1sUqH2",
+      "name": "Imposte 6 — R+2",
+      "start": "2026-06-04",
+      "end": "2026-06-05",
+      "elementIds": [
+        "ZMXUPBatxtGD3OAZ1sUqH2"
+      ],
+      "parentId": "partitions-r2-6"
+    },
+    {
+      "id": "partitions-r2-14",
+      "name": "Zone 2 — axe 14 m",
+      "parentId": "partitions-r2",
+      "start": "2026-06-05",
+      "end": "2026-06-10"
+    },
+    {
+      "id": "object:3HrzEn_Bx5uA4mNvz11kDk",
+      "name": "Cloison 14 A — R+2",
+      "start": "2026-06-05",
+      "end": "2026-06-08",
+      "elementIds": [
+        "3HrzEn_Bx5uA4mNvz11kDk"
+      ],
+      "parentId": "partitions-r2-14"
+    },
+    {
+      "id": "object:Yxw$XF$vS4krCjv_Rp_Kff",
+      "name": "Cloison 14 B — R+2",
+      "start": "2026-06-08",
+      "end": "2026-06-09",
+      "elementIds": [
+        "Yxw$XF$vS4krCjv_Rp_Kff"
+      ],
+      "parentId": "partitions-r2-14"
+    },
+    {
+      "id": "object:FBoa8pl0azq5gIYHr2_i_A",
+      "name": "Imposte 14 — R+2",
+      "start": "2026-06-09",
+      "end": "2026-06-10",
+      "elementIds": [
+        "FBoa8pl0azq5gIYHr2_i_A"
+      ],
+      "parentId": "partitions-r2-14"
+    },
+    {
+      "id": "lot-05",
+      "name": "05 · Menuiseries intérieures",
+      "start": "2026-05-15",
+      "end": "2026-06-16"
+    },
+    {
+      "id": "doors-rdc",
+      "name": "RDC",
+      "parentId": "lot-05",
+      "start": "2026-05-15",
+      "end": "2026-05-21"
+    },
+    {
+      "id": "object:ARuUGOq5JkQ7BFvh2O0YTl",
+      "name": "Pose et réglage porte 6 — RDC",
+      "start": "2026-05-15",
+      "end": "2026-05-18",
+      "elementIds": [
+        "ARuUGOq5JkQ7BFvh2O0YTl"
+      ],
+      "parentId": "doors-rdc"
+    },
+    {
+      "id": "object:1SLsSwO6WLy0etrYJD8KKX",
+      "name": "Pose et réglage porte 14 — RDC",
+      "start": "2026-05-20",
+      "end": "2026-05-21",
+      "elementIds": [
+        "1SLsSwO6WLy0etrYJD8KKX"
+      ],
+      "parentId": "doors-rdc"
+    },
+    {
+      "id": "doors-r1",
+      "name": "R+1",
+      "parentId": "lot-05",
+      "start": "2026-05-25",
+      "end": "2026-05-29"
+    },
+    {
+      "id": "object:l1WsfzJheYROecIAvk9ReR",
+      "name": "Pose et réglage porte 6 — R+1",
+      "start": "2026-05-25",
+      "end": "2026-05-26",
+      "elementIds": [
+        "l1WsfzJheYROecIAvk9ReR"
+      ],
+      "parentId": "doors-r1"
+    },
+    {
+      "id": "object:4W4HcwSi9n8rVfFLYzXhhj",
+      "name": "Pose et réglage porte 14 — R+1",
+      "start": "2026-05-28",
+      "end": "2026-05-29",
+      "elementIds": [
+        "4W4HcwSi9n8rVfFLYzXhhj"
+      ],
+      "parentId": "doors-r1"
+    },
+    {
+      "id": "doors-r2",
+      "name": "R+2",
+      "parentId": "lot-05",
+      "start": "2026-06-10",
+      "end": "2026-06-16"
+    },
+    {
+      "id": "object:QAd2okTyNI$8ws5AC6kbTT",
+      "name": "Pose et réglage porte 6 — R+2",
+      "start": "2026-06-10",
+      "end": "2026-06-11",
+      "elementIds": [
+        "QAd2okTyNI$8ws5AC6kbTT"
+      ],
+      "parentId": "doors-r2"
+    },
+    {
+      "id": "object:RjcFWp1UcXmmMRylq6L1Gi",
+      "name": "Pose et réglage porte 14 — R+2",
+      "start": "2026-06-15",
+      "end": "2026-06-16",
+      "elementIds": [
+        "RjcFWp1UcXmmMRylq6L1Gi"
+      ],
+      "parentId": "doors-r2"
+    }
+  ]
+}

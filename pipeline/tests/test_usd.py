@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 import numpy as np
@@ -135,3 +136,47 @@ def test_layer_carries_the_read_only_list(conversion, stage):
     data = stage.GetRootLayer().customLayerData
     assert list(data["readOnly"]) == conversion.metadata["readOnly"]
     assert data["contractVersion"] == 1
+
+
+def _flat_coloured_glb():
+    """An imported glTF triangle, without the converter's axis-conversion root."""
+    positions = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype="<f4")
+    colours = np.tile(np.array([0.00303527, 0.12743768, 0.57758044, 0.5], dtype="<f4"), (3, 1))
+    indices = np.array([0, 1, 2], dtype="<u4")
+    binary = positions.tobytes() + colours.tobytes() + indices.tobytes()
+    document = {
+        "asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}],
+        "nodes": [{"name": "Imported", "extras": {"id": "stable-id"}, "mesh": 0,
+                   "translation": [10, 20, 30], "rotation": [0, 0, 2**-0.5, 2**-0.5], "scale": [2, 3, 1]}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "indices": 2}]}],
+        "buffers": [{"byteLength": len(binary)}],
+        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 36},
+                        {"buffer": 0, "byteOffset": 36, "byteLength": 48},
+                        {"buffer": 0, "byteOffset": 84, "byteLength": 12}],
+        "accessors": [{"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+                      {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC4"},
+                      {"bufferView": 2, "componentType": 5125, "count": 3, "type": "SCALAR"}],
+    }
+    payload = json.dumps(document).encode()
+    payload += b" " * (-len(payload) % 4)
+    return struct.pack("<III", 0x46546C67, 2, 28 + len(payload) + len(binary)) + struct.pack("<II", len(payload), 0x4E4F534A) + payload + struct.pack("<II", len(binary), 0x004E4942) + binary
+
+
+def test_flat_glb_roots_keep_placement_colours_and_transparency_in_usd(tmp_path):
+    scene = usd_writer.scene_from_glb(_flat_coloured_glb())
+    assert len(scene.elements) == 1
+    assert scene.elements[0].guid == "stable-id"
+    path = tmp_path / "imported.usda"
+    path.write_text(usd_writer.write_usda(scene, {"elements": {"stable-id": {"properties": {"Checked": True}}}}))
+    stage = Usd.Stage.Open(str(path))
+    element = elements(stage)[0]
+    assert element.GetCustomDataByKey("properties")["Checked"] is True
+    bounds = UsdGeom.BBoxCache(Usd.TimeCode.Default(), ["default"]).ComputeWorldBound(element).ComputeAlignedBox()
+    # glTF XY triangle, rotated and scaled, converted from Y-up to USD Z-up.
+    assert list(bounds.GetMin()) == pytest.approx([7, -30, 20])
+    assert list(bounds.GetMax()) == pytest.approx([10, -30, 22])
+    mesh = next(child for child in Usd.PrimRange(element) if child.IsA(UsdGeom.Mesh))
+    material = UsdShade.MaterialBindingAPI(mesh).ComputeBoundMaterial()[0]
+    shader = UsdShade.Shader(material.GetPrim().GetChild("Shader"))
+    assert list(shader.GetInput("diffuseColor").Get()) == pytest.approx([0.00303527, 0.12743768, 0.57758044], abs=1e-7)
+    assert shader.GetInput("opacity").Get() == pytest.approx(0.5)

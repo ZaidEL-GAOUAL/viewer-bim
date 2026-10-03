@@ -1,11 +1,12 @@
 import { Box3 } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { IFC_READ_ONLY, PATH_SEP, PropertyStore, flattenProperties, mergeProperties, parseMetadata, type FlatProps, type Metadata, type PropValue } from '../data/metadata.ts';
-import { boxMesh, type BoxSpec } from '../engine/boxMesh.ts';
+import { IFC_READ_ONLY, PropertyStore, flattenProperties, unflattenProperties, mergeProperties, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
 import { writeGlb } from '../engine/writeGlb.ts';
-import { newGuid } from '../data/guid.ts';
+import { PropertyEdits } from '../data/PropertyEdits.ts';
+import { evaluateAppearanceRules, validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
+import { updateGlbMetadata } from '../engine/updateGlbMetadata.ts';
 import { hexToRgb } from '../data/palette.ts';
-import { buildModel } from '../engine/buildModel.ts';
+import { buildModel, gltfSource } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
 import { IfcTooLargeError, convertIfc, isIfcFile, packageUsd } from '../ifc/convertIfc.ts';
@@ -14,37 +15,28 @@ import type { ModelSource } from '../engine/buildModel.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
+import { iconButton } from './icons.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
 import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
-import { MeasurePanel } from './MeasurePanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
 import { SectionPanel } from './SectionPanel.ts';
 import { TreePanel } from './TreePanel.ts';
+import { SchedulePanel } from './SchedulePanel.ts';
+import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
-/**
- * `metadata` : des propriétés ont été modifiées ou ajoutées ; `geometry` : des éléments ont été
- * déplacés ; `structure` : des éléments ont été ajoutés ou retirés (le modèle reste le même).
- */
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'geometry' | 'structure';
+/** Viewer state and local metadata events. */
+export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping';
 export type SelectionSource = 'view' | 'panel';
 export type Tool = 'select' | MeasureKind;
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 export type ModelFormat = 'glb' | 'usd';
 
-/** Une boîte à créer dans le viewer, avec sa fiche. */
-export interface BoxCreation extends BoxSpec {
-  name: string;
-  /** Couleur sRGB, 0 à 255. */
-  color?: [number, number, number];
-  properties?: FlatProps;
-}
-
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
   { id: 'select', label: 'Sélection', hint: 'Cliquer un élément pour afficher ses propriétés' },
-  { id: 'distance', label: 'Distance', hint: 'Cliquer deux points' },
-  { id: 'area', label: 'Surface', hint: 'Cliquer une face plane' },
-  { id: 'volume', label: 'Volume', hint: 'Cliquer un élément' },
+  { id: 'distance', label: 'Distance', hint: 'Cliquez deux points. Accroche aux sommets proches ; Échap annule le point en cours.' },
+  { id: 'area', label: 'Surface', hint: 'Cliquez une face plane pour mesurer sa surface.' },
+  { id: 'volume', label: 'Volume', hint: 'Cliquez un élément pour mesurer son volume.' },
 ];
 
 // Laisse le navigateur afficher le message d'attente avant un calcul long. Le délai de secours
@@ -98,6 +90,7 @@ export class App {
   private isolation: Uint8Array | null = null;
   private isolateButton!: HTMLButtonElement;
   private maskButton!: HTMLButtonElement;
+  private readonly measureHint = h('p', { class: 'measure-hint', attrs: { hidden: '', role: 'status' } });
   private downloads!: HTMLElement;
   /** Éléments masqués par le bouton « Masquer », que « Démasquer » fait revenir. */
   private readonly masked = new Set<number>();
@@ -110,8 +103,14 @@ export class App {
   edits = 0;
   /** Dernière modification, pour que les panneaux ne refassent que ce qui en dépend. */
   lastEdit: { path: string } | null = null;
-  /** Déplacements faits dans le viewer, dans l'ordre, pour pouvoir les annuler. */
-  private moves: { indices: number[]; delta: [number, number, number] }[] = [];
+  /** Local metadata changes only; the model geometry is immutable. */
+  propertyEdits: PropertyEdits | null = null;
+  appearanceRules: AppearanceRule[] = [];
+  groupingPaths: string[] = [];
+  private readonly planning: SchedulePanel;
+  get grouping(): readonly string[] { return this.groupingPaths; }
+  private originalGlb: ArrayBuffer | Blob | null = null;
+  private originalNodeKeys = new Map<number, string>();
   private jsonDownload!: HTMLButtonElement;
   format: ModelFormat = 'glb';
   private readonly formatButtons = new Map<ModelFormat, HTMLButtonElement>();
@@ -164,7 +163,7 @@ export class App {
 
     const tools = h('div', { class: 'segmented', attrs: { role: 'group', 'aria-label': 'Outils' } });
     for (const tool of TOOLS) {
-      const element = button(tool.label, () => this.setTool(tool.id), { title: tool.hint });
+      const element = iconButton(tool.id, tool.label, () => this.setTool(tool.id), `${tool.label} — ${tool.hint}`);
       this.toolButtons.set(tool.id, element);
       tools.append(element);
     }
@@ -177,6 +176,21 @@ export class App {
 
     this.isolateButton = button('Isoler', () => this.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
     this.maskButton = button('Masquer', () => this.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
+    const deselect = iconButton('deselect', 'Désélectionner', () => this.select([], 'panel'), 'Vider la sélection (Échap)');
+    const syncSelection = () => { deselect.disabled = this.selection.size === 0; };
+    this.on('selection', syncSelection); syncSelection();
+    const undo = iconButton('undo', 'Annuler', () => this.undoProperties(), 'Annuler la dernière modification de propriétés (⌘/Ctrl Z)');
+    const redo = iconButton('redo', 'Rétablir', () => this.redoProperties(), 'Rétablir la modification de propriétés (⌘/Ctrl Maj Z)');
+    const revert = iconButton('reset', 'Annuler les modifications', () => this.revertEdits(), 'Revenir aux propriétés des fichiers chargés');
+    const history = h('div', { class: 'bar-group', attrs: { role: 'group', 'aria-label': 'Modifications des propriétés' } }, undo, redo, revert);
+    const syncHistory = () => {
+      undo.disabled = !this.propertyEdits?.canUndo; redo.disabled = !this.propertyEdits?.canRedo;
+      revert.hidden = !this.propertyEdits?.canUndo;
+    };
+    this.on('history', syncHistory); this.on('model', syncHistory); syncHistory();
+    const clearMeasures = iconButton('erase', 'Effacer toutes les mesures', () => this.measure.clear());
+    clearMeasures.disabled = true;
+    this.measure.onChange = () => { clearMeasures.disabled = this.measure.results.length === 0; };
     // Safari exige un lien rel="ar" avec un seul enfant img pour ouvrir Quick Look.
     // Le fichier reste local : l'URL blob n'envoie jamais la maquette à un serveur.
     this.quickLookLink = h('a', {
@@ -206,7 +220,7 @@ export class App {
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
     window.addEventListener('beforeunload', (event) => {
-      if (this.edits > 0) event.preventDefault();
+      if (this.propertyEdits?.changed) event.preventDefault();
     });
 
     // Format de sortie : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
@@ -245,12 +259,13 @@ export class App {
         button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
         samples, fileInput, folderInput, this.metadataInput,
       ),
-      tools,
+      tools, clearMeasures, history,
       h('div', { class: 'bar-group' },
         sectionToggle,
         button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
         this.maskButton,
         this.isolateButton,
+        deselect,
         button('Tout afficher', () => this.showWholeModel(), { title: 'Réafficher tous les éléments et cadrer le modèle entier (A)' }),
       ),
       this.downloads,
@@ -286,8 +301,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    const measurePanel = new MeasurePanel(this);
-    this.viewport.append(h('div', { class: 'cards' }, sectionPanel.el, measurePanel.el, this.conversionEl));
+    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, sectionPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -309,7 +323,8 @@ export class App {
     const left = h('aside', { class: 'sidebar left' }, tabs, tree.el, filters.el, assistant.el);
     const right = h('aside', { class: 'sidebar right' }, new PropertiesPanel(this).el);
 
-    root.append(topbar, left, this.viewport, right);
+    this.planning = new SchedulePanel(this);
+    root.append(topbar, left, this.viewport, right, this.planning.el);
 
     this.bindPointer();
     this.bindKeyboard();
@@ -318,7 +333,6 @@ export class App {
     this.setTool('select');
     this.updateStats();
     this.on('visibility', () => this.updateStats());
-    this.on('structure', () => this.updateStats());
     this.viewer.onMotionEnd = () => this.updateStats();
     this.on('visibility', () => this.syncIsolateButton());
     this.on('selection', () => this.syncIsolateButton());
@@ -353,7 +367,7 @@ export class App {
       for (const index of this.selection) state.setSelected(index, false);
       this.selection.clear();
     }
-    const list = [...indices];
+    const list = [...indices].filter((i) => Number.isInteger(i) && i >= 0 && i < model.count);
     const toggle = additive && list.length === 1 && this.selection.has(list[0]);
     for (const index of list) {
       if (toggle) this.selection.delete(index);
@@ -491,26 +505,23 @@ export class App {
     this.emit('visibility');
   }
 
-  /** Impose une couleur (hexadécimale) à des groupes d'éléments. */
-  applyColors(groups: Iterable<[number[], string]>): void {
-    const model = this.model;
-    if (!model) return;
-    for (const [indices, hex] of groups) {
-      const [r, g, b] = hexToRgb(hex);
-      for (const index of indices) model.state.setColor(index, r, g, b);
-    }
-    model.state.commit();
-    this.viewer.invalidate();
-    this.emit('colors');
+  setAppearanceRules(rules: AppearanceRule[]): void {
+    this.appearanceRules = validateAppearanceRules(rules);
+    this.refreshAppearance(); this.emit('appearance');
   }
-
-  clearColors(): void {
+  private refreshAppearance(): void {
     const model = this.model;
     if (!model) return;
-    for (let i = 0; i < model.count; i++) model.state.clearColor(i);
-    model.state.commit();
-    this.viewer.invalidate();
-    this.emit('colors');
+    for (let i = 0; i < model.count; i++) { model.state.clearColor(i); model.state.setOpacity(i, null); }
+    for (const [i, appearance] of evaluateAppearanceRules(this.store, this.appearanceRules)) {
+      if (appearance.color) model.state.setColor(i, ...hexToRgb(appearance.color));
+      if (appearance.opacity !== undefined) model.state.setOpacity(i, appearance.opacity);
+    }
+    model.state.commit(); this.viewer.invalidate(); this.emit('colors');
+  }
+  groupBy(paths: string[]): void {
+    if (paths.some((path) => !this.store.paths.includes(path))) throw new Error('Une propriété de regroupement est introuvable.');
+    this.groupingPaths = [...new Set(paths)]; this.emit('grouping');
   }
 
   fitTo(indices: Iterable<number>): void {
@@ -537,6 +548,8 @@ export class App {
     this.measure.setTool(tool === 'select' ? null : tool);
     for (const [id, element] of this.toolButtons) element.setAttribute('aria-pressed', String(id === tool));
     this.viewport.classList.toggle('measuring', tool !== 'select');
+    this.measureHint.hidden = tool === 'select';
+    this.measureHint.textContent = TOOLS.find((item) => item.id === tool)?.hint ?? '';
     this.emit('tool');
   }
 
@@ -554,8 +567,23 @@ export class App {
       this.toast('Déposez un fichier .ifc, .glb ou .gltf, avec éventuellement un .json de métadonnées.', true);
       return;
     }
+    if ((modelFile || ifcFile) && !this.confirmReplace()) return;
     const ticket = this.beginLoad('Lecture des fichiers…');
     try {
+      const metadataFiles: { name: string; text: string }[] = [];
+      const schedules: { name: string; schedule: Schedule }[] = [];
+      let planningError = '';
+      // A planning JSON must never be interpreted as an object's metadata, even in a folder.
+      for (const input of jsonFiles) {
+        const text = await input.file.text();
+        if (ticket !== this.loadTicket) return;
+        let raw: unknown;
+        try { raw = JSON.parse(text); } catch { metadataFiles.push({ name: input.file.name, text }); continue; }
+        if (isScheduleDocument(raw)) {
+          try { schedules.push({ name: input.file.name, schedule: parseSchedule(raw) }); }
+          catch (error) { planningError ||= error instanceof Error ? error.message : String(error); }
+        } else metadataFiles.push({ name: input.file.name, text });
+      }
       if (!modelFile && ifcFile) {
         await this.loadIfc(ticket, ifcFile.file);
       } else if (modelFile) {
@@ -564,11 +592,11 @@ export class App {
         // Un JSON illisible n'empêche pas d'afficher le modèle.
         const candidates: Metadata[] = [];
         let metadataError = '';
-        for (const candidate of jsonFiles) {
+        for (const candidate of metadataFiles) {
           try {
-            candidates.push(this.readMetadata(await candidate.file.text(), candidate.file.name));
+            candidates.push(this.readMetadata(candidate.text, candidate.name));
           } catch (error) {
-            metadataError ||= `« ${candidate.file.name} » : ${error instanceof Error ? error.message : String(error)}`;
+            metadataError ||= `« ${candidate.name} » : ${error instanceof Error ? error.message : String(error)}`;
           }
         }
         // Au-delà de cette taille, le navigateur ne peut plus lire le fichier d'un seul bloc.
@@ -605,6 +633,7 @@ export class App {
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
         const installed = await this.installModel(ticket, loaded.source, candidates, modelFile.file.name);
         if (!installed) return;
+        if (/\.glb$/i.test(modelFile.file.name)) this.originalGlb = modelFile.file;
         if (/\.usdz$/i.test(modelFile.file.name)) {
           this.setQuickLook(modelFile.file.slice(0, modelFile.file.size, 'model/vnd.usdz+zip'));
         }
@@ -618,8 +647,8 @@ export class App {
         } else if (modelFiles.length > 1) {
           this.toast(`${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`);
         }
-      } else {
-        const metadata = this.readMetadata(await jsonFiles[0].file.text(), jsonFiles[0].file.name);
+      } else if (metadataFiles.length) {
+        const metadata = this.readMetadata(metadataFiles[0].text, metadataFiles[0].name);
         if (ticket !== this.loadTicket) return;
         if (!this.model) {
           this.metadata = metadata;
@@ -628,11 +657,16 @@ export class App {
           // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
           this.toast(NO_MATCH, true);
         } else {
-          this.metadata = metadata;
-          this.rebuildStore();
-          this.reportMatching();
+          this.propertyEdits?.import(metadata, this.model.keys);
+          this.emit('selection');
         }
       }
+      if (ticket !== this.loadTicket) return;
+      if (schedules.length) {
+        this.planning.loadJson(schedules[0].schedule, schedules[0].name);
+        if (schedules.length > 1) this.toast(`${schedules.length} plannings fournis : seul « ${schedules[0].name} » est chargé.`);
+      }
+      if (planningError) this.toast(`Planning non chargé : ${planningError}`, true);
     } catch (error) {
       if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
     } finally {
@@ -680,11 +714,12 @@ export class App {
     }
     if (!(await this.installModel(ticket, source, [metadata], `${base}.${produced.extension}`))) return;
 
+    this.originalGlb = result.glb;
     this.conversion = { name: base, glb: result.glb, ...produced };
     this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
     const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
     const lines = [
-      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` sur ${workers} cœurs` : ''}, reliés à leurs propriétés par leur identifiant IFC.`,
+      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, reliés à leurs propriétés par leur identifiant IFC.`,
     ];
     if (linework > 0) {
       lines.push(`${integer.format(linework)} ${linework > 1 ? 'objets sans volume (axes de trame, annotations) ont été laissés' : 'objet sans volume (axe de trame, annotation) a été laissé'} de côté : rien ne manque au bâtiment.`);
@@ -724,45 +759,33 @@ export class App {
     if (kind === 'json') {
       blob = new Blob([this.exportMetadata()], { type: 'application/json' });
       extension = 'json';
-    } else if (conversion && !this.geometryChanged && (kind !== 'quicklook' || conversion.extension === 'usdz')) {
-      blob = conversion.model;
-      extension = conversion.extension;
-      if (this.edits > 0 && extension === 'usdz') {
-        // Les métadonnées vivent dans le paquet USD lui-même : il est réécrit avec les valeurs du jour.
-        try {
-          const usdz = await packageUsd(conversion.glb, this.exportMetadata(), (message) => this.busy(message));
-          blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
-        } catch (error) {
-          this.toast(`Impossible de réécrire le paquet USD : ${error instanceof Error ? error.message : String(error)}`, true);
-          return;
-        } finally {
-          this.busy(null);
-        }
-      }
     } else {
-      // Géométrie modifiée, ou modèle ouvert tel quel : le fichier est réécrit depuis ce qui est affiché.
-      this.busy('Écriture du fichier 3D…');
+      this.busy('Écriture des métadonnées du modèle…');
       try {
         await nextFrame();
-        const glb = conversion && !this.geometryChanged ? conversion.glb : writeGlb(model);
+        if (model !== this.model) return;
+        const properties = new Map(model.keys.map((id, i) => [id, unflattenProperties(this.store.propsOf(i) ?? {})]));
+        const labels = new Map(model.keys.flatMap((id, i) => { const label = this.store.labelOf(i); return label ? [[id, label] as const] : []; }));
+        const metadata = this.exportMetadata();
+        const source = this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
+        const glb = updateGlbMetadata(source ?? writeGlb(model, 'viewer-bim', { properties }), properties, this.store.readOnly, {
+          nodeKeys: source && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
+        });
         if (this.format === 'usd' || kind === 'quicklook') {
-          const usdz = await packageUsd(glb, this.exportMetadata(), (message) => this.busy(message));
-          blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' });
-          extension = 'usdz';
+          const usdz = await packageUsd(glb, metadata, (message) => this.busy(message));
+          blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' }); extension = 'usdz';
         } else {
-          blob = new Blob([glb], { type: 'model/gltf-binary' });
-          extension = 'glb';
+          blob = new Blob([glb], { type: 'model/gltf-binary' }); extension = 'glb';
         }
       } catch (error) {
-        if (isOutOfMemory(error)) this.toast('Pas assez de mémoire pour réécrire ce modèle.', true);
-        else this.toast(`Impossible d’écrire le fichier 3D : ${error instanceof Error ? error.message : String(error)}`, true);
+        this.toast(isOutOfMemory(error) ? 'Pas assez de mémoire pour exporter ce modèle.' : `Export impossible : ${error instanceof Error ? error.message : String(error)}`, true);
         return;
-      } finally {
-        this.busy(null);
-      }
+      } finally { this.busy(null); }
     }
+    // setQuickLook advances its revision; remember whether this export was current first.
+    const currentExport = model === this.model && revision === this.quickLookRevision;
     // Une conversion en cours ne doit pas créer un lien vers une ancienne version du modèle.
-    if (model === this.model && revision === this.quickLookRevision && extension === 'usdz') {
+    if (currentExport && extension === 'usdz') {
       this.setQuickLook(blob);
     }
     if (kind === 'quicklook') {
@@ -778,6 +801,7 @@ export class App {
     const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${name}.${extension}` } });
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    if (currentExport) { this.propertyEdits?.markSaved(); this.emit('history'); }
   }
 
   /** Le lien reste valide pendant toute la consultation native, jusqu'au prochain changement. */
@@ -804,167 +828,26 @@ export class App {
   private syncDownloads(): void {
     const hasMetadata = this.store.matched > 0;
     this.modelDownload.hidden = this.model === null;
-    this.modelDownload.textContent = `${this.format === 'usd' && (this.conversion === null || this.conversion.extension === 'usdz') ? 'USD' : 'GLB'} ↓`;
-    this.modelDownload.title = this.conversion && !this.geometryChanged
-      ? 'Télécharger le fichier 3D issu de la conversion de l’IFC'
-      : 'Télécharger le fichier 3D tel qu’affiché (déplacements et ajouts compris, sans textures)';
+    this.modelDownload.textContent = `${this.format === 'usd' ? 'USD' : 'GLB'} ↓`;
+    this.modelDownload.title = 'Télécharger le modèle avec ses métadonnées actuelles';
     this.jsonDownload.hidden = !hasMetadata;
     this.downloads.hidden = this.model === null;
   }
 
-  /** Vrai si des éléments ont été déplacés ou ajoutés depuis le chargement. */
-  get geometryChanged(): boolean {
-    return this.moves.length > 0 || (this.model !== null && this.model.count > this.model.originalCount);
-  }
-
-  get addedCount(): number {
-    return this.model ? this.model.count - this.model.originalCount : 0;
-  }
-
-  /** Déplace des éléments d'un vecteur, en mètres (Y vertical). Renvoie le nombre d'éléments déplacés. */
-  moveElements(indices: Iterable<number>, dx: number, dy: number, dz: number): number {
-    const model = this.model;
-    if (!model || !(Number.isFinite(dx) && Number.isFinite(dy) && Number.isFinite(dz))) return 0;
-    const list = [...new Set(indices)].filter((index) => index >= 0 && index < model.count);
-    if (list.length === 0 || (dx === 0 && dy === 0 && dz === 0)) return 0;
-    model.translate(list, dx, dy, dz);
-    this.moves.push({ indices: list, delta: [dx, dy, dz] });
-    this.afterGeometry();
-    this.emit('geometry');
-    return list.length;
-  }
-
-  /** Copie des éléments, décalés, avec leurs propriétés. Renvoie les indices des copies. */
-  duplicateElements(indices: Iterable<number>, dx: number, dy: number, dz: number): number[] {
-    const model = this.model;
-    if (!model) return [];
-    const created: number[] = [];
-    for (const source of new Set(indices)) {
-      if (source < 0 || source >= model.count) continue;
-      const parts = model.copyParts(source, dx, dy, dz);
-      if (parts.length === 0) continue;
-      const key = newGuid();
-      const name = `${model.names[source]} (copie)`;
-      const index = model.addElement({ key, name, extras: model.extras[source] ? { ...model.extras[source] } : undefined, parts, closed: !model.state.isOpen(source) });
-      const props: FlatProps = { ...(this.store.propsOf(source) ?? {}) };
-      const label = this.store.labelOf(source);
-      this.registerCreated(index, key, props, label ? `${label} (copie)` : undefined, name);
-      created.push(index);
-    }
-    if (created.length > 0) this.afterStructure();
-    return created;
-  }
-
-  /** Ajoute des boîtes (murs provisoires, réservations, zones…) avec leur fiche. Renvoie leurs indices. */
-  addBoxes(specs: BoxCreation[]): number[] {
-    const model = this.model;
-    if (!model) return [];
-    const offset = model.offset.toArray() as [number, number, number];
-    const created: number[] = [];
-    for (const spec of specs) {
-      const mesh = boxMesh(spec, offset);
-      const color = spec.color ?? [176, 96, 96];
-      const key = newGuid();
-      const index = model.addElement({
-        key,
-        name: spec.name,
-        parts: [{ positions: mesh.positions, normals: mesh.normals, colors: new Uint8Array([color[0], color[1], color[2], 255]), index: mesh.index, transparent: false, doubleSided: false }],
-        closed: true,
-      });
-      // Les paramètres de la boîte restent dans la fiche : de quoi la recréer ailleurs (IFC, par exemple).
-      const props: FlatProps = { ...(spec.properties ?? {}) };
-      const put = (name: string, value: PropValue) => Object.defineProperty(props, `Boîte${PATH_SEP}${name}`, { value, enumerable: true, writable: true, configurable: true });
-      put('Centre X', spec.center[0]);
-      put('Centre Y', spec.center[1]);
-      put('Centre Z', spec.center[2]);
-      put('Taille X', spec.size[0]);
-      put('Taille Y (hauteur)', spec.size[1]);
-      put('Taille Z', spec.size[2]);
-      put('Rotation', spec.rotation ?? 0);
-      put('Créée dans le viewer', true);
-      this.registerCreated(index, key, props, spec.name, spec.name);
-      created.push(index);
-    }
-    if (created.length > 0) this.afterStructure();
-    return created;
-  }
-
-  private registerCreated(index: number, key: string, props: FlatProps, label: string | undefined, name: string): void {
-    // Si le fichier range le nom des éléments dans une propriété « Nom », l'élément créé suit la convention.
-    if (this.store.paths.includes('Nom')) Object.defineProperty(props, 'Nom', { value: name, enumerable: true, writable: true, configurable: true });
-    this.store.grow(index + 1);
-    this.store.set(index, props, label);
-    this.store.finalize();
-    // Enregistrée dans les métadonnées courantes : un rechargement du magasin la retrouve.
-    this.metadata ??= { version: 1, elements: new Map() };
-    this.metadata.elements.set(key, { label, props: { ...props } });
-    this.matched = this.countMatches(this.metadata);
-  }
-
-  private afterGeometry(): void {
-    this.setQuickLook(null);
-    this.viewer.modelChanged();
-    this.syncDownloads();
-    this.updateStats();
-  }
-
-  private afterStructure(): void {
-    this.afterGeometry();
-    this.emit('structure');
-  }
-
-  // ------------------------------------------------------------ modifications
-
-  /**
-   * Donne une valeur à une propriété des éléments indiqués (la crée si elle n'existe pas).
-   * Refusé pour les propriétés verrouillées. Renvoie vrai si quelque chose a changé.
-   */
   editProperty(indices: readonly number[], path: string, value: PropValue): boolean {
-    const model = this.model;
-    if (!model || indices.length === 0 || !this.store.isEditable(path)) return false;
-    let changed = 0;
-    for (const index of indices) {
-      const before = this.store.propsOf(index)?.[path];
-      if (!this.store.update(index, path, value)) continue;
-      changed++;
-      // Un libellé qui reprenait la valeur modifiée (le nom de l'objet, en général) la suit.
-      if (before !== undefined && before !== null && this.store.labelOf(index) === String(before)) {
-        this.store.setLabel(index, value === null || value === '' ? undefined : String(value));
-      }
-    }
-    if (changed === 0) return false;
-    this.edits += changed;
-    this.setQuickLook(null);
-    this.lastEdit = { path };
-    this.syncDownloads();
-    this.updateStats();
-    this.emit('metadata');
-    return true;
+    return this.propertyEdits?.set(indices, path, value) ?? false;
   }
-
-  /** Oublie toutes les modifications et revient aux métadonnées des fichiers. */
-  revertEdits(): void {
-    const model = this.model;
-    if (!model || (this.edits === 0 && !this.geometryChanged)) return;
-    // Les déplacements sont défaits dans l'ordre inverse, puis les éléments ajoutés retirés.
-    for (const move of this.moves.reverse()) {
-      const kept = move.indices.filter((index) => index < model.originalCount);
-      if (kept.length > 0) model.translate(kept, -move.delta[0], -move.delta[1], -move.delta[2]);
-    }
-    this.moves = [];
-    if (model.count > model.originalCount) {
-      for (let index = model.originalCount; index < model.count; index++) {
-        this.metadata?.elements.delete(model.keys[index]);
-        this.selection.delete(index);
-        this.masked.delete(index);
-      }
-      model.removeFrom(model.originalCount);
-      if (this.metadata && this.metadata.elements.size === 0 && !this.metadata.source) this.metadata = null;
-    }
-    this.rebuildStore();
-    this.afterGeometry();
-    this.emit('selection');
-    this.emit('visibility');
+  deleteProperty(indices: readonly number[], path: string): boolean { return this.propertyEdits?.delete(indices, path) ?? false; }
+  undoProperties(): void { this.propertyEdits?.undo(); this.emit('selection'); }
+  redoProperties(): void { this.propertyEdits?.redo(); this.emit('selection'); }
+  revertEdits(): void { this.propertyEdits?.revert(); this.emit('selection'); }
+  private afterPropertyEdit(path: string): void {
+    this.edits = this.propertyEdits?.count ?? 0; this.lastEdit = { path };
+    this.setQuickLook(null); this.syncDownloads(); this.updateStats();
+    this.refreshAppearance(); this.emit('metadata'); this.emit('history');
+  }
+  private confirmReplace(): boolean {
+    return !this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. Les exporter avant de remplacer le modèle permet de les conserver. Remplacer le modèle ?');
   }
 
   async loadSample(name: string): Promise<void> {
@@ -974,11 +857,12 @@ export class App {
       await this.loadFiles([{ file: new File([await response.blob()], 'ifc-demo.ifc'), path: 'ifc-demo.ifc' }]);
       return;
     }
+    if (!this.confirmReplace()) return;
     const ticket = this.beginLoad('Chargement de l’exemple…');
     try {
       const base = `${import.meta.env.BASE_URL}samples/${name}`;
-      const [gltf, text] = await Promise.all([loadModelUrl(`${base}.glb`), fetch(`${base}.json`).then((r) => r.text())]);
-      await this.installModel(ticket, gltf, [this.readMetadata(text, `${name}.json`)], `${name}.glb`);
+      const [gltf, text, glb] = await Promise.all([loadModelUrl(`${base}.glb`), fetch(`${base}.json`).then((r) => r.text()), fetch(`${base}.glb`).then((r) => r.blob())]);
+      if (await this.installModel(ticket, gltf, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) this.originalGlb = glb;
     } catch (error) {
       if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
     } finally {
@@ -1026,6 +910,7 @@ export class App {
       // stockage indisponible : le choix vaut pour la session
     }
     this.syncFormat();
+    this.syncDownloads();
   }
 
   private syncFormat(): void {
@@ -1034,12 +919,19 @@ export class App {
 
   private async installModel(ticket: number, gltf: GLTF | ModelSource, candidates: Metadata[], name: string): Promise<boolean> {
     if (ticket !== this.loadTicket) return false;
+    const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
     this.busy('Optimisation de la géométrie…');
     await nextFrame();
     if (ticket !== this.loadTicket) return false;
     let model: Model;
+    const nodeKeys = new Map<number, string>();
     try {
-      model = buildModel(gltf, this.viewer.selectColor);
+      let source: ModelSource = 'parser' in gltf ? gltfSource(gltf) : gltf;
+      if ('parser' in gltf) source = { ...source, onElement: (object, key) => {
+        const node = gltf.parser.associations.get(object)?.nodes;
+        if (node !== undefined) nodeKeys.set(node, key);
+      } };
+      model = buildModel(source, this.viewer.selectColor);
     } catch (error) {
       // Un modèle très lourd peut épuiser la mémoire pendant la fusion de sa géométrie.
       if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(name));
@@ -1054,7 +946,10 @@ export class App {
     this.conversion = null;
     this.conversionEl.hidden = true;
     this.model = model;
-    this.moves = [];
+    this.originalGlb = null;
+    this.originalNodeKeys = nodeKeys;
+    this.appearanceRules = [];
+    this.groupingPaths = [];
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;
     let bestMatches = metadata ? this.countMatches(metadata) : 0;
@@ -1072,6 +967,7 @@ export class App {
 
     this.emptyEl.hidden = true;
     this.rebuildStore();
+    if (Array.isArray(embeddedReadOnly)) this.store.readOnly = [...new Set([...this.store.readOnly, ...embeddedReadOnly.filter((p): p is string => typeof p === 'string')])];
     this.emit('selection');
     this.emit('visibility');
     if (metadata) this.reportMatching();
@@ -1087,7 +983,7 @@ export class App {
     for (let i = 0; i < model.count; i++) {
       const entry = this.metadata?.elements.get(model.keys[i]);
       const extras = model.extras[i];
-      const props = mergeProperties(extras ? flattenProperties(extras) : undefined, entry?.props);
+      const props = entry && this.metadata?.propertiesMode === 'replace' ? entry.props : mergeProperties(extras ? flattenProperties(extras) : undefined, entry?.props);
       if (props) store.set(i, props, entry?.label);
     }
     store.finalize();
@@ -1095,8 +991,9 @@ export class App {
     // convertisseur plus ancien) gardent les verrous habituels.
     store.readOnly = this.metadata?.readOnly ?? (store.paths.includes('Classe IFC') ? [...IFC_READ_ONLY] : []);
     this.store = store;
+    this.propertyEdits = new PropertyEdits(store, (path) => this.afterPropertyEdit(path));
     this.edits = 0;
-    this.matched = this.metadata ? this.countMatches(this.metadata) : 0;
+    this.matched = store.matched;
     this.syncDownloads();
     for (let i = 0; i < model.count; i++) model.state.clearColor(i);
     model.state.commit();
@@ -1159,8 +1056,6 @@ export class App {
     );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
     if (this.edits > 0) parts.push(`${integer.format(this.edits)} valeur${this.edits > 1 ? 's' : ''} modifiée${this.edits > 1 ? 's' : ''}`);
-    if (this.moves.length > 0) parts.push(`${integer.format(this.moves.length)} déplacement${this.moves.length > 1 ? 's' : ''}`);
-    if (this.addedCount > 0) parts.push(`${integer.format(this.addedCount)} élément${this.addedCount > 1 ? 's' : ''} ajouté${this.addedCount > 1 ? 's' : ''}`);
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
     if (frameTime > 0) {
@@ -1212,7 +1107,7 @@ export class App {
     });
     canvas.addEventListener('pointerleave', () => this.measure.leave());
     canvas.addEventListener('dblclick', (event) => {
-      if (this.tool !== 'select') return;
+      if (this.tool !== 'select' || this.viewer.sectionHandles.blocksPicking) return;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.fitTo([hit.element]);
     });
@@ -1220,7 +1115,7 @@ export class App {
   }
 
   private handleClick(event: PointerEvent): void {
-    if (!this.model) return;
+    if (!this.model || this.viewer.sectionHandles.blocksPicking) return;
     if (this.tool === 'select') {
       const additive = event.ctrlKey || event.metaKey || event.shiftKey;
       const hit = this.viewer.pick(event.clientX, event.clientY);
@@ -1235,6 +1130,8 @@ export class App {
   private bindKeyboard(): void {
     window.addEventListener('keydown', (event) => {
       const target = event.target as HTMLElement | null;
+      // Native dialogs own Escape and their controls; shortcuts must not affect the model behind them.
+      if (target?.closest('dialog[open]')) return;
       // Les raccourcis ne se taisent que pendant une saisie de texte ; un curseur ou une case à
       // cocher qui a gardé le focus ne doit pas les bloquer.
       const typing =
@@ -1243,6 +1140,9 @@ export class App {
         (target instanceof HTMLInputElement && !/^(checkbox|radio|range|color|button|file)$/.test(target.type)) ||
         target?.isContentEditable === true;
       if (typing) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault(); if (event.shiftKey) this.redoProperties(); else this.undoProperties(); return;
+      }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       switch (event.key.toLowerCase()) {
         case 'escape':

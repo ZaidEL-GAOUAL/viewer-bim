@@ -7,7 +7,6 @@ import { button, clear, h, integer } from './dom.ts';
 const MULTI_LIMIT = 5000;
 const MIXED = '(valeurs multiples)';
 const ADD_TITLE = 'Ajouter une propriété';
-const MOVE_TITLE = 'Déplacer ou dupliquer';
 const LOCKED_HINT = 'Propriété verrouillée par le fichier de métadonnées : elle découle de la structure du modèle (classe, type, emplacement, matériaux, quantités) et ne se modifie pas ici.';
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
@@ -16,7 +15,7 @@ interface Row {
   path: string;
   name: string;
   value: PropValue | undefined;
-  kind: 'text' | 'number' | 'boolean';
+  kind: 'text' | 'number' | 'boolean' | 'date';
   editable: boolean;
 }
 
@@ -33,48 +32,25 @@ export class PropertiesPanel {
   readonly el: HTMLElement;
   private readonly app: App;
   private readonly body: HTMLElement;
-  private readonly isolateButton: HTMLButtonElement;
-  private readonly maskButton: HTMLButtonElement;
-  private readonly revertButton: HTMLButtonElement;
   private titleEl: HTMLElement | null = null;
   /** Catégories repliées par l'utilisateur. */
-  private readonly folded = new Set<string>([ADD_TITLE, MOVE_TITLE]);
+  private readonly folded = new Set<string>([ADD_TITLE]);
 
   constructor(app: App) {
     this.app = app;
     this.body = h('div', { class: 'properties-body' });
     this.el = h('section', { class: 'panel properties-panel' }, h('h2', { class: 'panel-title', text: 'Propriétés' }), this.body);
-    this.isolateButton = button('Isoler', () => app.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
-    this.maskButton = button('Masquer', () => app.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
-    this.revertButton = button('Annuler les modifications', () => app.revertEdits(), {
-      class: 'revert',
-      title: 'Revenir aux métadonnées des fichiers chargés',
-    });
     app.on('selection', () => this.render());
     app.on('model', () => this.render());
-    app.on('visibility', () => this.syncIsolate());
     // Une modification ne redessine pas la fiche (le champ en cours garderait difficilement le
-    // focus) : seuls le titre et le bouton d'annulation suivent.
+    // focus) : seul le titre suit.
     app.on('metadata', () => this.syncEdits());
-    app.on('geometry', () => this.render());
-    app.on('structure', () => this.render());
+    app.on('history', () => this.syncEdits());
     this.render();
-  }
-
-  private syncIsolate(): void {
-    const isolated = this.app.isolated;
-    this.isolateButton.textContent = isolated ? 'Ne plus isoler' : 'Isoler';
-    this.isolateButton.setAttribute('aria-pressed', String(isolated));
-    this.isolateButton.title = isolated ? 'Revenir à l’affichage d’avant l’isolement (I)' : 'N’afficher que la sélection (I)';
-    const unmask = this.app.maskAction === 'unmask';
-    this.maskButton.textContent = unmask ? 'Démasquer' : 'Masquer';
-    this.maskButton.setAttribute('aria-pressed', String(unmask));
-    this.maskButton.title = unmask ? 'Réafficher la sélection (H)' : 'Masquer la sélection (H). Un second clic la réaffiche.';
   }
 
   private syncEdits(): void {
     const { app } = this;
-    this.revertButton.hidden = app.edits === 0 && !app.geometryChanged;
     const indices = [...app.selection];
     if (this.titleEl && indices.length === 1) this.titleEl.textContent = app.elementLabel(indices[0]);
   }
@@ -86,11 +62,11 @@ export class PropertiesPanel {
     const { model, selection } = app;
     if (!model) {
       this.body.append(h('p', { class: 'hint', text: 'Chargez un modèle pour consulter les propriétés de ses éléments.' }));
+      this.syncEdits();
       return;
     }
     if (selection.size === 0) {
       this.body.append(h('p', { class: 'hint', text: 'Cliquez un élément dans la vue 3D ou dans l’arborescence.' }));
-      if (app.edits > 0) this.body.append(h('div', { class: 'element-actions' }, this.revertButton));
       this.syncEdits();
       return;
     }
@@ -102,16 +78,6 @@ export class PropertiesPanel {
     this.body.append(this.titleEl);
     if (single) this.body.append(h('code', { class: 'element-key', text: model.keys[indices[0]], title: 'Identifiant de liaison avec les métadonnées' }));
 
-    this.body.append(
-      h('div', { class: 'element-actions' },
-        button('Cadrer', () => app.fitTo(app.selection), { title: 'Cadrer la vue sur la sélection (F)' }),
-        this.maskButton,
-        this.isolateButton,
-        button('Désélectionner', () => app.select([], 'panel'), { title: 'Vider la sélection (Échap)' }),
-        this.revertButton,
-      ),
-    );
-    this.syncIsolate();
     this.syncEdits();
 
     const rows = this.collectRows(indices);
@@ -136,7 +102,6 @@ export class PropertiesPanel {
     }
 
     this.body.append(this.section(ADD_TITLE, this.addForm(indices)));
-    this.body.append(this.section(MOVE_TITLE, this.moveForm(indices)));
 
     const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
     const geometry = h('dl', { class: 'props' });
@@ -156,7 +121,7 @@ export class PropertiesPanel {
     const rows: Row[] = [];
     const push = (path: string, value: PropValue | undefined, sample: PropValue | undefined) => {
       const cut = path.lastIndexOf(PATH_SEP);
-      const kind = typeof sample === 'number' ? 'number' : typeof sample === 'boolean' ? 'boolean' : 'text';
+      const kind = typeof sample === 'number' ? 'number' : typeof sample === 'boolean' ? 'boolean' : typeof sample === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sample) ? 'date' : 'text';
       rows.push({ path, name: cut < 0 ? path : path.slice(cut + PATH_SEP.length), value, kind, editable: store.isEditable(path) });
     };
     if (indices.length === 1) {
@@ -188,6 +153,7 @@ export class PropertiesPanel {
   }
 
   private propertyList(rows: Row[], indices: number[]): HTMLElement {
+    const { app } = this;
     const list = h('dl', { class: 'props' });
     for (const row of rows) {
       const display = row.value === undefined ? MIXED : formatValue(row.value);
@@ -198,7 +164,7 @@ export class PropertiesPanel {
         );
         continue;
       }
-      list.append(h('dt', { text: row.name, title: row.name }), h('dd', { class: 'editable' }, this.field(row, indices)));
+      list.append(h('dt', { text: row.name, title: row.name }), h('dd', { class: 'editable property-edit-cell' }, this.field(row, indices), button('×', () => { if (app.deleteProperty(indices, row.path)) this.render(); }, { class: 'property-delete', title: `Supprimer la propriété ${row.path} de la sélection`, attrs: { 'aria-label': `Supprimer la propriété ${row.path}` } })));
     }
     return list;
   }
@@ -209,16 +175,22 @@ export class PropertiesPanel {
     const label = `${row.name} (modifiable)`;
     if (row.kind === 'boolean') {
       const checkbox = h('input', { attrs: { type: 'checkbox', 'aria-label': label } });
-      checkbox.checked = row.value === true;
-      checkbox.indeterminate = row.value === undefined;
+      const valueLabel = h('span');
+      const show = () => {
+        checkbox.checked = row.value === true;
+        checkbox.indeterminate = row.value === undefined;
+        valueLabel.textContent = row.value === undefined ? MIXED : row.value ? 'Oui' : 'Non';
+        valueLabel.classList.toggle('mixed', row.value === undefined);
+      };
+      show();
       checkbox.addEventListener('change', () => {
-        checkbox.indeterminate = false;
-        app.editProperty(indices, row.path, checkbox.checked);
+        if (app.editProperty(indices, row.path, checkbox.checked)) row.value = checkbox.checked;
+        show();
       });
-      return h('label', { class: 'check' }, checkbox, h('span', { text: row.value === undefined ? MIXED : row.value ? 'Oui' : 'Non', class: row.value === undefined ? 'mixed' : '' }));
+      return h('label', { class: 'check' }, checkbox, valueLabel);
     }
 
-    const input = h('input', { attrs: { type: row.kind === 'number' ? 'number' : 'text', 'aria-label': label } });
+    const input = h('input', { attrs: { type: row.kind === 'number' ? 'number' : row.kind === 'date' ? 'date' : 'text', 'aria-label': label } });
     if (row.kind === 'number') input.step = 'any';
     let shown = row.value === undefined ? '' : row.value === null ? '' : String(row.value);
     const show = () => {
@@ -259,6 +231,8 @@ export class PropertiesPanel {
     const { app } = this;
     const name = h('input', { attrs: { type: 'text', placeholder: 'Nom, ou Catégorie / Nom', 'aria-label': 'Nom de la nouvelle propriété' } });
     const value = h('input', { attrs: { type: 'text', placeholder: 'Valeur', 'aria-label': 'Valeur de la nouvelle propriété' } });
+    const valueType = h('select', { attrs: { 'aria-label': 'Type de la nouvelle propriété' } }, h('option', { text: 'Valeur', attrs: { value: 'text' } }), h('option', { text: 'Date', attrs: { value: 'date' } }));
+    valueType.addEventListener('change', () => { value.type = valueType.value; value.value = ''; });
     const submit = () => {
       const path = name.value.split('/').map((part) => part.trim()).filter(Boolean).join(PATH_SEP);
       if (!path) {
@@ -280,32 +254,7 @@ export class PropertiesPanel {
         if (event.key === 'Enter') submit();
       });
     }
-    return h('div', { class: 'props-add' }, name, value, button('Ajouter', submit, { title: 'Ajouter cette propriété à la sélection' }));
-  }
-
-  /** Déplacement (ou copie décalée) de la sélection, en mètres dans le repère du projet. */
-  private moveForm(indices: number[]): HTMLElement {
-    const { app } = this;
-    const fields = (['X', 'Y (vertical)', 'Z'] as const).map((axis) =>
-      h('input', { attrs: { type: 'number', step: 'any', value: '0', placeholder: axis, 'aria-label': `Décalage ${axis} en mètres`, title: `Décalage ${axis} (m)` } }),
-    );
-    const delta = () => fields.map((field) => (field.value.trim() === '' ? 0 : field.valueAsNumber)) as [number, number, number];
-    const move = button('Déplacer', () => {
-      const [dx, dy, dz] = delta();
-      if (![dx, dy, dz].every(Number.isFinite)) return;
-      if (app.moveElements(indices, dx, dy, dz) === 0) app.toast('Indiquez un décalage non nul.');
-    }, { title: 'Déplacer la sélection de ce vecteur' });
-    const duplicate = button('Dupliquer', () => {
-      const [dx, dy, dz] = delta();
-      if (![dx, dy, dz].every(Number.isFinite)) return;
-      const created = app.duplicateElements(indices, dx, dy, dz);
-      if (created.length > 0) app.select(created, 'panel');
-    }, { title: 'Copier la sélection, décalée de ce vecteur, avec ses propriétés' });
-    return h('div', { class: 'props-move' },
-      h('div', { class: 'props-move-fields' }, ...fields),
-      h('div', { class: 'props-move-actions' }, move, duplicate),
-      h('p', { class: 'hint', text: 'Décalage en mètres, dans le repère du projet (Y vers le haut).' }),
-    );
+    return h('div', { class: 'props-add' }, name, valueType, value, button('Ajouter', submit, { title: 'Ajouter cette propriété à la sélection' }));
   }
 
   /** Catégorie pliable ; son état est conservé d'un élément à l'autre. */

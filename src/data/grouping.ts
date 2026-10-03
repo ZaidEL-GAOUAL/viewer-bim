@@ -13,6 +13,16 @@ export interface TreeGroup {
 
 const KEY_SEP = '\u001f';
 
+/** Keep per-instance property-set names out of the default picker, without removing any data. */
+export function groupingProperties(store: PropertyStore): { common: string[]; detailed: string[] } {
+  const common: string[] = [], detailed: string[] = [];
+  const shared = Math.max(2, Math.ceil(store.count * .01));
+  for (const path of store.paths) {
+    (!path.includes(PATH_SEP) || store.coverageOf(path) >= shared ? common : detailed).push(path);
+  }
+  return { common, detailed };
+}
+
 /**
  * Construit l'arborescence en regroupant les éléments selon une liste ordonnée de propriétés :
  * la première donne les groupes, la suivante les sous-groupes, etc.
