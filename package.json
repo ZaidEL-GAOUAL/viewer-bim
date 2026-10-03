@@ -7,7 +7,8 @@
     "dev": "node node_modules/vite/bin/vite.js",
     "build": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/vite/bin/vite.js build",
     "preview": "node node_modules/vite/bin/vite.js preview",
-    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/typescript/bin/tsc -p worker",
+    "typecheck:worker": "node node_modules/typescript/bin/tsc -p worker",
     "test": "node --test --test-timeout=30000 \"tests/**/*.test.ts\"",
     "sample": "node scripts/make-sample.mjs"
   },

@@ -11,6 +11,7 @@ import type { ModelSource } from '../engine/buildModel.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
+import { AssistantPanel } from './AssistantPanel.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { MeasurePanel } from './MeasurePanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
@@ -100,7 +101,7 @@ export class App {
   private modelDownload!: HTMLButtonElement;
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   private matched = 0;
-  private fileName = '';
+  fileName = '';
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -247,8 +248,9 @@ export class App {
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
     const filters = new FilterPanel(this);
+    const assistant = new AssistantPanel(this);
     const tabs = h('div', { class: 'tabs', attrs: { role: 'tablist' } });
-    const panels: [string, HTMLElement][] = [['Arborescence', tree.el], ['Couleurs et filtres', filters.el]];
+    const panels: [string, HTMLElement][] = [['Arborescence', tree.el], ['Couleurs et filtres', filters.el], ['Assistant', assistant.el]];
     const tabButtons = panels.map(([label, panel], index) => {
       const tab = button(label, () => {
         panels.forEach(([, other], i) => {
@@ -260,7 +262,7 @@ export class App {
       return tab;
     });
     tabs.append(...tabButtons);
-    const left = h('aside', { class: 'sidebar left' }, tabs, tree.el, filters.el);
+    const left = h('aside', { class: 'sidebar left' }, tabs, tree.el, filters.el, assistant.el);
     const right = h('aside', { class: 'sidebar right' }, new PropertiesPanel(this).el);
 
     root.append(topbar, left, this.viewport, right);
@@ -395,16 +397,25 @@ export class App {
       const saved = this.isolation;
       this.isolation = null;
       for (let i = 0; i < model.count; i++) state.setVisible(i, saved[i] === 1);
-    } else {
-      if (this.selection.size === 0) return;
-      const saved = new Uint8Array(model.count);
-      for (let i = 0; i < model.count; i++) {
-        saved[i] = state.isVisible(i) ? 1 : 0;
-        state.setVisible(i, false);
-      }
-      for (const index of this.selection) state.setVisible(index, true);
-      this.isolation = saved;
+      this.visibilityChanged();
+    } else if (this.selection.size > 0) {
+      this.isolate(this.selection);
     }
+  }
+
+  /** N'affiche que ces éléments ; « Ne plus isoler » rétablit l'affichage d'avant. */
+  isolate(indices: Iterable<number>): void {
+    const model = this.model;
+    if (!model) return;
+    const state = model.state;
+    // Un isolement déjà en cours garde son point de départ : on ne mémorise pas une vue isolée.
+    const saved = this.isolation ?? new Uint8Array(model.count);
+    for (let i = 0; i < model.count; i++) {
+      if (!this.isolation) saved[i] = state.isVisible(i) ? 1 : 0;
+      state.setVisible(i, false);
+    }
+    for (const index of indices) state.setVisible(index, true);
+    this.isolation = saved;
     this.visibilityChanged();
   }
 

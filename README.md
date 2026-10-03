@@ -80,6 +80,14 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   modèle a des métadonnées, modifications comprises. Un paquet USD est réécrit avec elles.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
+- **Assistant** (onglet de gauche) : une conversation avec un modèle de langage qui interroge
+  et complète les métadonnées — « combien d'éléments par niveau ? », « quels murs n'ont pas de
+  résistance au feu ? », « mets le lot Gros œuvre sur les murs du RDC ». Le modèle ne reçoit
+  jamais le fichier : il appelle des outils (compter, chercher, lire une fiche, sélectionner,
+  modifier) exécutés dans le navigateur, et seuls leurs résultats lui sont envoyés. Les
+  propriétés verrouillées lui sont interdites comme à tout le monde, ses modifications se
+  comptent et s'annulent comme les vôtres. Le service tourne sur un worker Cloudflare gratuit
+  (voir `worker/README.md`) ; sans lui, l'onglet le signale et tout le reste fonctionne.
 
 Raccourcis : `F` cadrer, `H` masquer ou démasquer, `I` isoler ou ne plus isoler, `A` tout
 afficher, `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.
@@ -90,6 +98,10 @@ Chaque envoi sur la branche `main` lance le workflow `.github/workflows/deploy.y
 build, puis publication sur GitHub Pages. Le site étant entièrement statique, il ne demande ni
 serveur ni base de données.
 
+Seul l'assistant a besoin d'un service : un worker Cloudflare (plan gratuit, sans carte
+bancaire), déployé par le même workflow quand les secrets `CLOUDFLARE_API_TOKEN` et
+`CLOUDFLARE_ACCOUNT_ID` sont renseignés dans le dépôt. Mode d'emploi dans `worker/README.md`.
+
 ## Architecture
 
 ```
@@ -98,8 +110,10 @@ src/
   engine/    moteur 3D : chargement, fusion de la géométrie, rendu, picking, coupes, mesures
   ifc/       lancement du convertisseur IFC dans le navigateur (fil d'exécution séparé)
   usd/       lecture des fichiers USD (usda, usdz)
+  assistant/ outils, message système et dialogue avec le worker de l'assistant
   ui/        interface : barre d'outils et panneaux, en DOM natif
 pipeline/    convertisseur IFC → GLB ou USD + JSON (Python, IfcOpenShell) et ses tests
+worker/      service de l'assistant (Cloudflare Workers) : relais vers le modèle de langage
 tests/       tests des modules de données et du moteur
 scripts/     générateur du modèle de démonstration
 ```

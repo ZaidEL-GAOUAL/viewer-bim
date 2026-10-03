@@ -1,0 +1,27 @@
+# Worker Cloudflare « assistant » : relais entre le viewer (site statique) et un LLM.
+# Déployé par .github/workflows/deploy.yml (wrangler-action) ou à la main : npx wrangler deploy
+name = "viewer-bim-assistant"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+# Modèles exécutés chez Cloudflare (10 000 neurones par jour gratuits, arrêt net au-delà).
+[ai]
+binding = "AI"
+
+# Au plus 20 requêtes par minute et par adresse : protège le quota gratuit.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[vars]
+# Seules ces origines peuvent appeler le worker (séparées par des virgules).
+ALLOWED_ORIGINS = "https://zaidel-gaoual.github.io,http://localhost:5173,http://localhost:4173"
+# Modèle Workers AI par défaut (doit savoir appeler des fonctions).
+MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+# Relais optionnels, utilisés quand Workers AI refuse (quota du jour atteint, panne).
+# Leurs clés sont des secrets : tableau de bord Cloudflare → Workers → viewer-bim-assistant →
+# Settings → Variables and Secrets (GROQ_API_KEY, CEREBRAS_API_KEY).
+GROQ_MODEL = "llama-3.3-70b-versatile"
+CEREBRAS_MODEL = "llama-3.3-70b"

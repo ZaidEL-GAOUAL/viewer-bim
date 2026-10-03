@@ -17,6 +17,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Le worker « assistant » n'est déployé que si le jeton Cloudflare est renseigné
+      # (Settings → Secrets and variables → Actions : CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID).
+      HAS_CLOUDFLARE: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,12 +29,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run typecheck:worker
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -r pipeline/requirements.txt pytest usd-core
       - run: pytest pipeline/tests -q
+      - name: Déploiement du worker Cloudflare (assistant)
+        id: worker
+        if: env.HAS_CLOUDFLARE == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
       - run: npm run build
+        env:
+          # Adresse du worker, inscrite dans le site au build. ASSISTANT_URL (variable du dépôt)
+          # permet de la fixer à la main si elle n'est pas lue dans la sortie de wrangler.
+          VITE_ASSISTANT_URL: ${{ vars.ASSISTANT_URL || steps.worker.outputs.deployment-url }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

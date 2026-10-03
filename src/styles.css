@@ -295,13 +295,17 @@ button[aria-pressed='true'] {
 
 .tabs button {
   flex: 1;
+  min-width: 0;
   height: 38px;
+  padding: 0 6px;
   border: 0;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   background: none;
   color: var(--muted);
+  font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .tabs button[aria-selected='true'] {
@@ -1010,4 +1014,144 @@ button[aria-pressed='true'] {
   * {
     transition: none !important;
   }
+}
+
+/* -------------------------------------------------------------- assistant */
+
+.assistant-panel {
+  gap: 0;
+}
+
+.assistant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.assistant-status {
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-status.warning {
+  color: var(--danger);
+  white-space: normal;
+}
+
+.assistant-header .subtle {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.assistant-log {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding: 10px 12px;
+  overflow: auto;
+}
+
+.chat {
+  max-width: 92%;
+  padding: 7px 10px;
+  border-radius: 10px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.chat.assistant {
+  align-self: flex-start;
+  background: var(--panel-alt);
+}
+
+.chat.note {
+  align-self: flex-start;
+  padding: 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.chat.note::before {
+  content: '→ ';
+}
+
+.chat.error {
+  align-self: stretch;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.assistant-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+
+.assistant-suggestions .chip {
+  height: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.assistant-suggestions .chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.assistant-input {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.assistant-input textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  resize: none;
+}
+
+.assistant-input textarea:disabled {
+  opacity: 0.6;
+}
+
+.assistant-input button {
+  align-self: flex-end;
+}
+
+.assistant-privacy {
+  padding-top: 0;
+  font-size: 10.5px;
+  line-height: 1.35;
 }
