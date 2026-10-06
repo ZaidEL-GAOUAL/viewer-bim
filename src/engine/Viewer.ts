@@ -74,6 +74,8 @@ export class Viewer {
   private readonly scratch = new Vector3();
   private readonly scratchBox = new Box3();
   private dirty = true;
+  /** Vrai si l’image demandée fait partie d’un mouvement de l’utilisateur (voir invalidateMotion). */
+  private moving = false;
   private resolutionScale = 1;
   private sharpenTimer = 0;
   private width = 1;
@@ -95,7 +97,7 @@ export class Viewer {
     this.controls.dampingFactor = 0.18;
     this.controls.zoomToCursor = true;
     this.controls.zoomSpeed = 1.3;
-    this.controls.addEventListener('change', this.invalidate);
+    this.controls.addEventListener('change', this.invalidateMotion);
 
     // Éclairage fixe et peu coûteux : une lumière d'ambiance et deux directions opposées,
     // pour qu'aucune face ne soit complètement noire.
@@ -142,6 +144,15 @@ export class Viewer {
 
   readonly invalidate = (): void => {
     this.dirty = true;
+  };
+
+  /**
+   * Demande une image qui fait partie d'un mouvement mené par l'utilisateur (caméra, poignée de
+   * coupe) : elle compte pour la résolution adaptative. Le reste passe par `invalidate`.
+   */
+  readonly invalidateMotion = (): void => {
+    this.dirty = true;
+    this.moving = true;
   };
 
   setBackground(color: string): void {
@@ -310,9 +321,12 @@ export class Viewer {
     this.controls.update();
     if (!this.dirty) return;
     this.dirty = false;
+    const motion = this.moving;
+    this.moving = false;
     // Pendant un mouvement continu, la résolution suit ce que la machine arrive à tenir ;
-    // la vue repasse en pleine résolution dès que la caméra s'arrête.
-    this.setResolutionScale(this.adaptive.frame(performance.now()));
+    // la vue repasse en pleine résolution dès que la caméra s'arrête. Les images qui ne
+    // viennent pas d'un mouvement (lecture du planning, fondus…) sont toujours nettes.
+    this.setResolutionScale(this.adaptive.frame(performance.now(), motion));
     this.draw();
     window.clearTimeout(this.sharpenTimer);
     this.sharpenTimer = window.setTimeout(this.sharpen, SHARPEN_DELAY);

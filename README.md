@@ -200,7 +200,10 @@ Masquer ou colorer plusieurs milliers d'éléments prend moins de 1 ms.
 - **Résolution adaptative** (`engine/AdaptiveResolution.ts`). Si la carte graphique ne tient pas
   environ 30 images par seconde pendant un mouvement de caméra, la vue est calculée avec moins de
   pixels (jusqu'à moitié moins dans chaque direction), puis en pleine résolution dès que la caméra
-  s'arrête. Une machine rapide n'est jamais concernée.
+  s'arrête. Une machine rapide n'est jamais concernée. Seuls les mouvements menés par
+  l'utilisateur (caméra, poignées de coupe) sont mesurés : la lecture du planning 4D, ses fondus
+  et les changements de couleur sont toujours rendus en pleine résolution — un pas de planning
+  toutes les 100 ms passait sinon pour une machine à 10 images par seconde.
 - **Fluidité affichée**. La barre d'état en bas de la vue 3D indique le nombre d'images par
   seconde mesuré pendant le dernier mouvement, et signale une résolution réduite. C'est le moyen
   le plus simple de vérifier le comportement sur un autre ordinateur.

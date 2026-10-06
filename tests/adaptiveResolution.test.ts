@@ -62,3 +62,41 @@ test('la résolution remonte quand la machine suit de nouveau, sans osciller', (
   run(adaptive, now, 16.7, 100);
   assert.ok(adaptive.motionScale > dropped);
 });
+
+/** Images de la lecture du planning : un pas toutes les ~100 ms (gigue du minuteur), parfois un fondu à 60 Hz. */
+function playbackFrames(steps: number): number[] {
+  let seed = 1;
+  const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const frames = new Set<number>();
+  for (let step = 0; step < steps; step++) {
+    const tick = step * 100 + (random() - 0.5) * 6;
+    frames.add(Math.round((tick + 2) * 10) / 10);
+    if (random() < 0.3) for (let t = tick + 16.7; t < tick + 240; t += 16.7) frames.add(Math.round(t * 10) / 10);
+  }
+  return [...frames].sort((a, b) => a - b);
+}
+
+test('le rythme du planning, compté comme un mouvement, ferait baisser la résolution d’une machine rapide', () => {
+  // Constat à l'origine du correctif : des pas espacés d'un peu moins de 100 ms passent pour des images lentes.
+  const adaptive = new AdaptiveResolution();
+  for (const now of playbackFrames(300)) adaptive.frame(now);
+  assert.ok(adaptive.motionScale < 1);
+});
+
+test('les images qui ne viennent pas d’un mouvement (planning, fondus, couleurs) restent en pleine résolution', () => {
+  const adaptive = new AdaptiveResolution();
+  for (const now of playbackFrames(300)) assert.equal(adaptive.frame(now, false), 1);
+  assert.equal(adaptive.motionScale, 1);
+  assert.equal(adaptive.frameTime, 0, 'aucune mesure prise hors mouvement');
+});
+
+test('pendant la lecture, une rotation de caméra n’est mesurée que sur ses propres images', () => {
+  const adaptive = new AdaptiveResolution();
+  const playback = new Set(playbackFrames(120));
+  const camera = Array.from({ length: 700 }, (_, i) => Math.round(i * 16.7 * 10) / 10);
+  for (const now of [...new Set([...playback, ...camera])].sort((a, b) => a - b)) {
+    adaptive.frame(now, camera.includes(now));
+  }
+  assert.equal(adaptive.motionScale, 1);
+  assert.ok(Math.abs(adaptive.frameTime - 16.7) < 0.5, `${adaptive.frameTime}`);
+});

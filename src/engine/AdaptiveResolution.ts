@@ -12,6 +12,11 @@ const SETTLE = 8; // images laissées pour que la mesure se stabilise après un 
  *
  * La classe ne fait que décider du facteur d'échelle à partir des dates des images rendues ;
  * elle ne touche pas au rendu.
+ *
+ * Seules les images d'un mouvement mené par l'utilisateur (caméra, poignée de coupe) sont
+ * mesurées. Les autres — pas de la lecture du planning, fondus, couleurs — arrivent à leur
+ * propre rythme : une lecture qui avance toutes les 100 ms passerait pour une machine à 10
+ * images par seconde et ferait baisser la résolution d'un ordinateur rapide.
  */
 export class AdaptiveResolution {
   /** Facteur de résolution utilisé pendant un mouvement (1 = pleine résolution). */
@@ -28,9 +33,11 @@ export class AdaptiveResolution {
 
   /**
    * À appeler juste avant de rendre une image. Renvoie le facteur de résolution à utiliser pour
-   * cette image : `motionScale` au milieu d'un mouvement, 1 pour une image isolée.
+   * cette image : `motionScale` au milieu d'un mouvement, 1 pour une image isolée ou qui ne
+   * vient pas d'un mouvement (`motion` faux) — celle-ci n'est pas mesurée.
    */
-  frame(now: number): number {
+  frame(now: number, motion = true): number {
+    if (!motion) return 1;
     const elapsed = now - this.last;
     this.last = now;
     if (elapsed > MOTION_GAP) {

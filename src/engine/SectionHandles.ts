@@ -34,7 +34,7 @@ export class SectionHandles {
       control.enabled = false;
       control.showXY = control.showYZ = control.showXZ = control.showXYZE = control.showE = false;
       viewer.overlay.add(control.getHelper());
-      control.addEventListener('change', viewer.invalidate);
+      control.addEventListener('change', viewer.invalidateMotion);
       control.addEventListener('objectChange', this.preview);
     }
     const canvas = viewer.renderer.domElement;
@@ -120,6 +120,7 @@ export class SectionHandles {
     const point = this.active === this.rotate ? this.startPoint : this.proxy.position;
     this.viewer.sections.setTransform(this.selected, point, normal);
     this.viewer.sectionsChanged();
+    this.viewer.invalidateMotion();
   };
 
   private readonly up = (event: PointerEvent): void => {
