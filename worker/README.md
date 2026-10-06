@@ -90,9 +90,17 @@ exécute le worker chez Cloudflare (nécessaire pour Workers AI).
 ## Protocole
 
 - `GET /` → `{ ok, providers: [{ name, model }] }`.
+  Ce contrôle indique les fournisseurs configurés ; il n'appelle aucun modèle et ne garantit
+  donc ni leur disponibilité ni le quota restant.
 - `POST /chat` avec `{ messages, tools, api? }` au format « chat completions » (OpenAI).
   `api`, facultatif, vaut `{ endpoint, apiKey, model }` et ne fait jamais partie des messages.
 - Réponse : `{ content, tool_calls: [{ id, name, arguments }], provider, model, usage }`.
   `usage` contient `{ inputTokens, outputTokens, totalTokens }` ; chaque valeur est un entier
   mesuré ou `null` si elle n’est pas disponible. `unreportedAttempts`, facultatif, compte
   les tentatives précédentes sans mesure retournée.
+- Si tous les fournisseurs échouent, le HTTP 503 contient `error`, `unreportedAttempts` et
+  `failures` : une liste de diagnostics `{ provider, kind, code?, status? }`. Le code numérique
+  Workers AI, lorsqu'il est identifiable, distingue notamment quota (`3036`) et saturation
+  temporaire (`3040`). Le même diagnostic est journalisé sous `ai_provider_failure`.
+  Aucun texte d'erreur brut, contenu de conversation ou clé API n'est renvoyé ou journalisé.
+  Un diagnostic `unavailable` indique une cause non identifiée, sans supposer une panne temporaire.

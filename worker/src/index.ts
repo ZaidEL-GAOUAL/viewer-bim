@@ -2,6 +2,7 @@
 // passer que la conversation (résumé du modèle, résultats d'outils), jamais le fichier entier.
 // Le format est celui des « chat completions » d'OpenAI, compris par Workers AI, Groq et Cerebras.
 import { normalizeUsage, type TokenUsage } from '../../src/assistant/usage.ts';
+import { describeFailure, failureMessage, type ProviderFailure } from './diagnostics.ts';
 
 interface Env {
   AI: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
@@ -122,7 +123,7 @@ function openAiCompatible(name: string, url: string, key: string, model: string)
         credentials: 'omit',
       });
       // Upstream error text can contain request data or credentials: never return or log it.
-      if (!response.ok) throw new Error(`${name} : HTTP ${response.status}`);
+      if (!response.ok) throw Object.assign(new Error('Upstream HTTP error'), { status: response.status });
       const output: unknown = await response.json();
       const choice = isRecord(output) && Array.isArray(output.choices) ? (output.choices[0] as unknown) : null;
       const message = isRecord(choice) && isRecord(choice.message) ? choice.message : null;
@@ -168,11 +169,6 @@ function customProvider(raw: unknown, env: Env): Provider | null {
   const key = raw.apiKey.trim(), model = raw.model.trim();
   if (!key || key.length > 8192 || /[\r\n]/.test(key) || !model || model.length > 200 || /[\r\n]/.test(model)) throw new Error('Clé API ou modèle invalide.');
   return openAiCompatible(new URL(endpoint).hostname, endpoint, key, model);
-}
-
-function isQuotaError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return /quota|rate limit|429|limit exceeded|capacity|insufficient/i.test(message);
 }
 
 // ------------------------------------------------------------------- HTTP
@@ -231,24 +227,20 @@ export default {
     catch (error) { return json(400, { error: error instanceof Error ? error.message : 'Configuration de l’API invalide.' }, headers); }
 
     // Chaque fournisseur est tenté dans l'ordre ; le premier qui répond l'emporte.
-    const errors: string[] = [];
-    let quota = false;
+    const errors: ProviderFailure[] = [];
     for (const provider of custom ? [custom] : providers(env)) {
       try {
         const reply = await provider.run(body.messages, tools);
         return json(200, { ...reply, ...(errors.length ? { unreportedAttempts: errors.length } : {}) }, headers);
       } catch (error) {
-        quota ||= isQuotaError(error);
-        // Log provider identity only; model errors may echo prompts, keys or request bodies.
-        errors.push(`${provider.name} : échec de requête`);
+        errors.push(describeFailure(provider.name, error));
       }
     }
-    console.error(errors.join(' | '));
+    console.error(JSON.stringify({ event: 'ai_provider_failure', failures: errors }));
     return json(503, {
       unreportedAttempts: errors.length,
-      error: custom ? 'L’API configurée n’a pas répondu. Vérifiez l’adresse, la clé, le modèle et son quota.' : quota
-        ? 'Le quota gratuit du service d’IA est atteint pour aujourd’hui. Réessayez demain.'
-        : 'Le service d’IA ne répond pas pour le moment. Réessayez dans quelques minutes.',
+      failures: errors,
+      error: failureMessage(errors),
     }, headers);
   },
 };
