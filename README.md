@@ -55,7 +55,9 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   affiché et téléchargé. Il est mémorisé d'une visite à l'autre.
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
   l'arborescence. La fiche à droite affiche les propriétés du GLB puis celles du JSON, regroupées
-  par catégories repliables.
+  par catégories repliables, puis les **cotes calculées** depuis le maillage : longueur et largeur
+  (rectangle minimal au sol, quelle que soit l'orientation de l'élément), hauteur, surface et
+  volume — signalés « approx. » si le maillage n'est pas une enveloppe fermée.
 - **Métadonnées** : le JSON peut être fourni avec le modèle, dans son dossier, ou ajouté après
   coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
 - **Modification manuelle des métadonnées** : dans la fiche, chaque propriété se modifie sur place
@@ -112,9 +114,11 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   affichent le panneau de gauche et celui de droite.
 - **Assistant en lecture seule sur les données** : recherches, comptages et calculs utilisent
   exclusivement les métadonnées ; l’assistant n’accède pas aux maillages et ne modifie aucune
-  propriété ni aucun objet. Il peut sélectionner/isoler des éléments, configurer les mêmes règles
-  de couleur/opacité que le panneau manuel et organiser l’arbre par propriétés (« Bâtiment,
-  puis Niveau, puis Classe IFC »). Les calculs et règles s’exécutent dans le navigateur ; seuls
+  propriété ni aucun objet. Il peut sélectionner, isoler (« n’affiche que le bâtiment A, le reste
+  invisible »), masquer ou réafficher (« masque le niveau R+2 », « tout afficher »), mettre en
+  évidence (« fais ressortir le bâtiment A » : surbrillance, le reste atténué par deux règles
+  d’opacité retirables), configurer les mêmes règles de couleur/opacité que le panneau manuel et
+  organiser l’arbre par propriétés (« Bâtiment, puis Niveau, puis Classe IFC »). Les calculs et règles s’exécutent dans le navigateur ; seuls
   le résumé, la conversation et des résultats bornés sont envoyés au modèle. Les contrôles
   manuels ne consomment aucun jeton d’IA.
 - **Usage et API** : l’assistant affiche les jetons d’entrée/sortie/total communiqués pendant

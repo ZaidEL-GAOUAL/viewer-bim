@@ -1,12 +1,16 @@
 import { Box3, Vector3 } from 'three';
 import { PATH_SEP, formatValue, ownValue, type PropValue } from '../data/metadata.ts';
-import { formatLength } from '../engine/Measure.ts';
+import { elementDimensions } from '../engine/dimensions.ts';
+import { formatArea, formatLength, formatVolume } from '../engine/Measure.ts';
 import type { App } from './App.ts';
 import { button, clear, h, integer } from './dom.ts';
 
 const MULTI_LIMIT = 5000;
 const MIXED = '(valeurs multiples)';
 const ADD_TITLE = 'Ajouter une propriété';
+const DIMENSIONS_TITLE = 'Cotes (calculées)';
+const DIMENSIONS_MAX_ELEMENTS = 500;
+const DIMENSIONS_MAX_TRIANGLES = 3_000_000;
 const LOCKED_HINT = 'Propriété verrouillée par le fichier de métadonnées : elle découle de la structure du modèle (classe, type, emplacement, matériaux, quantités) et ne se modifie pas ici.';
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
@@ -103,16 +107,43 @@ export class PropertiesPanel {
 
     this.body.append(this.section(ADD_TITLE, this.addForm(indices)));
 
-    const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
-    const geometry = h('dl', { class: 'props' });
-    for (const [name, value] of [
-      ['Emprise X', formatLength(size.x)],
-      ['Emprise Y (hauteur)', formatLength(size.y)],
-      ['Emprise Z', formatLength(size.z)],
-    ]) {
-      geometry.append(h('dt', { text: name, title: name }), h('dd', { text: value, title: value }));
+    this.body.append(this.section(DIMENSIONS_TITLE, this.dimensions(indices)));
+  }
+
+  /**
+   * Cotes calculées depuis le maillage : longueur et largeur du rectangle minimal au sol (l'élément
+   * peut être orienté n'importe comment), hauteur, surface et volume. Une grande sélection garde
+   * seulement l'emprise, pour ne pas faire attendre.
+   */
+  private dimensions(indices: number[]): HTMLElement {
+    const model = this.app.model!;
+    const list = h('dl', { class: 'props' });
+    const row = (name: string, value: string) => list.append(h('dt', { text: name, title: name }), h('dd', { text: value, title: value }));
+    let triangles = 0;
+    for (const index of indices) for (const range of model.ranges[index]) triangles += range.count / 3;
+    if (indices.length > DIMENSIONS_MAX_ELEMENTS || triangles > DIMENSIONS_MAX_TRIANGLES) {
+      const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
+      row('Emprise X', formatLength(size.x));
+      row('Hauteur', formatLength(size.y));
+      row('Emprise Z', formatLength(size.z));
+      return h('div', {}, list, h('p', { class: 'hint', text: 'Sélection trop grande pour la surface et le volume : seule l’emprise est donnée.' }));
     }
-    this.body.append(this.section('Géométrie (calculée)', geometry));
+    const parts = indices.flatMap((index) => model.parts(index));
+    const dims = elementDimensions(parts);
+    if (!dims) {
+      row('Cotes', '(élément sans géométrie)');
+      return list;
+    }
+    row('Longueur', formatLength(dims.length));
+    row('Largeur', formatLength(dims.width));
+    row('Hauteur', formatLength(dims.height));
+    const approx = dims.closed ? '' : ' (approx.)';
+    row('Surface', formatArea(dims.area) + approx);
+    row('Volume', formatVolume(dims.volume) + approx);
+    const hint = dims.closed
+      ? 'Longueur et largeur : rectangle minimal au sol, quelle que soit l’orientation. Surface : totale du maillage.'
+      : 'Maillage non fermé : surface et volume sont approximatifs. Longueur et largeur : rectangle minimal au sol.';
+    return h('div', {}, list, h('p', { class: 'hint', text: hint }));
   }
 
   /** Propriétés de la sélection : pour plusieurs éléments, une valeur n'est retenue que si elle est identique partout. */

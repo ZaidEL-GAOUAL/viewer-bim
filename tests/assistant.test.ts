@@ -4,6 +4,7 @@ import { compactHistory, trimHistory, type Message } from '../src/assistant/clie
 import { compileExpression } from '../src/assistant/expression.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
+import type { AppearanceRule } from '../src/data/appearanceRules.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
 
 function sampleContext() {
@@ -18,13 +19,20 @@ function sampleContext() {
 
   const selected: number[][] = [];
   const isolated: boolean[] = [];
+  const visibility: [number[], boolean][] = [];
+  let shownAll = 0;
+  let rules: AppearanceRule[] = [];
   const context: ToolContext = {
     store, count: 6, keys: ['a', 'b', 'c', 'd', 'e', 'f'],
     labelOf: (index) => store.labelOf(index) ?? `élément ${index}`,
     selection: new Set([0, 1]),
     select: (indices, isolate) => { selected.push(indices); isolated.push(isolate); },
+    setVisible: (indices, visible) => { visibility.push([indices, visible]); },
+    showAll: () => { shownAll++; },
+    get appearanceRules() { return rules; },
+    setAppearanceRules: (next) => { rules = next; },
   };
-  return { store, context, selected, isolated };
+  return { store, context, selected, isolated, visibility, rulesOf: () => rules, shownAllCount: () => shownAll };
 }
 
 test('resolveProperty retrouve un nom exact, approximatif ou par son dernier segment', () => {
@@ -154,7 +162,7 @@ test('trimHistory garde le message système et des échanges complets', () => {
 
 test('les définitions d’outils sont au format OpenAI et nomment des outils implémentés', () => {
   const names = TOOL_DEFINITIONS.map((tool) => tool.function.name);
-  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'compute', 'get_view_settings', 'update_view']);
+  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'set_visibility', 'compute', 'get_view_settings', 'update_view']);
   for (const tool of TOOL_DEFINITIONS) {
     assert.equal(tool.type, 'function');
     assert.equal(tool.function.parameters.type, 'object');
@@ -232,4 +240,44 @@ test('compute : sommes et conditions calculées par le viewer, pas par le modèl
   assert.match(runTool('compute', { filters: [], expression: '[Inexistante] + 1' }, context).note, /introuvable/);
   assert.match(runTool('compute', { filters: [], expression: '[NetVolume] +' }, context).note, /illisible/);
   assert.match(runTool('compute', { filters: [] }, context).note, /manquante/);
+});
+
+test('set_visibility masque, réaffiche ou montre tout sans toucher à la sélection', () => {
+  const { context, visibility, selected, shownAllCount } = sampleContext();
+  const hidden = runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], visible: false }, context);
+  assert.deepEqual(visibility, [[[2, 3], false]]);
+  assert.equal(hidden.note, '2 éléments masqués');
+  runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], visible: true }, context);
+  assert.deepEqual(visibility[1], [[2, 3], true]);
+  assert.equal(runTool('set_visibility', { filters: [], showAll: true }, context).note, 'Toute la maquette est réaffichée');
+  assert.equal(shownAllCount(), 1);
+  assert.match(runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+9' }], visible: false }, context).note, /Aucun élément/);
+  assert.equal(selected.length, 0, 'la sélection n’a pas bougé');
+});
+
+test('select_elements avec highlight atténue le reste par deux règles empilées, retirables par id', () => {
+  const { context, selected, isolated, rulesOf } = sampleContext();
+  const outcome = runTool('select_elements', { filters: [{ property: 'Matériaux', op: 'equals', value: 'Béton' }], highlight: true }, context);
+  assert.deepEqual(selected, [[0, 3, 4]]);
+  assert.deepEqual(isolated, [false]);
+  assert.equal(outcome.note, '3 éléments mis en évidence');
+  const rules = rulesOf();
+  assert.deepEqual(rules.map((rule) => rule.id), ['assistant-dim-others', 'assistant-highlight']);
+  assert.deepEqual(rules[0].conditions, []);
+  assert.equal(rules[0].opacity, 0.15);
+  assert.deepEqual(rules[1].conditions, [{ property: 'Matériaux', op: 'equals', value: 'Béton' }]);
+  assert.equal(rules[1].opacity, 1);
+  assert.match(String((outcome.result as { note: string }).note), /removeRuleIds/);
+  // Une seconde mise en évidence remplace la précédente sans l'empiler.
+  runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'RDC' }], highlight: true }, context);
+  assert.equal(rulesOf().length, 2);
+  assert.deepEqual(rulesOf()[1].conditions, [{ property: 'Niveau', op: 'equals', value: 'RDC' }]);
+  // Les règles de l'utilisateur restent, en dessous.
+  context.setAppearanceRules!([{ id: 'u1', enabled: true, conditions: [], color: '#ff0000' }, ...rulesOf()]);
+  runTool('select_elements', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcDoor' }], highlight: true }, context);
+  assert.deepEqual(rulesOf().map((rule) => rule.id), ['u1', 'assistant-dim-others', 'assistant-highlight']);
+  // Dans la sélection seulement : pas de règle d'atténuation (le périmètre n'est pas exprimable en conditions).
+  context.setAppearanceRules!([]);
+  runTool('select_elements', { filters: [], scope: 'selection', highlight: true }, context);
+  assert.equal(rulesOf().length, 0);
 });

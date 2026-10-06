@@ -142,6 +142,8 @@ export class AssistantPanel {
         if (isolate) app.isolate(indices);
         if (indices.length > 0) app.fitTo(indices);
       },
+      setVisible: (indices, visible) => app.setVisible(indices, visible),
+      showAll: () => app.showAll(),
       get appearanceRules() { return app.appearanceRules; },
       setAppearanceRules: (rules) => app.setAppearanceRules(rules),
       get grouping() { return app.grouping; },

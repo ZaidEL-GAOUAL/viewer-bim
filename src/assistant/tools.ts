@@ -2,7 +2,7 @@
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
 import { PATH_SEP, UNDEFINED_LABEL, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
-import { numericValue, validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
+import { numericValue, validateAppearanceRules, type AppearanceRule, type RuleCondition } from '../data/appearanceRules.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
 
 export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less';
@@ -21,6 +21,9 @@ export interface ToolContext {
   labelOf(index: number): string;
   selection: ReadonlySet<number>;
   select(indices: number[], isolate: boolean): void;
+  /** Affiche ou masque des éléments sans toucher à la sélection. */
+  setVisible?(indices: number[], visible: boolean): void;
+  showAll?(): void;
   appearanceRules?: readonly AppearanceRule[];
   setAppearanceRules?(rules: AppearanceRule[]): void;
   grouping?: readonly string[];
@@ -89,8 +92,34 @@ export const TOOL_DEFINITIONS = [
     type: 'function',
     function: {
       name: 'select_elements',
-      description: 'Sélectionne et cadre dans la vue 3D les éléments vérifiant les filtres ; isolate=true masque les autres.',
-      parameters: { type: 'object', properties: { filters: FILTERS, scope: SCOPE, isolate: { type: 'boolean', description: 'N’afficher que ces éléments.' } }, required: ['filters'] },
+      description: 'Sélectionne et cadre dans la vue 3D les éléments vérifiant les filtres. isolate=true : n’affiche que ces éléments, le reste devient invisible (« n’affiche que X », « masque tout sauf X »). highlight=true : met en évidence (« mets en évidence X », « fais ressortir X ») : surbrillance et le reste atténué.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          isolate: { type: 'boolean', description: 'N’afficher que ces éléments ; le reste est masqué.' },
+          highlight: { type: 'boolean', description: 'Mettre en évidence : le reste de la maquette est atténué (opacité 0,15).' },
+        },
+        required: ['filters'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_visibility',
+      description: 'Masque (visible=false) ou réaffiche (visible=true) les éléments vérifiant les filtres, sans changer la sélection ; showAll=true réaffiche toute la maquette. Pour « n’afficher que X », préférer select_elements avec isolate=true.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          visible: { type: 'boolean', description: 'false pour masquer, true pour réafficher.' },
+          showAll: { type: 'boolean', description: 'true : tout réafficher (les filtres sont ignorés).' },
+        },
+        required: ['filters'],
+      },
     },
   },
   {
@@ -133,6 +162,9 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ];
+
+/** Règles posées par « mettre en évidence », dans cet ordre : atténuation générale, puis les éléments visés. */
+export const HIGHLIGHT_IDS: readonly string[] = ['assistant-dim-others', 'assistant-highlight'];
 
 const DETAIL_LIMIT = 20;
 const DETAIL_MAX = 50;
@@ -337,8 +369,47 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const indices = selectIndices(context, filters, args.scope);
       const isolate = args.isolate === true;
+      const highlight = args.highlight === true;
       context.select(indices, isolate);
-      return { result: { count: indices.length, isolated: isolate }, note: `${plural(indices.length, 'élément')} ${isolate ? 'isolé' : 'sélectionné'}${indices.length > 1 ? 's' : ''}` };
+      let dimmed = false;
+      if (highlight && context.setAppearanceRules && args.scope !== 'selection' && indices.length > 0) {
+        // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité.
+        // Deux règles empilées, reconnaissables à leur identifiant pour pouvoir les retirer.
+        const conditions: RuleCondition[] = filters.map(({ path, filter }) => ({ property: path, op: filter.op, ...(filter.value !== undefined ? { value: filter.value } : {}) }));
+        const kept = (context.appearanceRules ?? []).filter((rule) => !HIGHLIGHT_IDS.includes(rule.id)).map((rule) => structuredClone(rule));
+        context.setAppearanceRules([
+          ...kept,
+          { id: HIGHLIGHT_IDS[0], name: 'Mise en évidence : reste atténué', enabled: true, conditions: [], opacity: 0.15 },
+          { id: HIGHLIGHT_IDS[1], name: 'Mise en évidence', enabled: true, conditions, opacity: 1 },
+        ]);
+        dimmed = true;
+      }
+      const many = indices.length > 1;
+      const verb = isolate ? (many ? 'isolés' : 'isolé') : highlight ? 'mis en évidence' : many ? 'sélectionnés' : 'sélectionné';
+      return {
+        result: {
+          count: indices.length,
+          isolated: isolate,
+          highlighted: highlight,
+          ...(dimmed ? { note: `Le reste est atténué par les règles ${HIGHLIGHT_IDS.join(' et ')} ; pour revenir : update_view removeRuleIds.` } : {}),
+        },
+        note: `${plural(indices.length, 'élément')} ${verb}`,
+      };
+    }
+
+    case 'set_visibility': {
+      if (!context.setVisible || !context.showAll) throw new Error('La visibilité n’est pas réglable dans ce contexte.');
+      if (args.showAll === true) {
+        context.showAll();
+        return { result: { shown: context.count }, note: 'Toute la maquette est réaffichée' };
+      }
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      const visible = args.visible !== false;
+      const indices = selectIndices(context, filters, args.scope);
+      if (indices.length === 0) return { result: { changed: 0, error: 'Aucun élément ne vérifie ces filtres.' }, note: 'Aucun élément concerné' };
+      context.setVisible(indices, visible);
+      return { result: { changed: indices.length, visible }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
     }
 
     case 'compute': {
