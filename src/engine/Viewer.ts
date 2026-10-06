@@ -25,6 +25,7 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AdaptiveResolution } from './AdaptiveResolution.ts';
+import { clipRange } from './clipRange.ts';
 import { TRANSPARENT_LAYER } from './buildModel.ts';
 import type { Model, PickHit, RaycastOptions } from './Model.ts';
 import { AXES, Sections } from './Sections.ts';
@@ -344,7 +345,6 @@ export class Viewer {
   private updateClipRange(): void {
     const camera = this.camera;
     const { center, radius } = this.sphere;
-    const distance = camera.position.distanceTo(center);
 
     // Si la caméra rattrape son point de pivot, le zoom se bloquerait : on repousse le pivot
     // le long de l'axe de vue, ce qui ne change pas l'image et permet d'avancer dans le modèle.
@@ -357,13 +357,10 @@ export class Viewer {
       this.controls.target.copy(camera.position).addScaledVector(toTarget, minDistance);
     }
 
-    // Plan proche : aussi loin que possible pour la précision en profondeur, mais jamais au point
-    // de couper ce que l'on regarde. En s'approchant d'un petit objet dans un grand modèle, il
-    // se resserre avec la distance au point de pivot.
-    const far = (distance + radius) * 1.02;
+    // Plans mesurés le long de l'axe de vue (voir clipRange) : une maquette poussée dans un coin
+    // de l'écran n'est plus coupée par le plan proche.
     const pivotDistance = camera.position.distanceTo(this.controls.target);
-    const inside = Math.max(far * 1e-6, Math.min(far * 1e-4, pivotDistance * 0.05));
-    const near = Math.max(inside, (distance - radius) * 0.98);
+    const { near, far } = clipRange(camera.position, camera.getWorldDirection(this.scratch), center, radius, pivotDistance);
     if (Math.abs(camera.near - near) > near * 1e-3 || Math.abs(camera.far - far) > far * 1e-3) {
       camera.near = near;
       camera.far = far;
