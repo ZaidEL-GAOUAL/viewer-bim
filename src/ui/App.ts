@@ -17,6 +17,8 @@ import { Viewer } from '../engine/Viewer.ts';
 import { button, h, integer } from './dom.ts';
 import { iconButton } from './icons.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
+import { DimensionsCard } from './DimensionsCard.ts';
+import { MEASURES, MeasureMenu } from './MeasureMenu.ts';
 import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
@@ -28,16 +30,14 @@ import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedu
 /** Viewer state and local metadata events. */
 export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping';
 export type SelectionSource = 'view' | 'panel';
-export type Tool = 'select' | MeasureKind;
+/** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
+export type MeasureTool = MeasureKind | 'dimensions';
+export type Tool = 'select' | MeasureTool;
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 export type ModelFormat = 'glb' | 'usd';
 
-const TOOLS: { id: Tool; label: string; hint: string }[] = [
-  { id: 'select', label: 'Sélection', hint: 'Cliquer un élément pour afficher ses propriétés' },
-  { id: 'distance', label: 'Distance', hint: 'Cliquez deux points. Accroche aux sommets proches ; Échap annule le point en cours.' },
-  { id: 'area', label: 'Surface', hint: 'Cliquez une face plane pour mesurer sa surface.' },
-  { id: 'volume', label: 'Volume', hint: 'Cliquez un élément pour mesurer son volume.' },
-];
+/** Vrai pour les outils qui mesurent par clics dans la vue (les cotes, elles, sélectionnent). */
+const isPointMeasure = (tool: Tool): tool is MeasureKind => tool === 'distance' || tool === 'area' || tool === 'volume';
 
 // Laisse le navigateur afficher le message d'attente avant un calcul long. Le délai de secours
 // évite de rester bloqué quand l'onglet est en arrière-plan (les images y sont suspendues).
@@ -161,12 +161,10 @@ export class App {
       samples.value = '';
     });
 
-    const tools = h('div', { class: 'segmented', attrs: { role: 'group', 'aria-label': 'Outils' } });
-    for (const tool of TOOLS) {
-      const element = iconButton(tool.id, tool.label, () => this.setTool(tool.id), `${tool.label} — ${tool.hint}`);
-      this.toolButtons.set(tool.id, element);
-      tools.append(element);
-    }
+    // Sélection, puis le menu qui réunit les mesures (distance, surface, volume, cotes).
+    const selectTool = iconButton('select', 'Sélection', () => this.setTool('select'), 'Sélection — cliquer un élément pour afficher ses propriétés');
+    this.toolButtons.set('select', selectTool);
+    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el);
 
     const sectionPanel = new SectionPanel(this);
     const sectionToggle = button('Coupes', () => {
@@ -301,7 +299,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, sectionPanel.el, this.conversionEl));
+    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, sectionPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -545,11 +543,11 @@ export class App {
 
   setTool(tool: Tool): void {
     this.tool = tool;
-    this.measure.setTool(tool === 'select' ? null : tool);
+    this.measure.setTool(isPointMeasure(tool) ? tool : null);
     for (const [id, element] of this.toolButtons) element.setAttribute('aria-pressed', String(id === tool));
-    this.viewport.classList.toggle('measuring', tool !== 'select');
+    this.viewport.classList.toggle('measuring', isPointMeasure(tool));
     this.measureHint.hidden = tool === 'select';
-    this.measureHint.textContent = TOOLS.find((item) => item.id === tool)?.hint ?? '';
+    this.measureHint.textContent = MEASURES.find((item) => item.id === tool)?.hint ?? '';
     this.emit('tool');
   }
 
@@ -1095,7 +1093,7 @@ export class App {
       this.handleClick(event);
     });
     canvas.addEventListener('pointermove', (event) => {
-      if (this.tool === 'select' || event.buttons !== 0) return;
+      if (!isPointMeasure(this.tool) || event.buttons !== 0) return;
       hoverX = event.clientX;
       hoverY = event.clientY;
       if (hoverQueued) return;
@@ -1107,7 +1105,7 @@ export class App {
     });
     canvas.addEventListener('pointerleave', () => this.measure.leave());
     canvas.addEventListener('dblclick', (event) => {
-      if (this.tool !== 'select' || this.viewer.sectionHandles.blocksPicking) return;
+      if (isPointMeasure(this.tool) || this.viewer.sectionHandles.blocksPicking) return;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.fitTo([hit.element]);
     });
@@ -1116,7 +1114,8 @@ export class App {
 
   private handleClick(event: PointerEvent): void {
     if (!this.model || this.viewer.sectionHandles.blocksPicking) return;
-    if (this.tool === 'select') {
+    if (!isPointMeasure(this.tool)) {
+      // Sélection, et outil Cotes : un clic choisit l'élément, Ctrl/Cmd/Maj l'ajoute.
       const additive = event.ctrlKey || event.metaKey || event.shiftKey;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.select([hit.element], 'view', additive);

@@ -55,9 +55,7 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   affiché et téléchargé. Il est mémorisé d'une visite à l'autre.
 - **Sélection** d'un élément (clic), de plusieurs (Ctrl, Cmd ou Maj + clic) ou d'un groupe depuis
   l'arborescence. La fiche à droite affiche les propriétés du GLB puis celles du JSON, regroupées
-  par catégories repliables, puis les **cotes calculées** depuis le maillage : longueur et largeur
-  (rectangle minimal au sol, quelle que soit l'orientation de l'élément), hauteur, surface et
-  volume — signalés « approx. » si le maillage n'est pas une enveloppe fermée.
+  par catégories repliables, puis l'emprise de la sélection selon les axes.
 - **Métadonnées** : le JSON peut être fourni avec le modèle, dans son dossier, ou ajouté après
   coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
 - **Modification manuelle des métadonnées** : dans la fiche, chaque propriété se modifie sur place
@@ -91,10 +89,16 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   et le remplissage des sections coupées. La flèche de déplacement et les cercles de rotation
   coexistent sur le plan actif ; tourner conserve le centre de la poignée. « Réaligner » restaure
   l’orientation de l’axe sans déplacer ce centre.
-- **Mesures** : distance entre deux points (avec accroche aux sommets), surface d'une face plane,
-  volume et surface totale d'un élément. Les outils sont des icônes dans la barre d’outils avec
-  une aide au survol. Chaque résultat dans la vue porte une croix pour le supprimer ; ses détails
-  sont accessibles au survol. Une icône de la barre efface toutes les mesures.
+- **Mesures** : un menu de la barre d'outils réunit les outils. **Distance** entre deux points
+  (avec accroche aux sommets), **Surface** d'une face plane, **Volume** et surface totale d'un
+  élément : chaque résultat dans la vue porte une croix pour le supprimer, ses détails sont
+  accessibles au survol, et une icône de la barre efface toutes les mesures. **Cotes** donne,
+  pour la sélection — un ou plusieurs éléments, Ctrl, Cmd ou Maj + clic pour en ajouter —
+  longueur, largeur, hauteur, surface et volume calculés depuis le maillage. Longueur et largeur
+  sont celles du rectangle minimal au sol, justes même pour un élément de biais. Pour plusieurs
+  éléments, la carte donne l'ensemble (emprise commune, surfaces et volumes additionnés) puis
+  chaque élément ; « Copier le tableau » les copie pour un tableur. Les valeurs sont marquées
+  « approx. » quand un maillage n'est pas une enveloppe fermée.
 
 - **Isoler** : n'affiche que la sélection ; un second clic sur le même bouton rétablit
   l'affichage d'avant. **Masquer** cache la sélection ; le même bouton devient « Démasquer » et

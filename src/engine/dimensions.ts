@@ -73,28 +73,60 @@ export function minimalRectangle(points: [number, number][]): { length: number; 
   return { length: best.length, width: best.width, angle: best.angle };
 }
 
-/** Cotes d'un ensemble de triangles (un élément, ou plusieurs réunis). */
-export function elementDimensions(parts: MeshPart[]): Dimensions | null {
-  const seen = new Set<string>();
+/**
+ * Mesure d'un élément, gardée sous une forme combinable : l'enveloppe convexe de son empreinte
+ * au sol (quelques points), son étendue verticale, sa surface et son volume.
+ */
+export interface ElementMeasure {
+  hull: [number, number][];
+  minY: number;
+  maxY: number;
+  area: number;
+  volume: number;
+  closed: boolean;
+  triangles: number;
+}
+
+export function measureElement(parts: MeshPart[]): ElementMeasure | null {
   const footprint: [number, number][] = [];
   let minY = Infinity, maxY = -Infinity;
   for (const part of parts) {
-    const local = new Set<number>();
-    for (let k = part.start, end = part.start + part.count; k < end; k++) local.add(part.index[k]);
-    for (const v of local) {
-      const x = part.positions[v * 3], y = part.positions[v * 3 + 1], z = part.positions[v * 3 + 2];
+    const vertices = new Set<number>();
+    for (let k = part.start, end = part.start + part.count; k < end; k++) vertices.add(part.index[k]);
+    for (const v of vertices) {
+      const y = part.positions[v * 3 + 1];
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
-      // Les sommets confondus de plusieurs pièces ne comptent qu'une fois dans l'empreinte.
-      const key = `${x.toFixed(4)}|${z.toFixed(4)}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        footprint.push([x, z]);
-      }
+      footprint.push([part.positions[v * 3], part.positions[v * 3 + 2]]);
     }
   }
   if (footprint.length === 0) return null;
-  const rectangle = minimalRectangle(footprint);
   const solid = analyzeSolid(parts);
-  return { ...rectangle, height: maxY - minY, area: solid.area, volume: solid.volume, closed: solid.closed, triangles: solid.triangles };
+  return { hull: convexHull(footprint), minY, maxY, area: solid.area, volume: solid.volume, closed: solid.closed, triangles: solid.triangles };
+}
+
+/**
+ * Cotes d'un ou plusieurs éléments réunis : rectangle minimal de l'empreinte commune, hauteur de
+ * l'ensemble, sommes des surfaces et des volumes. Fermé seulement si tous les éléments le sont.
+ */
+export function combineMeasures(measures: readonly ElementMeasure[]): Dimensions | null {
+  if (measures.length === 0) return null;
+  const points: [number, number][] = [];
+  let minY = Infinity, maxY = -Infinity, area = 0, volume = 0, triangles = 0, closed = true;
+  for (const measure of measures) {
+    for (const point of measure.hull) points.push(point);
+    if (measure.minY < minY) minY = measure.minY;
+    if (measure.maxY > maxY) maxY = measure.maxY;
+    area += measure.area;
+    volume += measure.volume;
+    triangles += measure.triangles;
+    closed &&= measure.closed;
+  }
+  return { ...minimalRectangle(points), height: maxY - minY, area, volume, closed, triangles };
+}
+
+/** Cotes d'un ensemble de triangles (un élément, ou plusieurs pièces d'un élément). */
+export function elementDimensions(parts: MeshPart[]): Dimensions | null {
+  const measure = measureElement(parts);
+  return measure ? combineMeasures([measure]) : null;
 }

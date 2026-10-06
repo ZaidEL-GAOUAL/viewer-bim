@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { convexHull, elementDimensions, minimalRectangle } from '../src/engine/dimensions.ts';
+import { combineMeasures, convexHull, elementDimensions, measureElement, minimalRectangle } from '../src/engine/dimensions.ts';
 import { CUBE, buildFromNodes } from './helpers.ts';
 
 /** Les quatre coins d'un rectangle L × W tourné de `degrees` autour de l'origine, plus des points intérieurs. */
@@ -46,4 +46,24 @@ test('elementDimensions : cube unité → 1 × 1 × 1, surface 6, volume 1, ferm
   const both = elementDimensions([...two.parts(0), ...two.parts(1)]);
   assert.ok(both && Math.abs(both.length - 2) < 1e-6 && Math.abs(both.width - 1) < 1e-6 && Math.abs(both.volume - 2) < 1e-6);
   assert.equal(elementDimensions([]), null);
+});
+
+test('combineMeasures réunit plusieurs éléments : emprise commune, sommes, fermeture de tous', async () => {
+  // Trois cubes unité : deux côte à côte au sol, un troisième posé sur le premier.
+  const model = await buildFromNodes([
+    { name: 'A', mesh: 0, extras: { id: 'a' } },
+    { name: 'B', mesh: 0, translation: [1, 0, 0], extras: { id: 'b' } },
+    { name: 'C', mesh: 0, translation: [0, 1, 0], extras: { id: 'c' } },
+  ], [0, 1, 2], CUBE);
+  const measures = [0, 1, 2].map((index) => measureElement(model.parts(index))!);
+  assert.ok(measures.every((measure) => measure.hull.length === 4), 'empreinte d’un cube : quatre coins');
+  const total = combineMeasures(measures)!;
+  assert.ok(Math.abs(total.length - 2) < 1e-6 && Math.abs(total.width - 1) < 1e-6, `${total.length} × ${total.width}`);
+  assert.ok(Math.abs(total.height - 2) < 1e-6);
+  assert.ok(Math.abs(total.area - 18) < 1e-6 && Math.abs(total.volume - 3) < 1e-6);
+  assert.equal(total.closed, true);
+  assert.equal(total.triangles, 36);
+  // Un élément ouvert rend l'ensemble approximatif.
+  assert.equal(combineMeasures([...measures, { ...measures[0], closed: false }])!.closed, false);
+  assert.equal(combineMeasures([]), null);
 });
