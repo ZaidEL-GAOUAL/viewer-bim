@@ -21,6 +21,8 @@ export interface ToolContext {
   keys: readonly string[];
   labelOf(index: number): string;
   selection: ReadonlySet<number>;
+  /** Éléments dont l'identifiant figure mot pour mot dans la demande en cours. */
+  mentioned?: ReadonlySet<number>;
   select(indices: number[], isolate: boolean): void;
   /** Affiche ou masque des éléments sans toucher à la sélection. */
   setVisible?(indices: number[], visible: boolean): void;
@@ -166,6 +168,25 @@ export const TOOL_DEFINITIONS = [
 
 /** Règles posées par « mettre en évidence », dans cet ordre : atténuation générale, puis les éléments visés. */
 export const HIGHLIGHT_IDS: readonly string[] = ['assistant-dim-others', 'assistant-highlight'];
+const isHighlightRule = (id: string) => id === HIGHLIGHT_IDS[0] || id.startsWith(HIGHLIGHT_IDS[1]);
+
+/**
+ * L'identifiant tapé par l'utilisateur l'emporte : si le modèle élargit la cible par un filtre qui
+ * attrape aussi des homonymes de l'élément cité (même nom, autre niveau), on revient à lui seul.
+ * Une cible volontairement plus large (un niveau entier, une catégorie) n'est pas touchée.
+ */
+function narrowToMentioned(context: ToolContext, filters: ResolvedFilter[], indices: number[]): { indices: number[]; narrowed: number } {
+  const mentioned = context.mentioned;
+  if (!mentioned || mentioned.size === 0 || filters.some(({ path }) => path === ELEMENT_ID)) return { indices, narrowed: 0 };
+  const kept = indices.filter((index) => mentioned.has(index));
+  if (kept.length === 0 || kept.length === indices.length) return { indices, narrowed: 0 };
+  const names = new Set(kept.map((index) => context.labelOf(index)));
+  const homonymsOnly = indices.every((index) => mentioned.has(index) || names.has(context.labelOf(index)));
+  return homonymsOnly ? { indices: kept, narrowed: indices.length - kept.length } : { indices, narrowed: 0 };
+}
+
+/** Fin d'action : le modèle a ce qu'il faut pour répondre ; une seconde action remplacerait la première. */
+const DONE = 'Action faite. Réponds maintenant à l’utilisateur, sans autre appel, sauf si sa demande comporte une autre action distincte.';
 
 const DETAIL_LIMIT = 20;
 const DETAIL_MAX = 50;
@@ -388,7 +409,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
     case 'select_elements': {
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const indices = selectIndices(context, filters, args.scope);
+      const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
+      const indices = narrowing.indices;
       const isolate = args.isolate === true;
       const highlight = args.highlight === true;
       if (indices.length === 0) return { result: { count: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
@@ -397,12 +419,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (highlight && context.setAppearanceRules && args.scope !== 'selection') {
         // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité.
         // Deux règles empilées, reconnaissables à leur identifiant pour pouvoir les retirer.
-        const conditions: RuleCondition[] = filters.map(({ path, filter }) => ({ property: path, op: filter.op, ...(filter.value !== undefined ? { value: filter.value } : {}) }));
-        const kept = (context.appearanceRules ?? []).filter((rule) => !HIGHLIGHT_IDS.includes(rule.id)).map((rule) => structuredClone(rule));
+        // Cible réduite aux éléments cités : une règle par identifiant (les conditions se combinent par ET).
+        const targets: RuleCondition[][] = narrowing.narrowed > 0
+          ? indices.map((index) => [{ property: ELEMENT_ID, op: 'equals', value: context.keys[index] }])
+          : [filters.map(({ path, filter }) => ({ property: path, op: filter.op, ...(filter.value !== undefined ? { value: filter.value } : {}) }))];
+        const kept = (context.appearanceRules ?? []).filter((rule) => !isHighlightRule(rule.id)).map((rule) => structuredClone(rule));
         context.setAppearanceRules([
           ...kept,
           { id: HIGHLIGHT_IDS[0], name: 'Mise en évidence : reste atténué', enabled: true, conditions: [], opacity: 0.15 },
-          { id: HIGHLIGHT_IDS[1], name: 'Mise en évidence', enabled: true, conditions, opacity: 1 },
+          ...targets.map((conditions, i): AppearanceRule => ({ id: i === 0 ? HIGHLIGHT_IDS[1] : `${HIGHLIGHT_IDS[1]}-${i + 1}`, name: 'Mise en évidence', enabled: true, conditions, opacity: 1 })),
         ]);
         dimmed = true;
       }
@@ -414,7 +439,9 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
           ...namesOf(context, indices),
           isolated: isolate,
           highlighted: highlight,
-          ...(dimmed ? { rules: HIGHLIGHT_IDS } : {}),
+          ...(dimmed ? { rules: (context.appearanceRules ?? []).filter((rule) => isHighlightRule(rule.id)).map((rule) => rule.id) } : {}),
+          ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}),
+          next: DONE,
         },
         note: `${plural(indices.length, 'élément')} ${verb}`,
       };
@@ -429,10 +456,11 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const visible = args.visible !== false;
-      const indices = selectIndices(context, filters, args.scope);
+      const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
+      const indices = narrowing.indices;
       if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
       context.setVisible(indices, visible);
-      return { result: { changed: indices.length, ...namesOf(context, indices), visible }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
+      return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
     }
 
     case 'compute': {
@@ -561,7 +589,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (!changesRules && grouping === undefined) throw new Error('Indiquez les règles ou le regroupement à modifier.');
       if (changesRules) context.setAppearanceRules(rules);
       if (grouping !== undefined) context.groupBy(grouping);
-      return { result: { rules: rules.map((rule) => ({ id: rule.id, enabled: rule.enabled })), groupBy: grouping ?? context.grouping ?? [] }, note: 'Présentation mise à jour : règles et regroupement' };
+      return { result: { rules: rules.map((rule) => ({ id: rule.id, enabled: rule.enabled })), groupBy: grouping ?? context.grouping ?? [], next: DONE }, note: 'Présentation mise à jour : règles et regroupement' };
     }
 
     default:

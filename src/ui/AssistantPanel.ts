@@ -2,6 +2,7 @@ import { AssistantError, assistantUrl, fetchStatus, runTurn, type ApiSettings, t
 import { SessionUsage } from '../assistant/usage.ts';
 import { buildSystemPrompt } from '../assistant/prompt.ts';
 import type { ToolContext } from '../assistant/tools.ts';
+import { describeMentions, mentionedElements } from '../assistant/mentions.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
 import { AssistantSettings } from './AssistantSettings.ts';
@@ -168,12 +169,20 @@ export class AssistantPanel {
     else this.messages[0] = system;
     this.input.value = '';
     this.line('user', text);
+    // Identifiants cités tels quels : reconnus ici, signalés au modèle, et prioritaires dans les outils.
+    const mentioned = mentionedElements(text, app.model!.keys);
+    if (mentioned.length > 0) {
+      this.line('note', `Identifiant reconnu : ${mentioned.slice(0, 3).map((index) => `« ${app.elementLabel(index)} »`).join(', ')}${mentioned.length > 3 ? ` et ${mentioned.length - 3} autres` : ''}`);
+    }
+    const request = text + describeMentions(mentioned, app.model!.keys, (index) => app.elementLabel(index));
+    const context = this.context();
+    context.mentioned = new Set(mentioned);
     const pending = this.line('note', 'Réflexion…');
     const controller = new AbortController();
     this.busy = controller;
     this.syncStatus();
     try {
-      const answer = await runTurn(this.url, this.messages, text, this.context(), {
+      const answer = await runTurn(this.url, this.messages, request, context, {
         onTool: (note) => {
           pending.remove();
           this.line('note', note);

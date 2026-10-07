@@ -4,6 +4,7 @@ import { evaluateAppearanceRules, validateAppearanceRules } from '../src/data/ap
 import { PropertyStore } from '../src/data/metadata.ts';
 import { buildSystemPrompt } from '../src/assistant/prompt.ts';
 import { resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
+import { describeMentions, mentionedElements } from '../src/assistant/mentions.ts';
 import type { AppearanceRule } from '../src/data/appearanceRules.ts';
 
 /** Le cas de la revue : trois « Mur pignon est » (un par niveau), le nom n'étant dans aucune propriété. */
@@ -84,4 +85,46 @@ test('le message système donne un exemple réel de propriété imbriquée et ex
   assert.doesNotMatch(prompt, /« Catégorie \/ Nom »/);
   assert.match(prompt, /« Dimensions \/ Longueur \(m\) »/);
   assert.match(prompt, /"#nom" et "#id"/);
+});
+
+test('les identifiants cités dans la demande sont reconnus, ponctuation comprise, sans faux positifs', () => {
+  const { keys } = gables();
+  assert.deepEqual(mentionedElements('mets en evidance Mur pignon est 1LVqDbHM1SRg8h_tXAXntZ', keys), [3]);
+  assert.deepEqual(mentionedElements('le mur (1LVqDbHM1SRg8h_tXAXntZ).', keys), [3]);
+  assert.deepEqual(mentionedElements('mets en évidence le mur pignon est et la dalle', keys), []);
+  assert.deepEqual(mentionedElements('Kug$zJrX72nRr_rZNPqvdq', ['a', 'Kug$zJrX72nRr_rZNPqvdq']), [1]);
+  const note = describeMentions([3], keys, (i) => ['', '', '', 'Mur pignon est', ''][i]);
+  assert.match(note, /1LVqDbHM1SRg8h_tXAXntZ = « Mur pignon est »/);
+  assert.match(note, /uniquement sur "#id"/);
+  assert.equal(describeMentions([], keys, () => ''), '');
+});
+
+test('trace de la revue : après le bon appel sur #id, un second appel sur le nom ne s’étend plus aux homonymes', () => {
+  const { context, selected, rulesOf } = gables();
+  context.mentioned = new Set([3]);
+  // 1. Le bon appel : un élément.
+  const first = runTool('select_elements', { filters: [{ property: '#id', op: 'equals', value: '1LVqDbHM1SRg8h_tXAXntZ' }], highlight: true }, context);
+  assert.equal(first.note, '1 élément mis en évidence');
+  assert.match(String((first.result as { next: string }).next), /sans autre appel/);
+  // 2. Le second appel du modèle, par le nom : ramené à l'élément cité.
+  const second = runTool('select_elements', { filters: [{ property: '#nom', op: 'equals', value: 'Mur pignon est' }], highlight: true }, context);
+  assert.equal(second.note, '1 élément mis en évidence');
+  assert.deepEqual(selected[selected.length - 1], [3]);
+  assert.match(String((second.result as { narrowed: string }).narrowed), /2 homonyme/);
+  assert.deepEqual(rulesOf().map((rule) => rule.id), ['assistant-dim-others', 'assistant-highlight']);
+  assert.deepEqual(rulesOf()[1].conditions, [{ property: '#id', op: 'equals', value: '1LVqDbHM1SRg8h_tXAXntZ' }]);
+  // Masquer par le nom : même réduction.
+  const hidden = runTool('set_visibility', { filters: [{ property: '#nom', op: 'contains', value: 'pignon est' }], visible: false }, context);
+  assert.equal(hidden.note, '1 élément masqué');
+});
+
+test('une cible volontairement plus large (un niveau entier) n’est pas réduite à l’élément cité', () => {
+  const { context, selected } = gables();
+  context.mentioned = new Set([3]);
+  runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+2' }], isolate: true }, context);
+  assert.deepEqual(selected[selected.length - 1], [3, 4], 'le mur cité et la dalle du même niveau');
+  // Sans identifiant cité, le nom garde tous les homonymes.
+  context.mentioned = new Set();
+  runTool('select_elements', { filters: [{ property: '#nom', op: 'equals', value: 'Mur pignon est' }] }, context);
+  assert.deepEqual(selected[selected.length - 1], [1, 2, 3]);
 });
