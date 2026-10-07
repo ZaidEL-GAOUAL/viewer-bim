@@ -511,7 +511,7 @@ export class App {
     const model = this.model;
     if (!model) return;
     for (let i = 0; i < model.count; i++) { model.state.clearColor(i); model.state.setOpacity(i, null); }
-    for (const [i, appearance] of evaluateAppearanceRules(this.store, this.appearanceRules)) {
+    for (const [i, appearance] of evaluateAppearanceRules(this.store, this.appearanceRules, { keys: model.keys, label: (index) => this.elementLabel(index) })) {
       if (appearance.color) model.state.setColor(i, ...hexToRgb(appearance.color));
       if (appearance.opacity !== undefined) model.state.setOpacity(i, appearance.opacity);
     }

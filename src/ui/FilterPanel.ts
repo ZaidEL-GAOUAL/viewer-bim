@@ -2,6 +2,7 @@ import { suggestGrouping } from '../data/grouping.ts';
 import { categoryColor } from '../data/palette.ts';
 import { UNDEFINED_LABEL, ownValue, type PropValue } from '../data/metadata.ts';
 import { validateAppearanceRules, type AppearanceRule, type RuleCondition, type RuleOp } from '../data/appearanceRules.ts';
+import { ELEMENT_FIELDS, fieldLabel, isElementField } from '../data/elementFields.ts';
 import type { App } from './App.ts';
 import { button, clear, h, integer } from './dom.ts';
 import './filter-panel.css';
@@ -247,10 +248,12 @@ export class FilterPanel {
     this.editingId = existing?.id ?? null;
     clear(this.ruleForm); this.ruleForm.hidden = false;
     const name = h('input', { attrs: { type: 'text', placeholder: 'Nom de la règle', 'aria-label': 'Nom de la règle', value: existing?.name ?? '' } });
-    const propertySelect = (label: string, value?: string) => {
+    const propertySelect = (label: string, value?: string, withElementFields = false) => {
       const select = h('select', { attrs: { 'aria-label': label } });
+      // Une condition peut aussi viser un élément par son nom ou son identifiant.
+      if (withElementFields) for (const field of ELEMENT_FIELDS) select.append(h('option', { text: fieldLabel(field), attrs: { value: field } }));
       for (const path of this.app.store.paths) select.append(h('option', { text: path, attrs: { value: path } }));
-      if (value && !this.app.store.paths.includes(value)) select.append(h('option', { text: `${value} (absente)`, attrs: { value } }));
+      if (value && !this.app.store.paths.includes(value) && !(withElementFields && isElementField(value))) select.append(h('option', { text: `${value} (absente)`, attrs: { value } }));
       select.value = value ?? this.path;
       return select;
     };
@@ -258,7 +261,7 @@ export class FilterPanel {
     const readers: { row: HTMLElement; read: () => RuleCondition }[] = [];
     const labels: [RuleOp, string][] = [['equals', '='], ['not_equals', '≠'], ['contains', 'contient'], ['greater', '>'], ['greater_or_equal', '≥'], ['less', '<'], ['less_or_equal', '≤'], ['missing', 'absent'], ['present', 'renseigné']];
     const addCondition = (initial?: RuleCondition) => {
-      const property = propertySelect('Propriété de la condition', initial?.property);
+      const property = propertySelect('Propriété de la condition', initial?.property, true);
       const op = h('select', { attrs: { 'aria-label': 'Comparaison' } });
       for (const [value, label] of labels) op.append(h('option', { text: label, attrs: { value } }));
       op.value = initial?.op ?? 'equals';

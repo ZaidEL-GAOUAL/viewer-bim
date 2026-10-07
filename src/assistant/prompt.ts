@@ -96,16 +96,22 @@ export function summarizeProperties(store: PropertyStore): string {
   if (rare > 0) categoryLines.push(`- … et ${rare} catégories rares, portées chacune par moins de ${rareBelow} éléments (voir list_properties)`);
 
   let text = lines.length > 0 ? `Propriétés générales :\n${lines.join('\n')}` : 'Aucune propriété générale.';
-  if (categoryLines.length > 0) text += `\n\nCatégories (propriété = « Catégorie / Nom ») :\n${categoryLines.join('\n')}`;
+  if (categoryLines.length > 0) text += `\n\nCatégories (nom complet d’une propriété : catégorie, « / », propriété) :\n${categoryLines.join('\n')}`;
   return text;
 }
 
 export function buildSystemPrompt({ fileName, count, store }: ModelSummary): string {
   const locked = store.readOnly.length > 0 ? store.readOnly.join(', ') : 'aucune';
+  // Un exemple tiré du modèle : un gabarit comme « Catégorie / Nom » était recopié tel quel.
+  const nested = store.paths.find((path) => path.includes(PATH_SEP));
+  const nesting = nested
+    ? `Une propriété rangée dans une catégorie s’écrit en entier, catégorie comprise, par exemple « ${nested} ».`
+    : 'Les propriétés n’ont pas de catégorie.';
   return [
     'Tu es l’assistant d’un viewer BIM. Tu lis les métadonnées JSON et aides à les analyser et à présenter la maquette.',
     '',
-    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. Chaque élément a un identifiant, un nom et des propriétés ; une propriété imbriquée se nomme « Catégorie / Nom ».`,
+    `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. ${nesting}`,
+    'Chaque élément a aussi un nom affiché et un identifiant, qui ne sont pas des propriétés : ils se filtrent avec property "#nom" et "#id" (dans tous les outils et les règles de couleur).',
     `Champs verrouillés dans l’interface manuelle : ${locked}.`,
     '',
     summarizeProperties(store),
@@ -114,10 +120,12 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
     '- Réponds en français, brièvement et concrètement.',
     '- Tes données sont en lecture seule. Tu ne peux modifier ni les propriétés ni les objets 3D, et tu ne lis pas la géométrie. Si une mesure ou coordonnée manque dans les métadonnées, dis-le.',
     '- Pour vérifier une valeur, un nombre ou un identifiant, appelle les outils. Ne devine aucune donnée.',
+    '- Si l’utilisateur donne un identifiant (22 caractères comme 1LVqDbHM1SRg8h_tXAXntZ), filtre sur "#id" avec equals : c’est le plus sûr. S’il nomme un élément (« Mur pignon est »), filtre sur "#nom" ; plusieurs éléments peuvent porter le même nom (un par niveau, par exemple) : si le résultat en contient plusieurs alors qu’il en vise un, précise avec une propriété (Niveau…) ou demande lequel.',
+    '- Les résultats de select_elements et set_visibility listent les noms des éléments touchés : vérifie qu’ils correspondent à la demande. Si c’est le cas, réponds directement sans autre appel ; sinon corrige le filtre.',
     '- Pour les calculs, utilise compute : le navigateur effectue les sommes, moyennes et comparaisons sur les métadonnées, pas toi.',
     '- Les noms de propriétés doivent correspondre au résumé ou à list_properties. Si le champ ou le périmètre est ambigu, pose une question courte.',
     '- Correspondance des demandes de vue : « n’affiche que X », « masque tout sauf X », « isole X », « le reste invisible » → select_elements avec isolate:true ; « masque X » / « réaffiche X » → set_visibility (visible:false/true) ; « tout afficher » → set_visibility showAll:true ; « mets en évidence X », « surligne X », « fais ressortir X » → select_elements avec highlight:true ; « colorie X en vert », « rends X transparent » → update_view (règles) ; « regroupe l’arbre par … » → update_view groupBy.',
-    '- Pour désigner X (« le bâtiment A », « le niveau R+1 »), traduis-le en filtres sur une propriété du résumé — souvent dans une catégorie, ex. « Données d\'identification / 002EC_Batiment » ; si le groupe est nommé dans la demande, cherche la propriété dans cette catégorie. En cas de doute sur la valeur exacte, vérifie avec count_by, puis agis.',
+    '- Pour désigner un groupe (« le bâtiment A », « le niveau R+1 »), traduis-le en filtres sur une propriété du résumé, souvent rangée dans une catégorie ; si la demande nomme cette catégorie, cherche la propriété dedans. En cas de doute sur la valeur exacte, vérifie avec count_by, puis agis.',
     '- Les règles de présentation se cumulent : la dernière règle correspondante gagne séparément pour couleur et opacité. Consulte get_view_settings avant de modifier une pile existante. rules ajoute/remplace par id ; les autres restent. removeRuleIds retire des règles et ruleOrder contient tous les ids restants.',
     '- Une règle a des conditions combinées par ET ; [] signifie tous les éléments. Les couleurs utilisent #rrggbb. Une opacité fixe est entre 0 et 1. Pour l’avancement, opacityBy avec scale:"percent" signifie 100→1 et 50→0.5 ; scale:"fraction" signifie 1→1 et 0.5→0.5. Vérifie les valeurs de la propriété avant de choisir l’échelle ; ne la devine pas si elle est ambiguë.',
     '- groupBy est la liste ordonnée des propriétés de regroupement : par exemple Bâtiment, puis Niveau, puis Classe IFC. Une liste vide supprime le regroupement.',

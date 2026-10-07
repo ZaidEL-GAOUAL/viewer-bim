@@ -1,3 +1,4 @@
+import { ELEMENT_ID, ELEMENT_NAME, isElementField } from './elementFields.ts';
 import { ownValue, type PropValue, type PropertyStore } from './metadata.ts';
 
 export type RuleOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less' | 'greater_or_equal' | 'less_or_equal';
@@ -50,8 +51,19 @@ export function matchesCondition(value: PropValue | undefined, condition: RuleCo
   return condition.op === 'not_equals' ? !equal : equal;
 }
 
-/** Last matching rule wins independently for color and opacity. Neither metadata nor visibility is mutated. */
-export function evaluateAppearanceRules(store: PropertyStore, rules: readonly AppearanceRule[]): Map<number, ElementAppearance> {
+/** Ce qui identifie un élément hors de ses métadonnées : son identifiant et son nom affiché. */
+export interface ElementIdentity {
+  keys: readonly string[];
+  label(index: number): string;
+}
+
+/**
+ * Last matching rule wins independently for color and opacity. Neither metadata nor visibility is mutated.
+ * Conditions may also read the element's displayed name (#nom) and identifier (#id) when `element` is given.
+ */
+export function evaluateAppearanceRules(store: PropertyStore, rules: readonly AppearanceRule[], element?: ElementIdentity): Map<number, ElementAppearance> {
+  const valueAt = (index: number, property: string): PropValue | undefined =>
+    property === ELEMENT_ID ? element?.keys[index] : property === ELEMENT_NAME ? element?.label(index) ?? store.labelOf(index) : ownValue(store.propsOf(index), property);
   const result = new Map<number, ElementAppearance>();
   const active = rules.filter((rule) => rule.enabled);
   const indexes = new Map<string, Map<string, number[]>>();
@@ -67,7 +79,7 @@ export function evaluateAppearanceRules(store: PropertyStore, rules: readonly Ap
     if (!groups) {
       groups = new Map(); indexes.set(key, groups);
       for (let index = 0; index < store.count; index++) {
-        const value = ownValue(store.propsOf(index), equal.property);
+        const value = valueAt(index, equal.property);
         if (missing(value)) continue;
         const bucketKey = keyOf(value, scale), bucket = groups.get(bucketKey);
         if (bucket) bucket.push(index); else groups.set(bucketKey, [index]);
@@ -79,7 +91,7 @@ export function evaluateAppearanceRules(store: PropertyStore, rules: readonly Ap
   for (const rule of active) {
     for (const index of candidates(rule.conditions)) {
       const props = store.propsOf(index);
-      if (!rule.conditions.every((condition) => matchesCondition(ownValue(props, condition.property), condition))) continue;
+      if (!rule.conditions.every((condition) => matchesCondition(valueAt(index, condition.property), condition))) continue;
       let appearance = result.get(index);
       if (rule.color !== undefined) (appearance ??= {}).color = rule.color;
       if (rule.opacity !== undefined) (appearance ??= {}).opacity = rule.opacity;
@@ -108,7 +120,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
   const retainedById = new Map(retainedRules.map((rule) => [rule.id, rule]));
   const property = (value: unknown, retained: ReadonlySet<string>): string => {
     if (typeof value !== 'string' || !value.trim()) throw new Error('Chaque condition nécessite une propriété.');
-    if (store && !store.paths.includes(value) && !retained.has(value)) throw new Error(`Propriété introuvable : ${value}.`);
+    if (store && !store.paths.includes(value) && !isElementField(value) && !retained.has(value)) throw new Error(`Propriété introuvable : ${value}.`);
     return value;
   };
   return raw.map((value) => {
@@ -148,6 +160,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
     if (value.opacityBy !== undefined) {
       if (!record(value.opacityBy) || !['percent', 'fraction'].includes(String(value.opacityBy.scale))) throw new Error('L’opacité par propriété nécessite une échelle percent (0–100) ou fraction (0–1).');
       rule.opacityBy = { property: property(value.opacityBy.property, retained), scale: value.opacityBy.scale as 'percent' | 'fraction' };
+      if (isElementField(rule.opacityBy.property)) throw new Error('L’opacité doit suivre une propriété numérique, pas le nom ou l’identifiant.');
       if (rule.opacity !== undefined) throw new Error('Choisissez une opacité fixe ou liée à une propriété dans une même règle.');
     }
     if (rule.color === undefined && rule.opacity === undefined && rule.opacityBy === undefined) throw new Error('Une règle doit définir une couleur ou une opacité.');

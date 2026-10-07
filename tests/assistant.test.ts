@@ -267,7 +267,9 @@ test('select_elements avec highlight atténue le reste par deux règles empilée
   assert.equal(rules[0].opacity, 0.15);
   assert.deepEqual(rules[1].conditions, [{ property: 'Matériaux', op: 'equals', value: 'Béton' }]);
   assert.equal(rules[1].opacity, 1);
-  assert.match(String((outcome.result as { note: string }).note), /removeRuleIds/);
+  // Le résultat donne les identifiants des règles posées et les noms des éléments visés.
+  assert.deepEqual((outcome.result as { rules: string[] }).rules, ['assistant-dim-others', 'assistant-highlight']);
+  assert.deepEqual((outcome.result as { elements: string[] }).elements, ['Mur A', 'Dalle', 'Poteau']);
   // Une seconde mise en évidence remplace la précédente sans l'empiler.
   runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'RDC' }], highlight: true }, context);
   assert.equal(rulesOf().length, 2);

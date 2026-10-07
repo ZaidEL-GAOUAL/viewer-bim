@@ -69,7 +69,7 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   accès aux champs rares propres à quelques objets, sans supprimer ni renommer les données IFC.
 - **Règles de couleur et d’opacité** : une seule pile de règles, avec deux entrées de création :
   « Par valeur de propriété » et « Par condition ». Les règles sont modifiables, activables,
-  supprimables et réordonnables. Les conditions lisent les propriétés (égalité, texte, comparaisons numériques,
+  supprimables et réordonnables. Les conditions lisent les propriétés, ainsi que le nom affiché et l'identifiant de chaque élément (égalité, texte, comparaisons numériques,
   valeurs absentes). La dernière règle correspondante gagne séparément pour la couleur et
   l’opacité : « CO2 > 1 000 → gris », puis « Bâtiment A → bleu », puis « Avancement → opacité ».
   Pour une propriété en pourcentage, 100 donne une opacité de 1 et 50 une opacité de 0,5 ;
@@ -122,7 +122,9 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   invisible »), masquer ou réafficher (« masque le niveau R+2 », « tout afficher »), mettre en
   évidence (« fais ressortir le bâtiment A » : surbrillance, le reste atténué par deux règles
   d’opacité retirables), configurer les mêmes règles de couleur/opacité que le panneau manuel et
-  organiser l’arbre par propriétés (« Bâtiment, puis Niveau, puis Classe IFC »). Les calculs et règles s’exécutent dans le navigateur ; seuls
+  organiser l’arbre par propriétés (« Bâtiment, puis Niveau, puis Classe IFC »). Il vise un
+  élément par son nom (« Mur pignon est ») ou, sans ambiguïté, par son identifiant, et vérifie
+  les noms des éléments touchés avant de répondre. Les calculs et règles s’exécutent dans le navigateur ; seuls
   le résumé, la conversation et des résultats bornés sont envoyés au modèle. Les contrôles
   manuels ne consomment aucun jeton d’IA.
 - **Usage et API** : l’assistant affiche les jetons d’entrée/sortie/total communiqués pendant

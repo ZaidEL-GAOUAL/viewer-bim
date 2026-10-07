@@ -3,6 +3,7 @@
 
 import { PATH_SEP, UNDEFINED_LABEL, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
 import { numericValue, validateAppearanceRules, type AppearanceRule, type RuleCondition } from '../data/appearanceRules.ts';
+import { ELEMENT_ID, ELEMENT_NAME, isElementField } from '../data/elementFields.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
 
 export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less';
@@ -41,7 +42,7 @@ export interface ToolOutcome {
 /** Définitions au format OpenAI (comprises par Workers AI, Groq, Cerebras). Renvoyées à chaque appel : courtes. */
 const FILTERS = {
   type: 'array',
-  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less. Liste vide = tous.',
+  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less. Liste vide = tous. property peut aussi être "#nom" (nom affiché de l’élément) ou "#id" (son identifiant).',
   items: { type: 'object', description: 'Filtre {property, op, value}.' },
 };
 const SCOPE = { type: 'string', description: '"model" (défaut) ou "selection" (éléments sélectionnés).' };
@@ -172,8 +173,14 @@ const COUNT_LIMIT = 40;
 
 /** Metadata only: computed geometry is intentionally unavailable to the assistant. */
 export function valueOf(context: ToolContext, index: number, path: string): PropValue | undefined {
+  if (path === ELEMENT_NAME) return context.labelOf(index);
+  if (path === ELEMENT_ID) return context.keys[index];
   return ownValue(context.store.propsOf(index), path);
 }
+
+/** Mots par lesquels on désigne le nom ou l'identifiant d'un élément, quand aucune propriété ne porte ce nom. */
+const NAME_WORDS = new Set(['nom', 'name', 'label', 'libelle', 'nom de l’element', "nom de l'element", 'nom affiche', 'element']);
+const ID_WORDS = new Set(['id', 'identifiant', 'globalid', 'global id', 'guid', 'cle', 'key', 'ifc id']);
 
 // ------------------------------------------------------------- résolution
 
@@ -188,17 +195,28 @@ function fold(text: string): string {
  */
 export function resolveProperty(store: PropertyStore, name: string): string | { error: string } {
   const paths = store.paths;
-  if (paths.includes(name)) return name;
+  if (paths.includes(name) || isElementField(name)) return name;
   const wanted = fold(name.replace(/\s*\/\s*/g, PATH_SEP));
   const exact = paths.filter((path) => fold(path) === wanted);
   if (exact.length === 1) return exact[0];
   const tails = paths.filter((path) => fold(path.slice(path.lastIndexOf(PATH_SEP) + PATH_SEP.length)) === wanted);
   if (tails.length === 1) return tails[0];
+  // Une propriété réelle l'emporte toujours ; sinon « nom » ou « identifiant » désignent l'élément lui-même.
+  if (tails.length === 0 && NAME_WORDS.has(wanted)) return ELEMENT_NAME;
+  if (tails.length === 0 && ID_WORDS.has(wanted)) return ELEMENT_ID;
   const partial = tails.length > 1 ? tails : paths.filter((path) => fold(path).includes(wanted));
   if (partial.length === 1) return partial[0];
   if (partial.length > 1) return { error: `Propriété « ${name} » ambiguë : ${partial.slice(0, 8).join(' ; ')}` };
-  return { error: `Propriété « ${name} » introuvable. Utilisez list_properties pour voir les noms exacts.` };
+  return { error: `Propriété « ${name} » introuvable. Utilisez list_properties pour voir les noms exacts ; pour viser un élément par son nom ou son identifiant, utilisez "#nom" ou "#id".` };
 }
+
+/** Noms des premiers éléments visés : le modèle vérifie qu'il a pris les bons. */
+function namesOf(context: ToolContext, indices: number[], limit = 10): { elements: string[]; more?: number } {
+  const elements = indices.slice(0, limit).map((index) => context.labelOf(index));
+  return indices.length > limit ? { elements, more: indices.length - limit } : { elements };
+}
+
+const NO_MATCH = 'Aucun élément ne vérifie ces filtres. Vérifiez la valeur exacte avec find_elements ou count_by ; un nom d’élément se filtre sur "#nom", un identifiant sur "#id".';
 
 function isMissing(value: PropValue | undefined): boolean {
   return value === undefined || value === null || value === '';
@@ -313,12 +331,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         return { property: path, distinct: distinct > 1000 ? '> 1000' : distinct, missing: undefinedCount, locked: !store.isEditable(path) };
       });
       const total = paths.length;
-      return { result: { total, properties }, note: `${plural(total, 'propriété')} listée${total > 1 ? 's' : ''}` };
+      // Le nom et l'identifiant de chaque élément se filtrent aussi : on les rappelle à chaque liste.
+      const elementFields = { '#nom': 'nom affiché de l’élément', '#id': 'identifiant de l’élément' };
+      return { result: { total, properties, elementFields }, note: `${plural(total, 'propriété')} listée${total > 1 ? 's' : ''}` };
     }
 
     case 'count_by': {
       const path = resolveProperty(store, String(args.property ?? ''));
       if (typeof path !== 'string') return { result: path, note: path.error };
+      if (isElementField(path)) return { result: { error: `${path} distingue chaque élément : utilisez find_elements avec un filtre sur ${path}.` }, note: 'Répartition impossible sur le nom ou l’identifiant' };
       const scope = args.scope === 'selection' ? context.selection : null;
       const counts = new Map<string, number>();
       for (const [label, members] of store.groups(path)) {
@@ -370,9 +391,10 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const indices = selectIndices(context, filters, args.scope);
       const isolate = args.isolate === true;
       const highlight = args.highlight === true;
+      if (indices.length === 0) return { result: { count: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
       context.select(indices, isolate);
       let dimmed = false;
-      if (highlight && context.setAppearanceRules && args.scope !== 'selection' && indices.length > 0) {
+      if (highlight && context.setAppearanceRules && args.scope !== 'selection') {
         // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité.
         // Deux règles empilées, reconnaissables à leur identifiant pour pouvoir les retirer.
         const conditions: RuleCondition[] = filters.map(({ path, filter }) => ({ property: path, op: filter.op, ...(filter.value !== undefined ? { value: filter.value } : {}) }));
@@ -389,9 +411,10 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       return {
         result: {
           count: indices.length,
+          ...namesOf(context, indices),
           isolated: isolate,
           highlighted: highlight,
-          ...(dimmed ? { note: `Le reste est atténué par les règles ${HIGHLIGHT_IDS.join(' et ')} ; pour revenir : update_view removeRuleIds.` } : {}),
+          ...(dimmed ? { rules: HIGHLIGHT_IDS } : {}),
         },
         note: `${plural(indices.length, 'élément')} ${verb}`,
       };
@@ -407,9 +430,9 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const visible = args.visible !== false;
       const indices = selectIndices(context, filters, args.scope);
-      if (indices.length === 0) return { result: { changed: 0, error: 'Aucun élément ne vérifie ces filtres.' }, note: 'Aucun élément concerné' };
+      if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
       context.setVisible(indices, visible);
-      return { result: { changed: indices.length, visible }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
+      return { result: { changed: indices.length, ...namesOf(context, indices), visible }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
     }
 
     case 'compute': {
