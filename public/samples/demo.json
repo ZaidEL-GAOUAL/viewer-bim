@@ -1,5 +1,21 @@
 {
   "version": 1,
+  "georeference": {
+    "latitude": 48.8562,
+    "longitude": 2.2985,
+    "elevation": 36,
+    "origin": [
+      0,
+      0,
+      0
+    ],
+    "trueNorth": [
+      0,
+      1
+    ],
+    "rotation": 0,
+    "source": "exemple"
+  },
   "elements": {
     "RMpIvF5jLado8i5KMrQscB": {
       "label": "Dalle RDC",

@@ -219,3 +219,13 @@ test('unflattenProperties ne se laisse pas piéger par des noms de membres de Ob
   assert.equal(Object.getPrototypeOf(nested), Object.prototype);
   assert.equal('x' in {}, false, 'Object.prototype n’a pas été modifié');
 });
+
+test('parseMetadata lit le bloc georeference et l’ignore s’il est inutilisable', () => {
+  const base = { version: 1, elements: { a: { properties: { Type: 'Mur' } } } };
+  const placed = parseMetadata({ ...base, georeference: { latitude: 45.7474, longitude: 4.6904, elevation: 12, rotation: 90, source: 'IfcSite' } });
+  assert.equal(placed.georeference?.latitude, 45.7474);
+  assert.equal(placed.georeference?.elevation, 12);
+  assert.ok(Math.abs(placed.georeference!.trueNorth[0] - 1) < 1e-9 && Math.abs(placed.georeference!.trueNorth[1]) < 1e-9);
+  assert.equal(parseMetadata({ ...base, georeference: { latitude: 'nord' } }).georeference, undefined);
+  assert.equal(parseMetadata(base).georeference, undefined);
+});

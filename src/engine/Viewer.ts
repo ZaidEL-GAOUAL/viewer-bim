@@ -79,12 +79,15 @@ export class Viewer {
   private moving = false;
   private resolutionScale = 1;
   private sharpenTimer = 0;
+  private externalCamera = false;
+  private readonly background = new Color(0xe9ebef);
   private width = 1;
   private height = 1;
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.renderer = new WebGLRenderer({ antialias: true, stencil: true, powerPreference: 'high-performance' });
+    // alpha : en mode carte, le fond devient transparent pour laisser voir le globe dessiné dessous.
+    this.renderer = new WebGLRenderer({ antialias: true, stencil: true, alpha: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
@@ -157,8 +160,50 @@ export class Viewer {
   };
 
   setBackground(color: string): void {
-    this.renderer.setClearColor(new Color(color), 1);
+    this.background.set(color);
+    this.renderer.setClearColor(this.background, this.externalCamera ? 0 : 1);
     this.invalidate();
+  }
+
+  /**
+   * Caméra pilotée de l'extérieur (le globe, en mode carte) : les contrôles d'orbite se taisent,
+   * le fond devient transparent, et chaque image est demandée par `applyCamera`.
+   */
+  setExternalCamera(active: boolean): void {
+    if (this.externalCamera === active) return;
+    this.externalCamera = active;
+    this.controls.enabled = !active;
+    this.renderer.domElement.classList.toggle('external-camera', active);
+    this.renderer.setClearColor(this.background, active ? 0 : 1);
+    if (!active) {
+      // Retour aux contrôles d'orbite : ils repartent de la caméra laissée par le globe.
+      this.camera.up.set(0, 1, 0);
+      this.controls.update();
+    }
+    this.invalidate();
+  }
+
+  /** Place la caméra (position, direction, haut, champ vertical en degrés) et dessine tout de suite. */
+  applyCamera(position: Vector3, direction: Vector3, up: Vector3, fov: number): void {
+    const camera = this.camera;
+    camera.position.copy(position);
+    camera.up.copy(up);
+    this.scratch.copy(position).add(direction);
+    camera.lookAt(this.scratch);
+    if (Math.abs(camera.fov - fov) > 1e-6) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
+    // Le point de pivot sert au plan proche (voir updateClipRange) : devant la caméra, à portée du modèle.
+    this.controls.target.copy(position).addScaledVector(direction, Math.max(this.sphere.radius, 1));
+    this.moving = true;
+    this.dirty = true;
+    this.renderNow();
+  }
+
+  /** Dessine maintenant si une image est demandée (même chemin que la boucle d'animation). */
+  renderNow(): void {
+    this.tick();
   }
 
   setCapColor(color: string): void {
@@ -181,8 +226,12 @@ export class Viewer {
   }
 
   /** Cadre la caméra sur une boîte, en conservant la direction de vue sauf indication contraire. */
+  /** En mode carte, le cadrage est délégué au globe ; renvoie vrai s'il l'a pris en charge. */
+  onExternalFit: ((box: Box3) => boolean) | null = null;
+
   fit(box: Box3, direction?: Vector3): void {
     if (box.isEmpty()) return;
+    if (this.externalCamera && this.onExternalFit?.(box)) return;
     const sphere = box.getBoundingSphere(new Sphere());
     const radius = Math.max(sphere.radius, 1e-4);
     const halfV = (this.camera.fov * Math.PI) / 360;
@@ -319,7 +368,7 @@ export class Viewer {
   }
 
   private readonly tick = (): void => {
-    this.controls.update();
+    if (!this.externalCamera) this.controls.update();
     if (!this.dirty) return;
     this.dirty = false;
     const motion = this.moving;

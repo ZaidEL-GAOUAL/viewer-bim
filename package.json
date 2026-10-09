@@ -13,6 +13,7 @@
     "sample": "node scripts/make-sample.mjs"
   },
   "dependencies": {
+    "cesium": "^1.146.0",
     "three": "^0.186.1"
   },
   "devDependencies": {

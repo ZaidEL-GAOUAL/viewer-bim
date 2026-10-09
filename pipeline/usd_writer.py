@@ -187,6 +187,25 @@ def _element(element: ElementData, entry: dict[str, Any] | None, used: set[str],
     return f'{indent}def Xform "{name}" (\n' + "\n".join(metadata) + f"\n{indent})\n{indent}{{\n{body}\n{indent}}}"
 
 
+def _georeference_layer_data(position: dict | None) -> str:
+    """Position de la maquette sur Terre dans les métadonnées du calque (voir geo/georeference.ts)."""
+    if not position:
+        return ""
+    origin = position.get("origin", [0.0, 0.0, 0.0])
+    north = position.get("trueNorth", [0.0, 1.0])
+    lines = [
+        "dictionary georeference = {",
+        f"            double latitude = {float(position['latitude'])!r}",
+        f"            double longitude = {float(position['longitude'])!r}",
+        f"            double elevation = {float(position.get('elevation', 0.0))!r}",
+        f"            double3 origin = ({float(origin[0])!r}, {float(origin[1])!r}, {float(origin[2])!r})",
+        f"            double2 trueNorth = ({float(north[0])!r}, {float(north[1])!r})",
+        f"            string source = {_quote(str(position.get('source', 'IfcSite')))}",
+        "        }",
+    ]
+    return "\n        " + "\n        ".join(lines)
+
+
 def write_usda(scene: Scene, metadata: dict[str, Any], generator: str = "viewer-bim") -> str:
     """Scène convertie au format USD texte. Les métadonnées sont écrites dans chaque élément."""
     entries = metadata.get("elements", {}) if metadata else {}
@@ -204,7 +223,7 @@ def write_usda(scene: Scene, metadata: dict[str, Any], generator: str = "viewer-
     customLayerData = {{
         int contractVersion = {CONTRACT_VERSION}
         string generator = {_quote(generator)}
-        string[] readOnly = [{', '.join(_quote(item) for item in (metadata or {}).get('readOnly', []))}]
+        string[] readOnly = [{', '.join(_quote(item) for item in (metadata or {}).get('readOnly', []))}]{_georeference_layer_data((metadata or {}).get('georeference'))}
     }}
 )
 

@@ -219,3 +219,25 @@ def test_metadata_declare_the_properties_the_viewer_must_not_edit(result):
     assert {"Classe IFC", "Niveau", "Matériaux", "Qto_*"} <= set(read_only)
     assert not any(item.startswith("Pset") for item in read_only)
     assert json.loads(result.metadata_json())["readOnly"] == read_only
+
+
+def test_georeference_comes_from_the_site_and_the_true_north(result):
+    position = result.metadata["georeference"]
+    assert position["latitude"] == pytest.approx(48.8584, abs=1e-6)
+    assert position["longitude"] == pytest.approx(2.2945, abs=1e-6)
+    assert position["elevation"] == pytest.approx(35.0)
+    assert position["origin"] == [0.0, 0.0, 0.0]
+    assert position["trueNorth"] == pytest.approx([0.17364818, 0.98480775], abs=1e-6)
+    assert position["source"] == "IfcSite"
+    assert "projected" not in position
+
+
+def test_model_without_site_coordinates_has_no_georeference():
+    import ifcopenshell.api
+
+    model = ifcopenshell.api.run("project.create_file", version="IFC4")
+    ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcProject", name="Vide")
+    ifcopenshell.api.run("root.create_entity", model, ifc_class="IfcSite", name="Sans position")
+    assert ifc_to_glb.georeference(model) is None
+    assert ifc_to_glb._degrees((45, 44, 50, 634155)) == pytest.approx(45.747398376, abs=1e-9)
+    assert ifc_to_glb._degrees((-4, 41, 25)) == pytest.approx(-(4 + 41 / 60 + 25 / 3600))

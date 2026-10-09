@@ -152,6 +152,31 @@ Une opacité fixe utilise `opacity` entre 0 et 1. Pour `opacityBy`, l’échelle
 absentes ou non numériques ne remplacent pas une opacité déjà définie. Les règles, comme les
 filtres de visibilité, concernent la vue courante et ne modifient pas les matériaux exportés.
 
+## 2 quater. Position sur Terre (`georeference`)
+
+Un bloc optionnel à la racine place la maquette sur la carte du viewer (option « Carte ») :
+
+```json
+"georeference": {
+  "latitude": 45.747398, "longitude": 4.690430, "elevation": 0,
+  "origin": [0, 0, 0], "trueNorth": [0, 1], "rotation": 0, "source": "IfcSite"
+}
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `latitude`, `longitude` | Position, en degrés décimaux (WGS 84), du point `origin` du repère du projet. |
+| `elevation` | Altitude de ce point, en mètres (0 par défaut). |
+| `origin` | Ce point, dans le repère du projet tel qu'il est dans l'IFC : X vers l'est du projet, Y vers son nord, Z vers le haut, en mètres ([0, 0, 0] par défaut). |
+| `trueNorth` ou `rotation` | Direction du nord vrai dans le plan du projet : un vecteur unitaire, ou un angle en degrés depuis l'axe Y, positif dans le sens horaire ([0, 1] / 0 par défaut). |
+| `source` | D'où vient la position : « IfcSite », « manuel »… (informatif). |
+
+Le convertisseur IFC le remplit depuis `IfcSite` (`RefLatitude`, `RefLongitude`, `RefElevation`,
+placement du site) et le nord vrai du contexte géométrique ; une `IfcMapConversion` (IFC4) est
+recopiée telle quelle sous `projected`, à titre indicatif. Sans ce bloc, la position se saisit
+dans la carte (ou d'un clic), et « JSON ↓ » l'enregistre. En USD, le même bloc est dans le
+`customLayerData` du calque (`dictionary georeference`).
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des

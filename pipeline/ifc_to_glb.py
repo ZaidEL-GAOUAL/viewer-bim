@@ -32,6 +32,8 @@ import numpy as np
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element as element_util
+import ifcopenshell.util.placement as placement_util
+import ifcopenshell.util.unit as unit_util
 
 CONTRACT_VERSION = 1
 
@@ -392,6 +394,66 @@ def write_glb(scene: Scene, generator: str) -> bytes:
 # ------------------------------------------------------------------- conversion
 
 
+def _degrees(parts: Any) -> float | None:
+    """Latitude ou longitude IFC : (degrés, minutes, secondes, millionièmes de seconde)."""
+    if not parts or len(parts) < 3:
+        return None
+    values = [float(v) for v in parts]
+    sign = -1.0 if values[0] < 0 or str(parts[0]).startswith("-") else 1.0
+    micro = abs(values[3]) if len(values) > 3 else 0.0
+    return sign * (abs(values[0]) + abs(values[1]) / 60 + (abs(values[2]) + micro / 1e6) / 3600)
+
+
+def georeference(model: Any) -> dict[str, Any] | None:
+    """Position du site sur Terre, d'après l'IFC, ou None s'il ne la donne pas.
+
+    Latitude/longitude et altitude viennent d'IfcSite ; l'origine est le placement du site dans
+    le repère du projet (mètres) ; le nord vrai vient du contexte géométrique. En IFC4, une
+    IfcMapConversion (coordonnées projetées) est recopiée telle quelle, à titre indicatif.
+    """
+    scale = unit_util.calculate_unit_scale(model)
+    for site in model.by_type("IfcSite"):
+        latitude = _degrees(site.RefLatitude)
+        longitude = _degrees(site.RefLongitude)
+        if latitude is None or longitude is None:
+            continue
+        origin = [0.0, 0.0, 0.0]
+        if site.ObjectPlacement is not None:
+            matrix = placement_util.get_local_placement(site.ObjectPlacement)
+            origin = [round(float(v) * scale, 6) for v in matrix[:3, 3]]
+        true_north = [0.0, 1.0]
+        for context in model.by_type("IfcGeometricRepresentationContext"):
+            direction = getattr(context, "TrueNorth", None)
+            if direction is not None and context.is_a() == "IfcGeometricRepresentationContext":
+                ratios = [float(v) for v in direction.DirectionRatios[:2]]
+                length = (ratios[0] ** 2 + ratios[1] ** 2) ** 0.5
+                if length > 0:
+                    true_north = [round(ratios[0] / length, 9), round(ratios[1] / length, 9)]
+                break
+        result: dict[str, Any] = {
+            "latitude": round(latitude, 9),
+            "longitude": round(longitude, 9),
+            "elevation": round(float(site.RefElevation or 0.0) * scale, 6),
+            "origin": origin,
+            "trueNorth": true_north,
+            "source": "IfcSite",
+        }
+        if model.schema != "IFC2X3":
+            for conversion in model.by_type("IfcMapConversion"):
+                crs = conversion.TargetCRS
+                result["projected"] = {
+                    "crs": getattr(crs, "Name", None),
+                    "eastings": float(conversion.Eastings),
+                    "northings": float(conversion.Northings),
+                    "height": float(conversion.OrthogonalHeight),
+                    "xAxis": [float(conversion.XAxisAbscissa or 1.0), float(conversion.XAxisOrdinate or 0.0)],
+                    "scale": float(conversion.Scale or 1.0),
+                }
+                break
+        return result
+    return None
+
+
 def convert(
     model: Any,
     *,
@@ -498,9 +560,13 @@ def convert(
         "failed": failed[:50],
         "seconds": round(time.perf_counter() - started, 2),
     }
+    metadata: dict[str, Any] = {"version": CONTRACT_VERSION, "readOnly": READ_ONLY, "elements": elements}
+    position = georeference(model)
+    if position is not None:
+        metadata["georeference"] = position
     return Conversion(
         scene=scene,
-        metadata={"version": CONTRACT_VERSION, "readOnly": READ_ONLY, "elements": elements},
+        metadata=metadata,
         report=report,
         generator=f"viewer-bim ifc_to_glb (IfcOpenShell {ifcopenshell.version})",
     )

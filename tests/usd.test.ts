@@ -97,3 +97,13 @@ test('la liste readOnly du calque est lue avec les métadonnées', () => {
   assert.ok(metadata.readOnly?.includes('Classe IFC'));
   assert.ok(metadata.readOnly?.includes('Qto_*'));
 });
+
+test('la position sur Terre du calque USD est lue comme celle du JSON', () => {
+  const { metadata } = loadUsda(text);
+  assert.ok(metadata?.georeference, 'georeference attendue dans customLayerData');
+  assert.ok(Math.abs(metadata!.georeference!.latitude - 48.8584) < 1e-6);
+  assert.ok(Math.abs(metadata!.georeference!.longitude - 2.2945) < 1e-6);
+  assert.equal(metadata!.georeference!.elevation, 35);
+  assert.ok(Math.abs(metadata!.georeference!.trueNorth[0] - 0.17364818) < 1e-6);
+  assert.equal(metadata!.georeference!.source, 'IfcSite');
+});

@@ -23,12 +23,14 @@ import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
 import { SectionPanel } from './SectionPanel.ts';
+import { MapPanel } from './MapPanel.ts';
+import { georeferenceToJson, type Georeference } from '../geo/georeference.ts';
 import { TreePanel } from './TreePanel.ts';
 import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping';
+export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference';
 export type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
@@ -69,6 +71,9 @@ export class App {
   model: Model | null = null;
   store = new PropertyStore(0);
   metadata: Metadata | null = null;
+  /** Position de la maquette sur Terre : lue dans le fichier, ou saisie dans la carte. */
+  georeference: Georeference | null = null;
+  private mapPanel!: MapPanel;
   readonly selection = new Set<number>();
   selectionSource: SelectionSource = 'panel';
   /** Dernier élément ajouté à la sélection par un clic dans la vue 3D. */
@@ -166,6 +171,9 @@ export class App {
     this.toolButtons.set('select', selectTool);
     const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el);
 
+    const mapToggle = button('Carte', () => {
+      void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
+    }, { title: 'Poser la maquette sur la carte (globe, plan ou photo aérienne)', attrs: { 'aria-pressed': 'false' } });
     const sectionPanel = new SectionPanel(this);
     const sectionToggle = button('Coupes', () => {
       const open = sectionPanel.toggle();
@@ -259,6 +267,7 @@ export class App {
       ),
       tools, clearMeasures, history,
       h('div', { class: 'bar-group' },
+        mapToggle,
         sectionToggle,
         button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
         this.maskButton,
@@ -284,7 +293,13 @@ export class App {
         ),
       ),
     );
-    this.viewport = h('main', { class: 'viewport' }, canvasHost, overlayRoot, this.emptyEl, this.stats, this.toastEl, this.busyEl);
+    const globeHost = h('div', { class: 'globe-host', attrs: { hidden: '' } });
+    this.viewport = h('main', { class: 'viewport' }, globeHost, canvasHost, overlayRoot, this.emptyEl, this.stats, this.toastEl, this.busyEl);
+    this.mapPanel = new MapPanel(this, globeHost);
+    this.mapPanel.onChange = () => {
+      globeHost.hidden = !this.mapPanel.isOpen;
+      mapToggle.setAttribute('aria-pressed', String(this.mapPanel.isOpen));
+    };
 
     // Après la conversion d'un IFC : rappel du résultat et téléchargement des deux fichiers produits.
     this.conversionText = h('p', { class: 'hint' });
@@ -299,7 +314,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, sectionPanel.el, this.conversionEl));
+    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, sectionPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -739,7 +754,14 @@ export class App {
   exportMetadata(): string {
     const model = this.model;
     if (!model) return '';
-    return JSON.stringify(this.store.export(model.keys));
+    const out = this.store.export(model.keys) as Record<string, unknown>;
+    if (this.georeference) out.georeference = georeferenceToJson(this.georeference);
+    return JSON.stringify(out);
+  }
+
+  setGeoreference(georeference: Georeference | null): void {
+    this.georeference = georeference;
+    this.emit('georeference');
   }
 
   /**
@@ -959,6 +981,7 @@ export class App {
       }
     }
     this.metadata = metadata;
+    this.georeference = metadata?.georeference ?? null;
     this.fileName = name;
     this.viewer.setModel(model);
     previous?.dispose();
@@ -1064,7 +1087,10 @@ export class App {
   }
 
   private bindPointer(): void {
-    const canvas = this.viewer.renderer.domElement;
+    // Les gestes sont écoutés sur la zone de vue : en mode carte, c'est le canvas du globe (dessous)
+    // qui les reçoit, et ils remontent ici. Les cartes flottantes et leurs boutons sont ignorés.
+    const canvas = this.viewport;
+    const onCanvas = (event: Event) => event.target instanceof HTMLCanvasElement;
     let down: { x: number; y: number; button: number } | null = null;
     let hoverX = 0;
     let hoverY = 0;
@@ -1074,6 +1100,7 @@ export class App {
     const active = new Set<number>();
     const release = (event: PointerEvent) => active.delete(event.pointerId);
     canvas.addEventListener('pointerdown', (event) => {
+      if (!onCanvas(event)) return;
       active.add(event.pointerId);
       down = active.size === 1 ? { x: event.clientX, y: event.clientY, button: event.button } : null;
     });
@@ -1093,7 +1120,7 @@ export class App {
       this.handleClick(event);
     });
     canvas.addEventListener('pointermove', (event) => {
-      if (!isPointMeasure(this.tool) || event.buttons !== 0) return;
+      if (!onCanvas(event) || !isPointMeasure(this.tool) || event.buttons !== 0) return;
       hoverX = event.clientX;
       hoverY = event.clientY;
       if (hoverQueued) return;
@@ -1105,7 +1132,7 @@ export class App {
     });
     canvas.addEventListener('pointerleave', () => this.measure.leave());
     canvas.addEventListener('dblclick', (event) => {
-      if (isPointMeasure(this.tool) || this.viewer.sectionHandles.blocksPicking) return;
+      if (!onCanvas(event) || isPointMeasure(this.tool) || this.viewer.sectionHandles.blocksPicking) return;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.fitTo([hit.element]);
     });

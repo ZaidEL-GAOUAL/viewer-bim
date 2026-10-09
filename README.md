@@ -85,6 +85,14 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   six lots dépliables et 220 tâches par objet, avec des dates fictives décalées et des lots simultanés.
   Tout s’exécute localement sans IA ni modification de géométrie ; voir le
   [contrat du planning et ses exemples](docs/contrat-planning.md).
+- **Carte** : la maquette posée sur la Terre, dans son environnement réel — plan OpenStreetMap,
+  photo aérienne ou plan IGN (France), gratuits et sans clé. Le globe est dessiné par CesiumJS,
+  chargé à la demande (quelques mégaoctets, une fois) sous le canvas du viewer, dont la caméra
+  suit celle du globe : sélection, fiche, coupes, mesures, règles d'apparence, planning 4D et
+  assistant fonctionnent sur la carte comme ailleurs. La position vient de l'IFC
+  (`IfcSite`), du JSON (`georeference`, voir le contrat), ou se saisit — latitude, longitude,
+  altitude, orientation du nord — ou se prend d'un clic sur la carte ; « JSON ↓ » l'enregistre.
+  CesiumJS est la seule bibliothèque utilisée en plus de three.js, et seulement pour la carte.
 - **Coupes** : trois plans initialement alignés sur les axes, chacun avec sa position et son sens,
   et le remplissage des sections coupées. La flèche de déplacement et les cercles de rotation
   coexistent sur le plan actif ; tourner conserve le centre de la poignée. « Réaligner » restaure

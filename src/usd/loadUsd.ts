@@ -4,6 +4,7 @@
 
 import { BufferAttribute, BufferGeometry, DoubleSide, FrontSide, LinearSRGBColorSpace, Matrix4, Mesh, MeshStandardMaterial, Object3D } from 'three';
 import { flattenProperties, type Metadata, type MetadataEntry } from '../data/metadata.ts';
+import { parseGeoreference } from '../geo/georeference.ts';
 import type { ModelSource } from '../engine/buildModel.ts';
 import { parseUsda, type UsdDictionary, type UsdLayer, type UsdPath, type UsdPrim, type UsdValue } from './usda.ts';
 
@@ -233,6 +234,12 @@ export function loadUsda(text: string): LoadedUsd {
   const layerData = layer.meta.customLayerData as UsdDictionary | undefined;
   if (metadata && Array.isArray(layerData?.readOnly)) {
     metadata.readOnly = layerData.readOnly.filter((item): item is string => typeof item === 'string');
+  }
+  const position = layerData?.georeference;
+  if (metadata && position && typeof position === 'object' && !Array.isArray(position)) {
+    // Les tuples USD (double3, double2) arrivent en tableaux : même forme que le JSON.
+    const georeference = parseGeoreference(position);
+    if (georeference) metadata.georeference = georeference;
   }
   let meshes = 0;
   root.traverse((object) => {

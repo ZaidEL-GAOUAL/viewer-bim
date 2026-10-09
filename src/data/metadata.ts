@@ -1,6 +1,8 @@
 // Lecture du fichier de métadonnées (voir docs/contrat-metadonnees.md) et index des propriétés.
 // Rien ici ne suppose un nom de propriété : tout est découvert dans le fichier.
 
+import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
+
 export type PropValue = string | number | boolean | null;
 export type FlatProps = Record<string, PropValue>;
 
@@ -18,6 +20,8 @@ export interface Metadata {
   readOnly?: string[];
   /** Complete snapshots replace embedded properties for matching elements. Older JSON merges. */
   propertiesMode?: 'replace';
+  /** Position de la maquette sur Terre (voir geo/georeference.ts), si le fichier la donne. */
+  georeference?: Georeference;
 }
 
 /**
@@ -126,6 +130,8 @@ export function parseMetadata(json: unknown): Metadata {
   const metadata: Metadata = { version, elements };
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
+  const georeference = parseGeoreference(json.georeference);
+  if (georeference) metadata.georeference = georeference;
   return metadata;
 }
 

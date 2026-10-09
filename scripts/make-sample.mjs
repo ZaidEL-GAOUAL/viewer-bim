@@ -418,7 +418,9 @@ binHeader.writeUInt32LE(0x004e4942, 4);
 
 mkdirSync(outDir, { recursive: true });
 writeFileSync(join(outDir, `${baseName}.glb`), Buffer.concat([header, jsonHeader, json, binHeader, bin]));
-writeFileSync(join(outDir, `${baseName}.json`), JSON.stringify({ version: 1, elements: metadata }, null, large ? 0 : 2));
+// Position sur Terre, pour l'option Carte : un terrain libre du Champ-de-Mars à Paris (fictif).
+const georeference = { latitude: 48.8562, longitude: 2.2985, elevation: 36, origin: [0, 0, 0], trueNorth: [0, 1], rotation: 0, source: 'exemple' };
+writeFileSync(join(outDir, `${baseName}.json`), JSON.stringify({ version: 1, georeference, elements: metadata }, null, large ? 0 : 2));
 
 const elementCount = nodes.filter((node) => node.extras?.id).length;
 console.log(`${baseName}.glb : ${elementCount} éléments, ${Object.keys(metadata).length} entrées de métadonnées`);

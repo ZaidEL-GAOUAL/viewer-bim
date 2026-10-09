@@ -1291,3 +1291,27 @@ button[aria-pressed='true'] {
 .dimensions-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .dimensions-values { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: normal; }
 .dimensions-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+
+/* -------------------------------------------------------------------- carte */
+
+.globe-host { position: absolute; inset: 0; z-index: 0; }
+.globe-host[hidden] { display: none; }
+.globe-host.picking { cursor: crosshair; }
+.globe-host .cesium-viewer, .globe-host .cesium-widget, .globe-host .cesium-widget canvas { width: 100%; height: 100%; }
+.globe-host .cesium-viewer-bottom { right: 12px; bottom: 6px; left: auto; font-size: 10px; }
+.globe-host .cesium-widget-credits { color: var(--muted); }
+.globe-host .cesium-credit-logoContainer { display: none; }
+/* La maquette se dessine sur un canvas transparent par-dessus le globe (ordre du DOM) ; en mode
+   carte, le canvas laisse passer la souris jusqu'au globe, qui pilote la caméra. */
+.canvas-host { pointer-events: none; }
+.canvas-host canvas { pointer-events: auto; }
+.canvas-host canvas.external-camera { pointer-events: none; }
+.map-status.warning { color: var(--danger); }
+.map-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.map-row select { flex: 1; min-width: 0; }
+.map-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; margin-top: 8px; }
+.map-field { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
+.map-field input { width: 100%; min-width: 0; font: inherit; color: var(--text); }
+.map-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.map-card .hint { padding: 6px 0 0; font-size: 11px; }

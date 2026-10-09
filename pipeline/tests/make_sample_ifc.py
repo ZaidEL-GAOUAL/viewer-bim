@@ -34,6 +34,11 @@ def build(version: str = "IFC4", storeys: int = 2) -> ifcopenshell.file:
     body = run("context.add_context", model, context_type="Model", context_identifier="Body", target_view="MODEL_VIEW", parent=context)
 
     site = run("root.create_entity", model, ifc_class="IfcSite", name="Campus")
+    # Géoréférencement : Paris, Champ-de-Mars (48°51′30,24″ N, 2°17′40,2″ E), 35 m, nord tourné de 10°.
+    site.RefLatitude = (48, 51, 30, 240000)
+    site.RefLongitude = (2, 17, 40, 200000)
+    site.RefElevation = 35000.0  # millimètres, comme le reste du modèle
+    context.TrueNorth = model.createIfcDirection((0.17364818, 0.98480775))
     building = run("root.create_entity", model, ifc_class="IfcBuilding", name="Bâtiment A")
     run("aggregate.assign_object", model, relating_object=project, products=[site])
     run("aggregate.assign_object", model, relating_object=site, products=[building])
