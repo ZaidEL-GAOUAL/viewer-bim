@@ -95,6 +95,12 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   assistant fonctionnent sur la carte comme ailleurs. La position vient de l'IFC
   (`IfcSite`), du JSON (`georeference`, voir le contrat), ou se saisit — latitude, longitude,
   altitude, orientation du nord — ou se prend d'un clic sur la carte ; « JSON ↓ » l'enregistre.
+  Autour de la maquette, au choix : le relief mondial (Terrain Tiles, AWS Open Data, gratuit et
+  sans clé ; « Au sol » pose la maquette dessus) et les bâtiments du quartier lus dans
+  OpenStreetMap (API Overpass, gratuite), extrudés d'après leur hauteur. Avec une clé, en
+  option et jamais par défaut : Cesium World Terrain et Cesium OSM Buildings (jeton Cesium ion),
+  ou les tuiles 3D photoréalistes de Google (clé Google Maps Platform) ; les clés restent dans
+  le navigateur, jamais dans les fichiers.
   CesiumJS est la seule bibliothèque utilisée en plus de three.js, et seulement pour la carte.
 - **Coupes** : trois plans initialement alignés sur les axes, chacun avec sa position et son sens,
   et le remplissage des sections coupées. La flèche de déplacement et les cercles de rotation

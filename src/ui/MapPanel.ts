@@ -1,10 +1,29 @@
 import { Box3 } from 'three';
 import { azimuthOf, trueNorthFromAzimuth } from '../geo/georeference.ts';
-import { GlobeView, IMAGERY, type ImageryKind } from '../geo/GlobeView.ts';
+import { GlobeView, IMAGERY, TERRAINS, type ImageryKind, type TerrainKind } from '../geo/GlobeView.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
 
 const number = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 6, useGrouping: false });
+const KEY_ION = 'viewer-bim.cesiumIonToken';
+const KEY_GOOGLE = 'viewer-bim.googleMapsKey';
+
+function readKey(name: string): string {
+  try {
+    return localStorage.getItem(name) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function writeKey(name: string, value: string): void {
+  try {
+    if (value) localStorage.setItem(name, value);
+    else localStorage.removeItem(name);
+  } catch {
+    // Stockage indisponible (navigation privée) : la clé ne vaut que pour cette session.
+  }
+}
 
 /**
  * Carte « Carte » : le globe sous la maquette (CesiumJS, chargé à la demande), le choix du fond,
@@ -19,6 +38,7 @@ export class MapPanel {
   private readonly fields = { latitude: h('input'), longitude: h('input'), elevation: h('input'), rotation: h('input') };
   private open = false;
   private loading = false;
+  private keysOpen = false;
   /** Appelé quand le globe s'ouvre ou se ferme (l'application montre ou cache son hôte). */
   onChange: () => void = () => {};
 
@@ -41,7 +61,9 @@ export class MapPanel {
       input.setAttribute('aria-label', { latitude: 'Latitude', longitude: 'Longitude', elevation: 'Altitude (m)', rotation: 'Rotation du nord (°)' }[key] ?? key);
       input.addEventListener('change', () => this.applyFields());
     }
-    this.globe.onModelStatus = () => this.render();
+    this.globe.onStatus = () => this.render();
+    this.globe.onNotice = (message, warning) => app.toast(message, warning);
+    this.globe.setKeys(readKey(KEY_ION), readKey(KEY_GOOGLE));
     app.on('model', () => this.onModel());
     app.on('georeference', () => {
       // Position saisie, cliquée ou reprise du fichier : le globe déplace la maquette.
@@ -136,6 +158,18 @@ export class MapPanel {
     });
   }
 
+  /** Altitude = hauteur du sol à la position de la maquette, d'après le relief ou les tuiles 3D affichés. */
+  private async placeOnGround(): Promise<void> {
+    const current = this.app.georeference;
+    if (!current) return;
+    const height = await this.globe.groundHeight();
+    if (height === null) return;
+    const elevation = Math.round(height * 100) / 100;
+    if (elevation === current.elevation) return;
+    this.app.setGeoreference({ ...current, elevation, source: 'manuel' });
+    this.app.toast(`Maquette posée au sol : altitude ${number.format(elevation)} m.`);
+  }
+
   private render(): void {
     clear(this.body);
     const { app } = this;
@@ -150,9 +184,10 @@ export class MapPanel {
     if (this.globe.active) {
       this.status.classList.remove('warning');
       const modelStatus = this.globe.modelStatus;
-      const sent = modelStatus === 'loading' ? ' Envoi de la maquette au globe…'
+      const osm = this.globe.osmStatus;
+      const sent = (modelStatus === 'loading' ? ' Envoi de la maquette au globe…'
         : modelStatus === 'error' ? ` Le globe n’a pas pu dessiner la maquette (${this.globe.modelError}) ; le viewer la garde.`
-        : '';
+        : '') + (osm === 'loading' ? ' Lecture des bâtiments OpenStreetMap…' : osm === 'on' ? ` ${this.globe.osmBuildingsCount} bâtiments OpenStreetMap alentour.` : '');
       this.status.textContent = georeference
         ? `Maquette posée à ${number.format(georeference.latitude)}, ${number.format(georeference.longitude)}${georeference.source ? ` (${georeference.source === 'manuel' ? 'position saisie' : `d’après ${georeference.source}`})` : ''}.${sent}`
         : 'Le fichier ne donne pas la position de la maquette : saisissez-la ci-dessous, ou cliquez sur la carte.';
@@ -172,6 +207,50 @@ export class MapPanel {
     };
     fill();
     const field = (label: string, input: HTMLInputElement) => h('label', { class: 'map-field' }, h('span', { text: label }), input);
+
+    const keys = this.globe.keys;
+    const terrain = h('select', { attrs: { 'aria-label': 'Relief' } });
+    for (const item of TERRAINS) {
+      const option = h('option', { text: item.label, attrs: { value: item.id, title: item.hint } });
+      if (item.needsIon && !keys.ion) option.disabled = true;
+      terrain.append(option);
+    }
+    terrain.value = this.globe.terrainKind;
+    terrain.addEventListener('change', () => this.globe.setTerrain(terrain.value as TerrainKind));
+
+    const check = (label: string, checked: boolean, enabled: boolean, title: string, onChange: (on: boolean) => void) => {
+      const input = h('input');
+      input.type = 'checkbox';
+      input.checked = checked;
+      input.disabled = !enabled;
+      input.addEventListener('change', () => onChange(input.checked));
+      return h('label', { class: 'map-check', attrs: { title } }, input, h('span', { text: label }));
+    };
+    const surroundings = h('div', { class: 'map-checks' },
+      check('Bâtiments OpenStreetMap', this.globe.osmBuildingsShown, true, 'Gratuit, sans clé : les bâtiments du quartier (API Overpass), extrudés d’après leur hauteur ou leur nombre de niveaux.', (on) => this.globe.setOsmBuildings(on)),
+      check('Cesium OSM Buildings (clé ion)', this.globe.ionBuildingsShown, Boolean(keys.ion), 'Bâtiments 3D du monde entier par Cesium ion ; demande un jeton ion.', (on) => void this.globe.setIonBuildings(on)),
+      check('Google 3D photoréaliste (clé Google)', this.globe.googleTilesShown, Boolean(keys.google), 'Tuiles 3D photoréalistes de Google Maps Platform ; demande une clé Google (facturation Google).', (on) => void this.globe.setGoogleTiles(on)),
+    );
+
+    const ionInput = h('input', { attrs: { type: 'password', placeholder: 'Jeton Cesium ion', autocomplete: 'off', 'aria-label': 'Jeton Cesium ion' } });
+    ionInput.value = keys.ion;
+    const googleInput = h('input', { attrs: { type: 'password', placeholder: 'Clé Google Maps Platform', autocomplete: 'off', 'aria-label': 'Clé Google Maps Platform' } });
+    googleInput.value = keys.google;
+    const saveKeys = () => {
+      writeKey(KEY_ION, ionInput.value.trim());
+      writeKey(KEY_GOOGLE, googleInput.value.trim());
+      this.globe.setKeys(ionInput.value, googleInput.value);
+    };
+    ionInput.addEventListener('change', saveKeys);
+    googleInput.addEventListener('change', saveKeys);
+    const keysDetails = h('details', { class: 'map-keys' },
+      h('summary', { text: 'Clés (facultatif)' }),
+      h('p', { class: 'hint', text: 'Pour le relief et les bâtiments de Cesium ion, ou les tuiles 3D de Google. Gardées dans ce navigateur seulement, jamais dans les fichiers.' }),
+      ionInput,
+      googleInput,
+    );
+    keysDetails.open = this.keysOpen;
+    keysDetails.addEventListener('toggle', () => { this.keysOpen = keysDetails.open; });
     const pick = button('Placer au clic', () => {
       if (!this.globe.active) return;
       pick.setAttribute('aria-pressed', 'true');
@@ -184,18 +263,24 @@ export class MapPanel {
       });
     }, { title: 'Le prochain clic sur le globe donne la position de la maquette', attrs: { 'aria-pressed': 'false' } });
     const fromFile = app.metadata?.georeference;
+    const ground = button('Au sol', () => void this.placeOnGround(), { title: 'Altitude = hauteur du sol (relief ou tuiles 3D) à cette position' });
+    ground.disabled = !georeference;
     this.body.append(
       h('div', { class: 'map-row' }, h('span', { class: 'field-label', text: 'Fond' }), imagery),
+      h('div', { class: 'map-row' }, h('span', { class: 'field-label', text: 'Relief' }), terrain),
+      surroundings,
       h('div', { class: 'map-fields' },
         field('Latitude', this.fields.latitude), field('Longitude', this.fields.longitude),
         field('Altitude (m)', this.fields.elevation), field('Nord (°)', this.fields.rotation),
       ),
       h('div', { class: 'map-actions' },
         pick,
+        ground,
         button('Cadrer', () => this.globe.flyTo(model.box, 1), { title: 'Voler jusqu’à la maquette' }),
         fromFile ? button('Position du fichier', () => app.setGeoreference(fromFile), { title: 'Revenir à la position lue dans le fichier' }) : null,
       ),
-      h('p', { class: 'hint', text: 'Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. La position est enregistrée dans « JSON ↓ ». Cartes : OpenStreetMap et IGN, gratuites, sans clé.' }),
+      keysDetails,
+      h('p', { class: 'hint', text: 'Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. « Au sol » pose la maquette sur le relief choisi. La position est enregistrée dans « JSON ↓ ». Cartes, relief mondial et bâtiments OpenStreetMap : gratuits, sans clé.' }),
     );
   }
 }

@@ -1315,3 +1315,10 @@ button[aria-pressed='true'] {
 .map-field input { width: 100%; min-width: 0; font: inherit; color: var(--text); }
 .map-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .map-card .hint { padding: 6px 0 0; font-size: 11px; }
+.map-checks { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.map-check { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.map-check input { margin: 0; }
+.map-check:has(input:disabled) { color: var(--muted); cursor: default; }
+.map-keys { margin-top: 8px; font-size: 12px; }
+.map-keys summary { cursor: pointer; color: var(--muted); }
+.map-keys input { display: block; width: 100%; margin-top: 6px; font: inherit; color: var(--text); }
