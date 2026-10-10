@@ -257,6 +257,9 @@ export class GlobeView {
     this.terrain = kind;
     this.applyTerrain();
     this.reframe();
+    if (kind !== 'ion' && this.ionBuildingsWanted) {
+      this.onNotice('Les bâtiments Cesium sont bâtis sur Cesium World Terrain : sur un autre relief, ils ne reposent exactement au sol qu’autour de la maquette.');
+    }
     this.onStatus();
   }
 
@@ -440,24 +443,36 @@ export class GlobeView {
     return enu.x >= footprint.minE && enu.x <= footprint.maxE && enu.y >= footprint.minN && enu.y <= footprint.maxN;
   }
 
-  /** Cesium OSM Buildings (tuiles 3D de Cesium ion, clé nécessaire). */
+  /**
+   * Cesium OSM Buildings (tuiles 3D de Cesium ion, clé nécessaire). Ils sont bâtis sur Cesium
+   * World Terrain : ce relief est activé avec eux, sinon ils flotteraient ou s'enfonceraient là
+   * où un autre relief s'écarte de celui-là (le décalage d'alignIonBuildings ne vaut qu'au pied
+   * de la maquette).
+   */
   async setIonBuildings(shown: boolean): Promise<void> {
     this.ionBuildingsWanted = shown;
     const cesium = this.cesium, globe = this.globe;
     if (!cesium || !globe) return;
-    if (this.ionBuildings) {
-      this.ionBuildings.show = shown;
-      globe.scene.requestRender();
-      this.onStatus();
-      return;
-    }
-    if (!shown) return;
-    if (!this.ionToken) {
+    if (shown && !this.ionToken) {
       this.ionBuildingsWanted = false;
       this.onNotice('Cesium OSM Buildings demande un jeton Cesium ion (voir « Clés »).', true);
       this.onStatus();
       return;
     }
+    if (shown && this.terrain !== 'ion') {
+      this.terrain = 'ion';
+      this.applyTerrain();
+      this.reframe();
+      this.onNotice('Relief : Cesium World Terrain, sur lequel les bâtiments Cesium sont bâtis.');
+    }
+    if (this.ionBuildings) {
+      this.ionBuildings.show = shown;
+      void this.alignIonBuildings();
+      globe.scene.requestRender();
+      this.onStatus();
+      return;
+    }
+    if (!shown) return;
     try {
       const tileset = await cesium.createOsmBuildingsAsync();
       if (!this.globe) { tileset.destroy(); return; }
