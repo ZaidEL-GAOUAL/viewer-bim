@@ -42,6 +42,8 @@ export class ElementState {
   /** Présentation 4D indépendante : 0 contexte, 1 à venir, 2 en cours, 3 terminé. */
   readonly scheduleUniform: IUniform<DataTexture>;
   readonly onOpacityChange = new Set<() => void>();
+  /** Prévenu après chaque lot de changements (commit, planning, opacité) : un autre moteur peut recopier l'état. */
+  readonly onChange = new Set<() => void>();
   private readonly opacityData: Float32Array;
   private readonly scheduleData: Uint8Array;
   /** Rouge = état 4D ; vert = facteur de fondu. Une seule texture et un seul accès GPU. */
@@ -133,6 +135,14 @@ export class ElementState {
     }
     this.scheduleUniform.value.needsUpdate = true;
     if (this.hasTranslucency !== wasTranslucent) for (const notify of this.onOpacityChange) notify();
+    this.notifyChange();
+  }
+
+  /** État 4D d'un élément : 0 contexte, 1 à venir, 2 en cours, 3 terminé. */
+  scheduleStateOf(index: number): number { return this.scheduleData[index]; }
+
+  private notifyChange(): void {
+    for (const notify of this.onChange) notify();
   }
 
   get hasScheduleFade(): boolean { return this.scheduleFades.size > 0; }
@@ -155,7 +165,10 @@ export class ElementState {
       }
       if (elapsed === 1) this.scheduleFades.delete(index);
     }
-    if (changed) this.scheduleUniform.value.needsUpdate = true;
+    if (changed) {
+      this.scheduleUniform.value.needsUpdate = true;
+      this.notifyChange();
+    }
     if (this.hasTranslucency !== wasTranslucent) for (const notify of this.onOpacityChange) notify();
     return this.hasScheduleFade;
   }
@@ -227,6 +240,7 @@ export class ElementState {
   commit(): void {
     this.texture.needsUpdate = true;
     this.opacityUniform.value.needsUpdate = true;
+    this.notifyChange();
   }
 
   dispose(): void {

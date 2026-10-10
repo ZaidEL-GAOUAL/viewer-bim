@@ -1,11 +1,14 @@
-// Le globe sous la maquette : CesiumJS dessine la Terre, l'imagerie et le relief dans un canvas
-// placé derrière le nôtre ; notre moteur garde la maquette, les coupes, les mesures et tout le
-// reste, avec une caméra copiée sur celle du globe à chaque image. Cesium n'est chargé (plusieurs
-// mégaoctets) qu'à la première ouverture de la carte.
+// Le globe sous la maquette : CesiumJS dessine la Terre, l'imagerie, le relief et — dès qu'elle
+// est posée — la maquette elle-même (voir GlobeModel), dans un canvas placé derrière le nôtre ;
+// notre moteur garde les coupes, les mesures, les poignées et l'état des éléments, avec une
+// caméra copiée sur celle du globe à chaque image. Cesium n'est chargé (plusieurs mégaoctets)
+// qu'à la première ouverture de la carte.
 
 import { Box3, Sphere, Vector3 } from 'three';
+import type { Model } from '../engine/Model.ts';
 import type { Viewer } from '../engine/Viewer.ts';
 import { enuToLocal, enuVectorToLocal, localToEnu, type Georeference } from './georeference.ts';
+import { GlobeModel, type GlobeModelStatus } from './GlobeModel.ts';
 
 type Cesium = typeof import('cesium');
 
@@ -41,6 +44,10 @@ export class GlobeView {
   private enuToEcef: import('cesium').Matrix4 | null = null;
   private ecefToEnu: import('cesium').Matrix4 | null = null;
   private pickHandler: ((position: { latitude: number; longitude: number }) => void) | null = null;
+  private model: Model | null = null;
+  private globeModel: GlobeModel | null = null;
+  /** Prévenu quand la maquette dessinée par le globe change d'état (envoi, prête, échec). */
+  onModelStatus: () => void = () => {};
   private syncing = false;
   /** Dernière caméra copiée : une image du globe sans mouvement ne redessine pas la maquette. */
   private lastCamera = new Float64Array(9);
@@ -57,6 +64,15 @@ export class GlobeView {
 
   get imageryKind(): ImageryKind {
     return this.imagery;
+  }
+
+  /** État de la maquette côté globe ; null tant qu'elle n'est pas posée (pas de position). */
+  get modelStatus(): GlobeModelStatus | null {
+    return this.globeModel?.status ?? null;
+  }
+
+  get modelError(): string {
+    return this.globeModel?.error ?? '';
   }
 
   async open(): Promise<void> {
@@ -98,6 +114,8 @@ export class GlobeView {
   close(): void {
     const globe = this.globe;
     if (!globe) return;
+    this.globeModel?.dispose();
+    this.globeModel = null;
     globe.scene.postRender.removeEventListener(this.sync);
     globe.canvas.removeEventListener('click', this.onClick);
     globe.destroy();
@@ -123,6 +141,51 @@ export class GlobeView {
     this.updateFrame();
     this.cameraKnown = false;
     this.sync();
+    this.refreshModel();
+  }
+
+  /** La maquette que le globe doit dessiner (null : aucune). Elle est envoyée dès qu'elle a une position. */
+  setModel(model: Model | null): void {
+    if (this.model === model) return;
+    this.model = model;
+    this.globeModel?.dispose();
+    this.globeModel = null;
+    this.refreshModel();
+  }
+
+  private refreshModel(): void {
+    const matrix = this.modelMatrix();
+    if (!matrix || !this.model || !this.globe || !this.cesium) {
+      if (this.globeModel) {
+        this.globeModel.dispose();
+        this.globeModel = null;
+        this.onModelStatus();
+      }
+      return;
+    }
+    if (this.globeModel) {
+      this.globeModel.setModelMatrix(matrix);
+      return;
+    }
+    this.globeModel = new GlobeModel(this.cesium, this.globe.scene, this.viewer, this.model, matrix);
+    this.globeModel.onStatus = () => this.onModelStatus();
+    this.onModelStatus();
+  }
+
+  /** Repère du viewer → repère terrestre : la matrice que Cesium applique à la maquette. */
+  private modelMatrix(): import('cesium').Matrix4 | null {
+    const cesium = this.cesium, g = this.georeference, enuToEcef = this.enuToEcef;
+    if (!cesium || !g || !enuToEcef) return null;
+    const offset = this.offset.toArray();
+    const origin = localToEnu([0, 0, 0], offset, g);
+    const [x, y, z] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]].map((axis) => localToEnu(axis, offset, g).map((value, i) => value - origin[i]));
+    const localToEnuMatrix = new cesium.Matrix4(
+      x[0], y[0], z[0], origin[0],
+      x[1], y[1], z[1], origin[1],
+      x[2], y[2], z[2], origin[2],
+      0, 0, 0, 1,
+    );
+    return cesium.Matrix4.multiply(enuToEcef, localToEnuMatrix, new cesium.Matrix4());
   }
 
   /** Au prochain clic sur le globe, la position cliquée est transmise (placement à la souris). */

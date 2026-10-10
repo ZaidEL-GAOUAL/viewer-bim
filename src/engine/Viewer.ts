@@ -247,7 +247,11 @@ export class Viewer {
   }
 
   /** À appeler après toute modification des plans de coupe. */
+  /** Prévenu après tout changement des plans de coupe (un autre moteur peut les reprendre). */
+  readonly onSectionsChanged = new Set<() => void>();
+
   sectionsChanged(): void {
+    for (const notify of this.onSectionsChanged) notify();
     const { enabled } = this.sections;
     for (const axis of AXES) {
       const outline = this.outlines[axis];

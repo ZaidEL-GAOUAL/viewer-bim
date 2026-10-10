@@ -41,8 +41,13 @@ export class MapPanel {
       input.setAttribute('aria-label', { latitude: 'Latitude', longitude: 'Longitude', elevation: 'Altitude (m)', rotation: 'Rotation du nord (°)' }[key] ?? key);
       input.addEventListener('change', () => this.applyFields());
     }
+    this.globe.onModelStatus = () => this.render();
     app.on('model', () => this.onModel());
-    app.on('georeference', () => this.render());
+    app.on('georeference', () => {
+      // Position saisie, cliquée ou reprise du fichier : le globe déplace la maquette.
+      if (this.globe.active) this.pushPlacement();
+      this.render();
+    });
     this.render();
   }
 
@@ -84,6 +89,7 @@ export class MapPanel {
         return;
       }
       this.pushPlacement();
+      this.globe.setModel(this.app.model);
       // Premier affichage : la caméra du globe part de l'espace ; on l'amène sur la maquette d'un coup.
       this.globe.flyTo(this.app.model?.box ?? null, 0);
       this.onChange();
@@ -101,6 +107,7 @@ export class MapPanel {
     this.render();
     if (this.globe.active) {
       this.pushPlacement();
+      this.globe.setModel(this.app.model);
       this.globe.flyTo(this.app.model?.box ?? null, 0.6);
     }
   }
@@ -142,9 +149,14 @@ export class MapPanel {
     const georeference = app.georeference;
     if (this.globe.active) {
       this.status.classList.remove('warning');
+      const modelStatus = this.globe.modelStatus;
+      const sent = modelStatus === 'loading' ? ' Envoi de la maquette au globe…'
+        : modelStatus === 'error' ? ` Le globe n’a pas pu dessiner la maquette (${this.globe.modelError}) ; le viewer la garde.`
+        : '';
       this.status.textContent = georeference
-        ? `Maquette posée à ${number.format(georeference.latitude)}, ${number.format(georeference.longitude)}${georeference.source ? ` (${georeference.source === 'manuel' ? 'position saisie' : `d’après ${georeference.source}`})` : ''}.`
+        ? `Maquette posée à ${number.format(georeference.latitude)}, ${number.format(georeference.longitude)}${georeference.source ? ` (${georeference.source === 'manuel' ? 'position saisie' : `d’après ${georeference.source}`})` : ''}.${sent}`
         : 'Le fichier ne donne pas la position de la maquette : saisissez-la ci-dessous, ou cliquez sur la carte.';
+      if (modelStatus === 'error') this.status.classList.add('warning');
     }
 
     const imagery = h('select', { attrs: { 'aria-label': 'Fond de carte' } });

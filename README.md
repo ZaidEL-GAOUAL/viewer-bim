@@ -88,7 +88,10 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 - **Carte** : la maquette posée sur la Terre, dans son environnement réel — plan OpenStreetMap,
   photo aérienne ou plan IGN (France), gratuits et sans clé. Le globe est dessiné par CesiumJS,
   chargé à la demande (quelques mégaoctets, une fois) sous le canvas du viewer, dont la caméra
-  suit celle du globe : sélection, fiche, coupes, mesures, règles d'apparence, planning 4D et
+  suit celle du globe. Sur la carte, c'est Cesium qui dessine la maquette : le viewer lui envoie
+  sa géométrie (un GLB bâti à la volée, quel que soit le fichier d'origine) et lui recopie son
+  état à chaque changement — sélection, masquage, couleurs et opacités des règles, planning 4D,
+  plans de coupe — de sorte que fiche, coupes, mesures, règles d'apparence, planning et
   assistant fonctionnent sur la carte comme ailleurs. La position vient de l'IFC
   (`IfcSite`), du JSON (`georeference`, voir le contrat), ou se saisit — latitude, longitude,
   altitude, orientation du nord — ou se prend d'un clic sur la carte ; « JSON ↓ » l'enregistre.
