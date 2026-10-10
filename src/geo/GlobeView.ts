@@ -163,7 +163,9 @@ export class GlobeView {
       maximumRenderTimeChange: Infinity,
       msaaSamples: 4,
     });
-    globe.scene.globe.depthTestAgainstTerrain = false;
+    // Le relief cache ce qui est derrière lui (bâtiments, maquette) ; sinon tout ce qui est
+    // masqué par une pente ou la ligne du sol transparaît à travers la carte.
+    globe.scene.globe.depthTestAgainstTerrain = true;
     globe.scene.postRender.addEventListener(this.sync);
     globe.scene.screenSpaceCameraController.enableCollisionDetection = true;
     globe.scene.screenSpaceCameraController.minimumZoomDistance = 2;
