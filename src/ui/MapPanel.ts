@@ -162,7 +162,7 @@ export class MapPanel {
   private async placeOnGround(): Promise<void> {
     const current = this.app.georeference;
     if (!current) return;
-    const height = await this.globe.groundHeight();
+    const height = await this.globe.groundElevation();
     if (height === null) return;
     const elevation = Math.round(height * 100) / 100;
     if (elevation === current.elevation) return;
@@ -254,14 +254,14 @@ export class MapPanel {
     const pick = button('Placer au clic', () => {
       if (!this.globe.active) return;
       pick.setAttribute('aria-pressed', 'true');
-      this.status.textContent = 'Cliquez l’endroit de la carte où poser la maquette (Échap pour annuler).';
-      this.globe.pickOnce(({ latitude, longitude }) => {
+      this.status.textContent = 'Cliquez l’endroit de la carte où poser la maquette : elle y sera centrée, au sol.';
+      this.globe.pickOnce(({ latitude, longitude, elevation }) => {
         pick.setAttribute('aria-pressed', 'false');
         const current = app.georeference;
-        app.setGeoreference({ latitude, longitude, elevation: current?.elevation ?? 0, origin: current?.origin ?? [0, 0, 0], trueNorth: current?.trueNorth ?? [0, 1], source: 'manuel' });
+        app.setGeoreference({ latitude, longitude, elevation, origin: current?.origin ?? [0, 0, 0], trueNorth: current?.trueNorth ?? [0, 1], source: 'manuel' });
         app.fitTo([...Array(model.count).keys()]);
       });
-    }, { title: 'Le prochain clic sur le globe donne la position de la maquette', attrs: { 'aria-pressed': 'false' } });
+    }, { title: 'Le prochain clic sur le globe centre la maquette sous le curseur, posée sur le sol', attrs: { 'aria-pressed': 'false' } });
     const fromFile = app.metadata?.georeference;
     const ground = button('Au sol', () => void this.placeOnGround(), { title: 'Altitude = hauteur du sol (relief ou tuiles 3D) à cette position' });
     ground.disabled = !georeference;
@@ -280,7 +280,7 @@ export class MapPanel {
         fromFile ? button('Position du fichier', () => app.setGeoreference(fromFile), { title: 'Revenir à la position lue dans le fichier' }) : null,
       ),
       keysDetails,
-      h('p', { class: 'hint', text: 'Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. « Au sol » pose la maquette sur le relief choisi. La position est enregistrée dans « JSON ↓ ». Cartes, relief mondial et bâtiments OpenStreetMap : gratuits, sans clé.' }),
+      h('p', { class: 'hint', text: 'Altitude au-dessus de la mer, comme dans l’IFC (le viewer convertit pour le globe, géoïde EGM96). Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. « Au sol » pose la maquette sur le relief choisi. La position est enregistrée dans « JSON ↓ ». Cartes, relief mondial et bâtiments OpenStreetMap : gratuits, sans clé.' }),
     );
   }
 }

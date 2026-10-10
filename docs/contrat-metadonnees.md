@@ -166,7 +166,7 @@ Un bloc optionnel à la racine place la maquette sur la carte du viewer (option 
 | Champ | Rôle |
 | --- | --- |
 | `latitude`, `longitude` | Position, en degrés décimaux (WGS 84), du point `origin` du repère du projet. |
-| `elevation` | Altitude de ce point, en mètres (0 par défaut). |
+| `elevation` | Altitude de ce point en mètres au-dessus du niveau moyen de la mer, comme `RefElevation` dans l'IFC (0 par défaut). Le viewer la convertit lui-même en hauteur au-dessus de l'ellipsoïde pour le globe (géoïde EGM96) ; n'y mettez pas une hauteur ellipsoïdale. |
 | `origin` | Ce point, dans le repère du projet tel qu'il est dans l'IFC : X vers l'est du projet, Y vers son nord, Z vers le haut, en mètres ([0, 0, 0] par défaut). |
 | `trueNorth` ou `rotation` | Direction du nord vrai dans le plan du projet : un vecteur unitaire, ou un angle en degrés depuis l'axe Y, positif dans le sens horaire ([0, 1] / 0 par défaut). |
 | `source` | D'où vient la position : « IfcSite », « manuel »… (informatif). |

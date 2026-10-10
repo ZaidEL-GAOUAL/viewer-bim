@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildingHeight, fetchOsmBuildings, outlineCentre, overpassQuery, parseOverpassBuildings } from '../src/geo/osmBuildings.ts';
-import { GRID, decodeTerrarium } from '../src/geo/terrain.ts';
+import { GRID, decodeTerrarium, geoidGrid } from '../src/geo/terrain.ts';
 
 test('la hauteur d’un bâtiment OSM vient de height, sinon des niveaux, sinon d’une valeur usuelle', () => {
   assert.equal(buildingHeight({ height: '12.5' }), 12.5);
@@ -73,4 +73,17 @@ test('les instances Overpass sont essayées dans l’ordre jusqu’à une répon
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test('le géoïde d’une tuile suit les rangées de Mercator, du nord au sud', () => {
+  const geoid = { height: (latitude: number, longitude: number) => latitude + longitude / 1000 } as import('../src/geo/geoid.ts').Geoid;
+  const rad = Math.PI / 180;
+  const grid = geoidGrid(geoid, { west: 2 * rad, south: 40 * rad, east: 4 * rad, north: 50 * rad });
+  assert.equal(grid.length, GRID * GRID);
+  assert.ok(Math.abs(grid[0] - (50 + 0.002)) < 1e-4, 'coin nord-ouest');
+  assert.ok(Math.abs(grid[GRID - 1] - (50 + 0.004)) < 1e-4, 'coin nord-est');
+  assert.ok(Math.abs(grid[(GRID - 1) * GRID] - (40 + 0.002)) < 1e-4, 'coin sud-ouest');
+  // Rangée du milieu : milieu en Mercator, donc au nord de la latitude moyenne (45°).
+  const middle = grid[((GRID - 1) / 2) * GRID];
+  assert.ok(middle > 45.1 && middle < 45.5, `milieu ${middle}`);
 });

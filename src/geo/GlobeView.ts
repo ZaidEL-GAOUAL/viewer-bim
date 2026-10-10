@@ -11,6 +11,7 @@ import { enuToLocal, enuVectorToLocal, localToEnu, type Georeference } from './g
 import { GlobeModel, type GlobeModelStatus } from './GlobeModel.ts';
 import { fetchOsmBuildings, outlineCentre, type OsmBuilding } from './osmBuildings.ts';
 import { createTerrariumTerrainProvider } from './terrain.ts';
+import { loadGeoid, type Geoid } from './geoid.ts';
 
 type Cesium = typeof import('cesium');
 
@@ -61,10 +62,17 @@ export class GlobeView {
   private offset = new Vector3();
   private enuToEcef: import('cesium').Matrix4 | null = null;
   private ecefToEnu: import('cesium').Matrix4 | null = null;
-  private pickHandler: ((position: { latitude: number; longitude: number }) => void) | null = null;
+  private pickHandler: ((position: { latitude: number; longitude: number; elevation: number }) => void) | null = null;
+  /** Géoïde EGM96 : altitudes (mer) ↔ hauteurs Cesium (ellipsoïde) ; null si la grille n'a pu être lue. */
+  private geoid: Geoid | null = null;
+  private geoidWarned = false;
+  /** Cesium World Terrain, lu seulement pour poser les bâtiments Cesium sur un autre relief. */
+  private worldTerrain: import('cesium').TerrainProvider | null = null;
+  private alignToken = 0;
   private model: Model | null = null;
   private globeModel: GlobeModel | null = null;
-  private terrain: TerrainKind = 'flat';
+  /** Relief gratuit par défaut : les altitudes (au-dessus de la mer) ont alors un sens dès l'ouverture. */
+  private terrain: TerrainKind = 'terrarium';
   private ionToken = '';
   private googleKey = '';
   private osmSource: import('cesium').CustomDataSource | null = null;
@@ -135,7 +143,7 @@ export class GlobeView {
 
   async open(): Promise<void> {
     if (this.globe) return;
-    const cesium = await loadCesium();
+    const [cesium] = await Promise.all([loadCesium(), this.ensureGeoid()]);
     if (this.globe) return;
     this.cesium = cesium;
     const { Viewer: CesiumViewer } = cesium;
@@ -174,11 +182,31 @@ export class GlobeView {
     globe.scene.requestRender();
   }
 
+  private async ensureGeoid(): Promise<void> {
+    if (this.geoid) return;
+    try {
+      this.geoid = await loadGeoid(new URL(`${import.meta.env.BASE_URL}geo/egm96-0.5deg.int16`, document.baseURI).href);
+    } catch (error) {
+      if (this.geoidWarned) return;
+      this.geoidWarned = true;
+      this.onNotice(`Géoïde indisponible (${error instanceof Error ? error.message : String(error)}) : les altitudes seront prises au-dessus de l’ellipsoïde.`, true);
+    }
+  }
+
+  /**
+   * Écart entre l'altitude (au-dessus de la mer, comme dans l'IFC) et la hauteur Cesium (au-dessus
+   * de l'ellipsoïde). Sans relief ni tuiles Google, la Terre lisse tient lieu de niveau de la mer.
+   */
+  private geoidOffset(latitude: number, longitude: number): number {
+    return this.geoid && (this.terrain !== 'flat' || this.googleWanted) ? this.geoid.height(latitude, longitude) : 0;
+  }
+
   close(): void {
     const globe = this.globe;
     if (!globe) return;
     this.globeModel?.dispose();
     this.globeModel = null;
+    this.worldTerrain = null;
     this.osmAbort?.abort();
     this.osmAbort = null;
     globe.scene.postRender.removeEventListener(this.sync);
@@ -211,17 +239,24 @@ export class GlobeView {
   setPlacement(georeference: Georeference | null, offset: Vector3): void {
     this.georeference = georeference;
     this.offset.copy(offset);
+    this.reframe();
+    if (this.osmWanted) void this.loadOsmBuildings();
+  }
+
+  /** Après tout changement de position ou de référence verticale : repère, caméra, maquette et bâtiments ion. */
+  private reframe(): void {
     this.updateFrame();
     this.cameraKnown = false;
     this.sync();
     this.refreshModel();
-    if (this.osmWanted) void this.loadOsmBuildings();
+    void this.alignIonBuildings();
   }
 
   /** Relief du globe : aucun, les tuiles gratuites, ou Cesium World Terrain (clé ion). */
   setTerrain(kind: TerrainKind): void {
     this.terrain = kind;
     this.applyTerrain();
+    this.reframe();
     this.onStatus();
   }
 
@@ -232,6 +267,7 @@ export class GlobeView {
     this.applyKeys();
     if (this.terrain === 'ion' && !this.ionToken) this.terrain = 'flat';
     this.applyTerrain();
+    this.reframe();
     this.onStatus();
   }
 
@@ -263,12 +299,20 @@ export class GlobeView {
         return;
       }
     }
-    scene.terrainProvider = this.terrain === 'terrarium' ? createTerrariumTerrainProvider(cesium) : new cesium.EllipsoidTerrainProvider();
+    scene.terrainProvider = this.terrain === 'terrarium' ? createTerrariumTerrainProvider(cesium, this.geoid) : new cesium.EllipsoidTerrainProvider();
     scene.requestRender();
   }
 
-  /** Hauteur du sol (relief ou tuiles 3D) à la position de la maquette ; 0 sans relief, null si inconnue. */
-  async groundHeight(): Promise<number | null> {
+  /** Altitude du sol (au-dessus de la mer) à la position de la maquette ; null si inconnue. */
+  async groundElevation(): Promise<number | null> {
+    const g = this.georeference;
+    const height = await this.groundHeight();
+    if (height === null || !g) return null;
+    return height - this.geoidOffset(g.latitude, g.longitude);
+  }
+
+  /** Hauteur Cesium du sol (relief ou tuiles 3D, au-dessus de l'ellipsoïde) à la position de la maquette ; 0 sans relief, null si inconnue. */
+  private async groundHeight(): Promise<number | null> {
     const cesium = this.cesium, globe = this.globe, g = this.georeference;
     if (!cesium || !globe || !g) return null;
     const position = cesium.Cartographic.fromDegrees(g.longitude, g.latitude);
@@ -421,11 +465,41 @@ export class GlobeView {
       tileset.show = this.ionBuildingsWanted;
       globe.scene.primitives.add(tileset);
       globe.scene.requestRender();
+      void this.alignIonBuildings();
     } catch (error) {
       this.ionBuildingsWanted = false;
       this.onNotice(`Cesium OSM Buildings indisponible : ${error instanceof Error ? error.message : String(error)}`, true);
     }
     this.onStatus();
+  }
+
+  /**
+   * Les bâtiments Cesium sont bâtis sur Cesium World Terrain (hauteurs au-dessus de l'ellipsoïde).
+   * Sur un autre relief — ou sur la Terre lisse — ils flotteraient ou s'enfonceraient : ils sont
+   * décalés verticalement pour reposer sur le sol affiché à l'endroit de la maquette.
+   */
+  private async alignIonBuildings(): Promise<void> {
+    const cesium = this.cesium, globe = this.globe, tileset = this.ionBuildings, g = this.georeference;
+    if (!cesium || !globe || !tileset || !g) return;
+    const token = ++this.alignToken;
+    let offset = 0;
+    if (this.terrain !== 'ion') {
+      try {
+        this.worldTerrain ??= await cesium.createWorldTerrainAsync();
+        const [reference] = await cesium.sampleTerrainMostDetailed(this.worldTerrain, [cesium.Cartographic.fromDegrees(g.longitude, g.latitude)]);
+        const ground = await this.groundHeight();
+        if (token !== this.alignToken || !this.globe || !this.ionBuildings) return;
+        if (ground === null || !Number.isFinite(reference?.height)) return;
+        offset = ground - reference.height;
+      } catch (error) {
+        this.onNotice(`Bâtiments Cesium non alignés sur le relief : ${error instanceof Error ? error.message : String(error)}`, true);
+        return;
+      }
+    }
+    const surface = cesium.Cartesian3.fromDegrees(g.longitude, g.latitude, 0);
+    const lifted = cesium.Cartesian3.fromDegrees(g.longitude, g.latitude, offset);
+    tileset.modelMatrix = cesium.Matrix4.fromTranslation(cesium.Cartesian3.subtract(lifted, surface, new cesium.Cartesian3()));
+    globe.scene.requestRender();
   }
 
   /** Tuiles 3D photoréalistes de Google (clé Google Maps Platform nécessaire) ; le globe se cache dessous. */
@@ -436,7 +510,7 @@ export class GlobeView {
     if (this.googleTiles) {
       this.googleTiles.show = shown;
       globe.scene.globe.show = !shown;
-      globe.scene.requestRender();
+      this.reframe();
       this.onStatus();
       return;
     }
@@ -454,7 +528,7 @@ export class GlobeView {
       tileset.show = this.googleWanted;
       globe.scene.primitives.add(tileset);
       globe.scene.globe.show = !this.googleWanted;
-      globe.scene.requestRender();
+      this.reframe();
     } catch (error) {
       this.googleWanted = false;
       this.onNotice(`Tuiles Google indisponibles : ${error instanceof Error ? error.message : String(error)}`, true);
@@ -507,7 +581,7 @@ export class GlobeView {
   }
 
   /** Au prochain clic sur le globe, la position cliquée est transmise (placement à la souris). */
-  pickOnce(handler: ((position: { latitude: number; longitude: number }) => void) | null): void {
+  pickOnce(handler: ((position: { latitude: number; longitude: number; elevation: number }) => void) | null): void {
     this.pickHandler = handler;
     this.host.classList.toggle('picking', handler !== null);
   }
@@ -553,7 +627,7 @@ export class GlobeView {
       this.enuToEcef = this.ecefToEnu = null;
       return;
     }
-    const origin = cesium.Cartesian3.fromDegrees(g.longitude, g.latitude, g.elevation);
+    const origin = cesium.Cartesian3.fromDegrees(g.longitude, g.latitude, g.elevation + this.geoidOffset(g.latitude, g.longitude));
     this.enuToEcef = cesium.Transforms.eastNorthUpToFixedFrame(origin);
     this.ecefToEnu = cesium.Matrix4.inverseTransformation(this.enuToEcef, new cesium.Matrix4());
   }
@@ -585,15 +659,41 @@ export class GlobeView {
     }
   };
 
+  /** Point du sol sous le curseur : le relief affiché, sinon les tuiles 3D, sinon l'ellipsoïde. */
+  private pickGround(point: import('cesium').Cartesian2): import('cesium').Cartesian3 | undefined {
+    const globe = this.globe!;
+    const { scene, camera } = globe;
+    let hit: import('cesium').Cartesian3 | undefined;
+    const ray = camera.getPickRay(point);
+    if (ray && scene.globe.show) hit = scene.globe.pick(ray, scene);
+    if (!hit && this.googleTiles?.show && scene.pickPositionSupported) hit = scene.pickPosition(point);
+    return hit ?? camera.pickEllipsoid(point, scene.globe.ellipsoid);
+  }
+
+  /**
+   * Placement au clic : le centre de l'emprise de la maquette vient sous le curseur, posé sur le
+   * sol cliqué ; la position renvoyée est celle de l'origine du projet, décalée d'autant.
+   */
   private readonly onClick = (event: MouseEvent): void => {
     const cesium = this.cesium, globe = this.globe, handler = this.pickHandler;
     if (!cesium || !globe || !handler) return;
     const rect = globe.canvas.getBoundingClientRect();
-    const point = new cesium.Cartesian2(event.clientX - rect.left, event.clientY - rect.top);
-    const hit = globe.camera.pickEllipsoid(point, globe.scene.globe.ellipsoid);
+    const hit = this.pickGround(new cesium.Cartesian2(event.clientX - rect.left, event.clientY - rect.top));
     if (!hit) return;
-    const carto = cesium.Cartographic.fromCartesian(hit);
+    const g: Georeference = this.georeference ?? { latitude: 0, longitude: 0, elevation: 0, origin: [0, 0, 0], trueNorth: [0, 1] };
+    let centre = [0, 0, 0];
+    const model = this.model;
+    if (model && !model.box.isEmpty()) {
+      const bottomCentre = model.box.getCenter(new Vector3());
+      bottomCentre.y = model.box.min.y;
+      centre = localToEnu(bottomCentre.toArray(), this.offset.toArray(), g);
+    }
+    const frame = cesium.Transforms.eastNorthUpToFixedFrame(hit);
+    const anchor = cesium.Matrix4.multiplyByPoint(frame, new cesium.Cartesian3(-centre[0], -centre[1], -centre[2]), new cesium.Cartesian3());
+    const carto = cesium.Cartographic.fromCartesian(anchor);
+    const latitude = cesium.Math.toDegrees(carto.latitude), longitude = cesium.Math.toDegrees(carto.longitude);
+    const elevation = Math.round((carto.height - this.geoidOffset(latitude, longitude)) * 100) / 100;
     this.pickOnce(null);
-    handler({ latitude: cesium.Math.toDegrees(carto.latitude), longitude: cesium.Math.toDegrees(carto.longitude) });
+    handler({ latitude, longitude, elevation });
   };
 }

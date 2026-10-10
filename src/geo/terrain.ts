@@ -2,7 +2,10 @@
 // PNG « terrarium » en grille Web Mercator (zoom 0 à 15) où la hauteur d'un pixel vaut
 // R·256 + G + B/256 − 32768 mètres. Elles sont décodées ici en champs de hauteurs pour Cesium.
 // Les fonds marins (hauteurs négatives) sont ramenés au niveau de la mer : le globe reste lisse
-// sur les côtes, là où l'on pose des maquettes.
+// sur les côtes, là où l'on pose des maquettes. Ces hauteurs sont au-dessus de la mer ; Cesium
+// attend des hauteurs au-dessus de l'ellipsoïde : le géoïde est ajouté à chaque sommet.
+
+import type { Geoid } from './geoid.ts';
 
 type Cesium = typeof import('cesium');
 
@@ -27,8 +30,28 @@ export function decodeTerrarium(pixels: ArrayLike<number>, size = TILE_PIXELS): 
   return heights;
 }
 
+/**
+ * Hauteur du géoïde en chaque sommet d'une tuile Web Mercator (rectangle en radians), rangée 0
+ * au nord : les rangées sont régulières en ordonnée de Mercator, pas en latitude.
+ */
+export function geoidGrid(geoid: Geoid, rectangle: { west: number; south: number; east: number; north: number }): Float32Array {
+  const out = new Float32Array(GRID * GRID);
+  const mercator = (latitude: number) => Math.log(Math.tan(Math.PI / 4 + latitude / 2));
+  const yNorth = mercator(rectangle.north), ySouth = mercator(rectangle.south);
+  const toDegrees = 180 / Math.PI;
+  for (let row = 0; row < GRID; row++) {
+    const y = yNorth + ((ySouth - yNorth) * row) / (GRID - 1);
+    const latitude = (2 * Math.atan(Math.exp(y)) - Math.PI / 2) * toDegrees;
+    for (let col = 0; col < GRID; col++) {
+      const longitude = (rectangle.west + ((rectangle.east - rectangle.west) * col) / (GRID - 1)) * toDegrees;
+      out[row * GRID + col] = geoid.height(latitude, longitude);
+    }
+  }
+  return out;
+}
+
 /** Fournisseur de relief Cesium lisant les tuiles terrarium ; à passer à `scene.terrainProvider`. */
-export function createTerrariumTerrainProvider(cesium: Cesium): import('cesium').TerrainProvider {
+export function createTerrariumTerrainProvider(cesium: Cesium, geoid: Geoid | null): import('cesium').TerrainProvider {
   const tilingScheme = new cesium.WebMercatorTilingScheme();
   const levelZeroError = cesium.TerrainProvider.getEstimatedLevelZeroGeometricErrorForAHeightmap(tilingScheme.ellipsoid, GRID, tilingScheme.getNumberOfXTilesAtLevel(0));
   const canvas = document.createElement('canvas');
@@ -50,7 +73,12 @@ export function createTerrariumTerrainProvider(cesium: Cesium): import('cesium')
       return promise.then((image) => {
         context.drawImage(image, 0, 0, TILE_PIXELS, TILE_PIXELS);
         const { data } = context.getImageData(0, 0, TILE_PIXELS, TILE_PIXELS);
-        return new cesium.HeightmapTerrainData({ buffer: decodeTerrarium(data), width: GRID, height: GRID, childTileMask: level < MAX_LEVEL ? 15 : 0 });
+        const heights = decodeTerrarium(data);
+        if (geoid) {
+          const undulation = geoidGrid(geoid, tilingScheme.tileXYToRectangle(x, y, level));
+          for (let i = 0; i < heights.length; i++) heights[i] += undulation[i];
+        }
+        return new cesium.HeightmapTerrainData({ buffer: heights, width: GRID, height: GRID, childTileMask: level < MAX_LEVEL ? 15 : 0 });
       });
     },
     getLevelMaximumGeometricError(level: number) {
