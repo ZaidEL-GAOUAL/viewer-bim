@@ -14,6 +14,8 @@ import { isUsdFile, loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.t
 import type { ModelSource } from '../engine/buildModel.ts';
 import type { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
+import { AXES } from '../engine/Sections.ts';
+import { STANDARD_VIEWS, VIEW_ORDER } from '../engine/views.ts';
 import { button, h, integer } from './dom.ts';
 import { iconButton } from './icons.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
@@ -34,7 +36,10 @@ export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' 
 export type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
-export type Tool = 'select' | MeasureTool;
+/** « section » : le prochain clic sur une surface y pose un plan de coupe. */
+export type Tool = 'select' | MeasureTool | 'section';
+
+const SECTION_HINT = 'Cliquez une surface : un plan de coupe s’y pose, orienté comme elle, et retire ce qui est devant. Échap annule.';
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 export type ModelFormat = 'glb' | 'usd';
 
@@ -96,6 +101,8 @@ export class App {
   private isolateButton!: HTMLButtonElement;
   private maskButton!: HTMLButtonElement;
   private readonly measureHint = h('p', { class: 'measure-hint', attrs: { hidden: '', role: 'status' } });
+  private viewBar!: HTMLElement;
+  private twoDButton!: HTMLButtonElement;
   private downloads!: HTMLElement;
   /** Éléments masqués par le bouton « Masquer », que « Démasquer » fait revenir. */
   private readonly masked = new Set<number>();
@@ -179,6 +186,11 @@ export class App {
       const open = sectionPanel.toggle();
       sectionToggle.setAttribute('aria-pressed', String(open));
     }, { title: 'Plans de coupe', attrs: { 'aria-pressed': 'false' } });
+    // Vue 2D : projection orthographique et vues standard, affichées sous la barre.
+    this.viewBar = h('div', { class: 'view-bar', attrs: { hidden: '', role: 'group', 'aria-label': 'Vues 2D' } },
+      ...VIEW_ORDER.map((id) => button(STANDARD_VIEWS[id].label, () => this.viewer.viewFrom(id), { title: STANDARD_VIEWS[id].title })),
+    );
+    this.twoDButton = button('2D', () => this.setTwoD(!this.twoD), { title: 'Vue 2D : sans perspective, déplacement et zoom seulement, vues face, arrière, gauche, droite, haut, bas', attrs: { 'aria-pressed': 'false' } });
 
     this.isolateButton = button('Isoler', () => this.toggleIsolate(), { attrs: { 'aria-pressed': 'false' } });
     this.maskButton = button('Masquer', () => this.toggleMask(), { attrs: { 'aria-pressed': 'false' } });
@@ -267,6 +279,7 @@ export class App {
       ),
       tools, clearMeasures, history,
       h('div', { class: 'bar-group' },
+        this.twoDButton,
         mapToggle,
         sectionToggle,
         button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
@@ -298,6 +311,9 @@ export class App {
     this.mapPanel = new MapPanel(this, globeHost);
     this.mapPanel.onChange = () => {
       globeHost.hidden = !this.mapPanel.isOpen;
+      // Le globe pilote une caméra en perspective : la vue 2D attend la fermeture de la carte.
+      if (this.mapPanel.isOpen && this.twoD) this.setTwoD(false);
+      this.twoDButton.disabled = this.mapPanel.isOpen;
       mapToggle.setAttribute('aria-pressed', String(this.mapPanel.isOpen));
     };
 
@@ -314,7 +330,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, sectionPanel.el, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, sectionPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -560,10 +576,47 @@ export class App {
     this.tool = tool;
     this.measure.setTool(isPointMeasure(tool) ? tool : null);
     for (const [id, element] of this.toolButtons) element.setAttribute('aria-pressed', String(id === tool));
-    this.viewport.classList.toggle('measuring', isPointMeasure(tool));
+    this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section');
     this.measureHint.hidden = tool === 'select';
-    this.measureHint.textContent = MEASURES.find((item) => item.id === tool)?.hint ?? '';
+    this.measureHint.textContent = tool === 'section' ? SECTION_HINT : MEASURES.find((item) => item.id === tool)?.hint ?? '';
     this.emit('tool');
+  }
+
+  get activeTool(): Tool {
+    return this.tool;
+  }
+
+  get twoD(): boolean {
+    return this.viewer.projection === 'orthographic';
+  }
+
+  /** Vue 2D : projection orthographique, ouverte sur la vue de face. */
+  setTwoD(on: boolean): void {
+    if (on === this.twoD) return;
+    this.viewer.setProjection(on ? 'orthographic' : 'perspective');
+    const active = this.twoD;
+    this.viewBar.hidden = !active;
+    this.twoDButton.setAttribute('aria-pressed', String(active));
+    if (active) this.viewer.viewFrom('front');
+    else this.viewer.invalidate();
+  }
+
+  /**
+   * Pose un plan de coupe sur la surface cliquée : orienté comme elle, il retire le côté de la
+   * caméra (la façade cliquée disparaît, l'intérieur apparaît). Un plan libre est pris d'abord,
+   * sinon celui dont les poignées sont affichées.
+   */
+  private placeSection(event: PointerEvent): void {
+    const hit = this.viewer.pick(event.clientX, event.clientY);
+    if (!hit) return;
+    const { sections, sectionHandles } = this.viewer;
+    const axis = AXES.find((slot) => !sections.enabled[slot]) ?? sectionHandles.axis ?? 0;
+    // La normale d'un plan de coupe désigne le côté retiré ; celle du contact pointe vers la caméra.
+    sections.setTransform(axis, hit.point, hit.normal.clone());
+    sections.set(axis, { enabled: true });
+    this.viewer.sectionsChanged();
+    sectionHandles.select(axis);
+    this.setTool('select');
   }
 
   // ------------------------------------------------------------- chargement
@@ -1141,7 +1194,9 @@ export class App {
 
   private handleClick(event: PointerEvent): void {
     if (!this.model || this.viewer.sectionHandles.blocksPicking) return;
-    if (!isPointMeasure(this.tool)) {
+    if (this.tool === 'section') {
+      this.placeSection(event);
+    } else if (!isPointMeasure(this.tool)) {
       // Sélection, et outil Cotes : un clic choisit l'élément, Ctrl/Cmd/Maj l'ajoute.
       const additive = event.ctrlKey || event.metaKey || event.shiftKey;
       const hit = this.viewer.pick(event.clientX, event.clientY);

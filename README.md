@@ -106,9 +106,17 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   bâtiments Cesium sur le relief affiché.
   CesiumJS est la seule bibliothèque utilisée en plus de three.js, et seulement pour la carte.
 - **Coupes** : trois plans initialement alignés sur les axes, chacun avec sa position et son sens,
-  et le remplissage des sections coupées. La flèche de déplacement et les cercles de rotation
-  coexistent sur le plan actif ; tourner conserve le centre de la poignée. « Réaligner » restaure
-  l’orientation de l’axe sans déplacer ce centre.
+  et le remplissage des sections coupées. « Placer par clic » pose un plan sur la surface
+  cliquée, orienté comme elle, en retirant ce qui est devant (une façade cliquée s'ouvre sur
+  l'intérieur, une dalle cliquée du dessus donne un plan d'étage). Le plan actif est visible dans
+  la vue, translucide, avec ses poignées : flèche bleue pour le déplacer le long de sa normale,
+  flèches rouge et verte pour déplacer les poignées dans le plan, cercles pour l'incliner ;
+  tourner conserve le centre de la poignée. « Réaligner » restaure l’orientation de l’axe sans
+  déplacer ce centre.
+- **Vue 2D** : le bouton « 2D » passe en projection orthographique, sans perspective ni rotation
+  (déplacement et zoom seulement), avec les vues Face, Arrière, Gauche, Droite, Haut et Bas
+  sous la barre. Combinée à une coupe, la vue de dessus donne un plan d'étage, une vue de côté
+  une coupe d'élévation. La carte, qui pilote une caméra en perspective, la suspend.
 - **Mesures** : un menu de la barre d'outils réunit les outils. **Distance** entre deux points
   (avec accroche aux sommets), **Surface** d'une face plane, **Volume** et surface totale d'un
   élément : chaque résultat dans la vue porte une croix pour le supprimer, ses détails sont

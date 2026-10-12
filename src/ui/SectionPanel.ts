@@ -20,6 +20,7 @@ export class SectionPanel {
   private readonly fill: HTMLInputElement;
   private readonly activePlane: HTMLSelectElement;
   private readonly reset: HTMLButtonElement;
+  private readonly place: HTMLButtonElement;
 
   constructor(app: App) {
     this.app = app;
@@ -68,15 +69,23 @@ export class SectionPanel {
     }, { title: 'Remettre la coupe sur son axe X, Y ou Z' });
     const handles = h('div', { class: 'section-handles' }, this.activePlane, this.reset);
     handles.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:10px';
+    // Pose au clic : le prochain clic sur une surface y met un plan, orienté comme elle.
+    this.place = button('Placer par clic', () => app.setTool(app.activeTool === 'section' ? 'select' : 'section'), {
+      class: 'primary',
+      title: 'Puis cliquez une surface de la maquette : le plan de coupe s’y pose, orienté comme elle, et retire ce qui est devant',
+      attrs: { 'aria-pressed': 'false' },
+    });
 
     this.el = h('section', { class: 'card section-card', attrs: { hidden: '' } },
       h('h2', { class: 'card-title', text: 'Coupes' }),
+      h('div', { class: 'section-place' }, this.place),
       body,
       handles,
-      h('p', { class: 'hint', text: 'Activez une coupe puis faites glisser la flèche ou les cercles dans la vue. Échap annule le geste.' }),
+      h('p', { class: 'hint', text: 'Dans la vue : flèche bleue pour déplacer le plan, flèches rouge et verte pour déplacer ses poignées, cercles pour l’incliner. Échap annule le geste.' }),
       h('label', { class: 'section-fill', attrs: { for: 'section-fill' } }, this.fill, 'Remplir les sections coupées'),
     );
 
+    app.on('tool', () => this.place.setAttribute('aria-pressed', String(app.activeTool === 'section')));
     app.on('model', () => this.sync());
     app.viewer.onSectionsChange.add(() => this.sync());
     app.viewer.sectionHandles.onChange.add(() => this.sync());
@@ -99,6 +108,7 @@ export class SectionPanel {
     const sections = this.app.viewer.sections;
     const hasModel = this.app.model !== null;
     const handles = this.app.viewer.sectionHandles;
+    this.place.disabled = !hasModel;
     this.activePlane.disabled = !hasModel;
     this.activePlane.value = handles.axis === null ? '' : String(handles.axis);
     for (const option of this.activePlane.options) if (option.value !== '') option.disabled = !sections.enabled[Number(option.value)];

@@ -1,4 +1,4 @@
-import { Group, Vector3 } from 'three';
+import { Group, Vector3, type Camera } from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import type { Axis } from './Sections.ts';
 import type { Viewer } from './Viewer.ts';
@@ -25,8 +25,8 @@ export class SectionHandles {
     // Route input ourselves: two DOM listeners would transform the same proxy twice.
     this.translate = new TransformControls(viewer.camera);
     this.rotate = new TransformControls(viewer.camera);
+    // Flèche bleue : déplace le plan le long de sa normale ; rouge et verte : déplacent le pivot dans le plan.
     this.translate.setMode('translate'); this.translate.setSpace('local'); this.translate.setSize(1.15);
-    this.translate.showX = this.translate.showY = false;
     this.rotate.setMode('rotate'); this.rotate.setSpace('world'); this.rotate.setSize(.75);
     this.proxy.name = 'Poignées du plan de coupe';
     viewer.overlay.add(this.proxy);
@@ -51,6 +51,13 @@ export class SectionHandles {
   }
 
   get axis(): Axis | null { return this.selected; }
+
+  /** La vue 2D change de caméra : les poignées se projettent avec la nouvelle. */
+  setCamera(camera: Camera): void {
+    this.translate.camera = camera;
+    this.rotate.camera = camera;
+    this.viewer.invalidate();
+  }
   get blocksPicking(): boolean { return this.consumed || this.active !== null || [this.translate, this.rotate].some((c) => c.enabled && c.axis !== null); }
 
   select(axis: Axis | null): void {

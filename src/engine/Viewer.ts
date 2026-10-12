@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   NotEqualStencilFunc,
+  OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
   Raycaster,
@@ -30,10 +31,13 @@ import { TRANSPARENT_LAYER } from './buildModel.ts';
 import type { Model, PickHit, RaycastOptions } from './Model.ts';
 import { AXES, Sections } from './Sections.ts';
 import { SectionHandles } from './SectionHandles.ts';
+import { STANDARD_VIEWS, type StandardView } from './views.ts';
 
 const NO_PLANES: Plane[] = [];
 const UNIT = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)];
 const DEFAULT_DIRECTION = new Vector3(1, 0.7, 1).normalize();
+
+export type Projection = 'perspective' | 'orthographic';
 
 export interface FrameStats {
   calls: number;
@@ -48,7 +52,11 @@ export class Viewer {
   readonly scene = new Scene();
   /** Objets dessinés par-dessus le modèle, sans plans de coupe (surfaces mesurées, contours). */
   readonly overlay = new Scene();
-  readonly camera = new PerspectiveCamera(45, 1, 0.1, 1000);
+  readonly perspective = new PerspectiveCamera(45, 1, 0.1, 1000);
+  /** Vue 2D : projection orthographique, cadrée par `setOrthoHalfHeight`, zoomée par les contrôles. */
+  readonly orthographic = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+  /** Caméra active : la perspective, ou l'orthographique en vue 2D. */
+  camera: PerspectiveCamera | OrthographicCamera = this.perspective;
   readonly controls: OrbitControls;
   readonly sections = new Sections();
   readonly sectionHandles: SectionHandles;
@@ -70,6 +78,8 @@ export class Viewer {
   private readonly capScene = new Scene();
   private readonly cap: Mesh;
   private readonly outlines: LineLoop[] = [];
+  /** Le plan de coupe lui-même, translucide, pour le voir et le saisir dans la vue. */
+  private readonly planeFills: Mesh[] = [];
   private readonly onePlane: Plane[] = [];
   private readonly otherPlanes: Plane[] = [];
   private readonly scratch = new Vector3();
@@ -94,7 +104,8 @@ export class Viewer {
     container.appendChild(this.renderer.domElement);
 
     this.camera.position.copy(DEFAULT_DIRECTION).multiplyScalar(30);
-    this.camera.layers.enable(TRANSPARENT_LAYER);
+    this.perspective.layers.enable(TRANSPARENT_LAYER);
+    this.orthographic.layers.enable(TRANSPARENT_LAYER);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -134,6 +145,15 @@ export class Viewer {
       outline.frustumCulled = false;
       this.outlines[axis] = outline;
       this.overlay.add(outline);
+      // Même tampon de sommets que le contour : le quadrilatère suit le plan sans recopie.
+      const fillGeometry = new BufferGeometry();
+      fillGeometry.setAttribute('position', geometry.getAttribute('position'));
+      fillGeometry.setIndex([0, 1, 2, 0, 2, 3]);
+      const fill = new Mesh(fillGeometry, new MeshBasicMaterial({ color: 0x1d8bff, transparent: true, opacity: 0.08, depthWrite: false, side: DoubleSide }));
+      fill.visible = false;
+      fill.frustumCulled = false;
+      this.planeFills[axis] = fill;
+      this.overlay.add(fill);
     }
     this.sectionHandles = new SectionHandles(this);
 
@@ -171,6 +191,8 @@ export class Viewer {
    */
   setExternalCamera(active: boolean): void {
     if (this.externalCamera === active) return;
+    // Le globe pilote une caméra en perspective : la vue 2D s'interrompt le temps de la carte.
+    if (active) this.setProjection('perspective');
     this.externalCamera = active;
     this.controls.enabled = !active;
     this.renderer.domElement.classList.toggle('external-camera', active);
@@ -185,7 +207,7 @@ export class Viewer {
 
   /** Place la caméra (position, direction, haut, champ vertical en degrés) et dessine tout de suite. */
   applyCamera(position: Vector3, direction: Vector3, up: Vector3, fov: number): void {
-    const camera = this.camera;
+    const camera = this.perspective;
     camera.position.copy(position);
     camera.up.copy(up);
     this.scratch.copy(position).add(direction);
@@ -225,6 +247,58 @@ export class Viewer {
     this.invalidate();
   }
 
+  get projection(): Projection {
+    return this.camera === this.perspective ? 'perspective' : 'orthographic';
+  }
+
+  /**
+   * Vue 2D : caméra orthographique, sans rotation (déplacement et zoom seulement), qui garde le
+   * cadrage de la perspective ; retour en perspective à la distance qui montre la même hauteur.
+   */
+  setProjection(kind: Projection): void {
+    if (this.projection === kind || (this.externalCamera && kind === 'orthographic')) return;
+    const from = this.camera;
+    const to = kind === 'perspective' ? this.perspective : this.orthographic;
+    const distance = Math.max(from.position.distanceTo(this.controls.target), 1e-3);
+    const halfFov = (this.perspective.fov * Math.PI) / 360;
+    const dir = this.scratch.copy(from.position).sub(this.controls.target).normalize();
+    if (dir.lengthSq() < 1e-12) dir.copy(DEFAULT_DIRECTION);
+    if (to === this.orthographic) {
+      to.up.copy(from.up);
+      to.position.copy(from.position);
+      this.setOrthoHalfHeight(Math.tan(halfFov) * distance);
+    } else {
+      const halfHeight = (this.orthographic.top - this.orthographic.bottom) / 2 / this.orthographic.zoom;
+      to.up.copy(UNIT[1]);
+      to.position.copy(this.controls.target).addScaledVector(dir, halfHeight / Math.tan(halfFov));
+    }
+    this.camera = to;
+    this.controls.object = to;
+    this.controls.enableRotate = kind === 'perspective';
+    this.sectionHandles.setCamera(to);
+    this.controls.update();
+    this.invalidate();
+  }
+
+  /** Vue standard (face, dessus…) : la maquette entière, regardée depuis cette direction. */
+  viewFrom(view: StandardView): void {
+    const { direction, up } = STANDARD_VIEWS[view];
+    this.camera.up.copy(up);
+    const box = this.model && !this.model.box.isEmpty() ? this.model.box : new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5));
+    this.fit(box, direction);
+  }
+
+  private setOrthoHalfHeight(halfHeight: number): void {
+    const camera = this.orthographic;
+    const aspect = this.width / this.height;
+    camera.top = halfHeight;
+    camera.bottom = -halfHeight;
+    camera.left = -halfHeight * aspect;
+    camera.right = halfHeight * aspect;
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+  }
+
   /** Cadre la caméra sur une boîte, en conservant la direction de vue sauf indication contraire. */
   /** En mode carte, le cadrage est délégué au globe ; renvoie vrai s'il l'a pris en charge. */
   onExternalFit: ((box: Box3) => boolean) | null = null;
@@ -234,14 +308,21 @@ export class Viewer {
     if (this.externalCamera && this.onExternalFit?.(box)) return;
     const sphere = box.getBoundingSphere(new Sphere());
     const radius = Math.max(sphere.radius, 1e-4);
-    const halfV = (this.camera.fov * Math.PI) / 360;
-    const halfH = Math.atan(Math.tan(halfV) * this.camera.aspect);
-    const distance = (radius / Math.sin(Math.min(halfV, halfH))) * 1.05;
     const dir = direction ? this.scratch.copy(direction) : this.scratch.copy(this.camera.position).sub(this.controls.target);
     if (dir.lengthSq() < 1e-12) dir.copy(DEFAULT_DIRECTION);
     dir.normalize();
     this.controls.target.copy(sphere.center);
-    this.camera.position.copy(sphere.center).addScaledVector(dir, distance);
+    if (this.camera === this.orthographic) {
+      // La sphère tient dans la plus petite dimension de la vue ; la caméra reste à distance du modèle.
+      const aspect = this.width / this.height;
+      this.setOrthoHalfHeight((radius * 1.05) / Math.min(1, aspect));
+      this.camera.position.copy(sphere.center).addScaledVector(dir, radius * 3);
+    } else {
+      const halfV = (this.perspective.fov * Math.PI) / 360;
+      const halfH = Math.atan(Math.tan(halfV) * this.perspective.aspect);
+      const distance = (radius / Math.sin(Math.min(halfV, halfH))) * 1.05;
+      this.camera.position.copy(sphere.center).addScaledVector(dir, distance);
+    }
     this.controls.update();
     this.invalidate();
   }
@@ -256,6 +337,7 @@ export class Viewer {
     for (const axis of AXES) {
       const outline = this.outlines[axis];
       outline.visible = enabled[axis];
+      this.planeFills[axis].visible = enabled[axis];
       if (!enabled[axis]) continue;
       const attribute = outline.geometry.getAttribute('position') as BufferAttribute;
       this.sections.outline(axis).forEach((point, i) => {
@@ -354,8 +436,12 @@ export class Viewer {
     this.resolutionScale = 1;
     this.renderer.setPixelRatio(this.basePixelRatio());
     this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.perspective.aspect = width / height;
+    this.perspective.updateProjectionMatrix();
+    const ortho = this.orthographic;
+    ortho.left = -ortho.top * (width / height);
+    ortho.right = ortho.top * (width / height);
+    ortho.updateProjectionMatrix();
     // Rendu immédiat : évite une image vide ou étirée pendant le redimensionnement.
     this.draw();
   }
