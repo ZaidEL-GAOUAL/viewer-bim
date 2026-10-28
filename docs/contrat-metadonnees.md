@@ -244,7 +244,8 @@ graphiques de lignes (couleur de trait, motif, demi-teinte) ne sont pas repris.
 ## 2 sexies. Vues enregistrées (`views`)
 
 Un tableau optionnel à la racine liste des vues enregistrées du modèle : un clic dans le menu « Vues » place la caméra et
-règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du projet.
+règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du projet et ses plans d'étage (voir « Plans
+d'étage » plus bas).
 
 ```json
 "views": [
@@ -259,6 +260,13 @@ règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du pro
   {
     "name": "{3D}",
     "camera": { "position": [-22.9, 39.3, 46.2], "direction": [0.399, -0.680, -0.616], "up": [0.369, 0.733, -0.571], "projection": "orthographic", "size": [99.9, 48.2] }
+  },
+  {
+    "name": "GF", "kind": "plan", "type": "Floor Plan",
+    "camera": { "position": [3.2, 30, 12.5], "direction": [0, -1, 0], "up": [0, 0, -1], "projection": "orthographic", "size": [62.4, 41.0] },
+    "range": { "bottom": 0.3, "top": 1.5 },
+    "sectionBox": { "min": [-28, 0.3, -8], "max": [34.4, 1.5, 33], "rotation": 0 },
+    "hiddenElements": ["2O2Fr$t4X7Zf8NOew3FLOH"]
   }
 ]
 ```
@@ -266,6 +274,9 @@ règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du pro
 | Champ | Obligatoire | Rôle |
 | --- | --- | --- |
 | `name` | oui | Nom affiché dans le menu. |
+| `kind` | non | `"plan"` pour un plan d'étage ; absent (ou `"3d"`) pour une vue 3D. Voir « Plans d'étage ». |
+| `type` | non | Le type de vue de Revit (« Floor Plan », « Structural Plan »…) : sert à distinguer deux plans de même nom. Affiché dans le menu. |
+| `range` | plans | `{ "bottom": nombre, "top": nombre }`, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). `top` est le plan de coupe ; `bottom` est la profondeur de vue, absente quand elle est illimitée. |
 | `camera` | oui | Voir ci-dessous. |
 | `sectionBox` | non | Boîte de coupe active de la vue (voir ci-dessous). |
 | `hiddenCategories` | non | `property` : nom de la propriété des éléments qui porte leur catégorie ; `values` : les valeurs masquées. La vue désigne elle-même sa propriété : le viewer n'en connaît aucune. |
@@ -289,19 +300,58 @@ tourne autour de la verticale (Y), dans le sens anti-horaire vu d'en haut, autou
 la boîte : six plans, en plus des trois plans de coupe libres (la carte « Coupes » a une case « Boîte de coupe de la vue »
 pour la couper ou la remettre). Une boîte qui n'est pas active n'est pas écrite.
 
-**Ce que fait « Vue par défaut ».** Elle retire la boîte, les masquages de la vue, la phase et le filtre, et replace la caméra
-d'avant l'ouverture de la première vue.
+**Plans d'étage** (`kind: "plan"`). Un plan est vu de dessus, coupé à la hauteur de coupe du plan : il montre la maquette
+entre sa profondeur de vue (`range.bottom`) et son plan de coupe (`range.top`), moins ce qu'il masque (`hiddenElements`,
+`hiddenCategories`) et ce que son filtre de phase écarte. Le viewer l'ouvre comme une vue 2D :
+
+- **Caméra.** Parallèle, regardant vers le bas (`direction: [0, -1, 0]`), `up` donnant le haut de l'écran (celui du
+  plan dans Revit). Avec `size`, c'est la fenêtre du recadrage du plan ; sans `size`, la
+  maquette est cadrée. L'œil est remonté au-dessus de la maquette, sur son axe : l'image est la même, mais le plan proche
+  ne passe plus dans le plan de coupe, qui garderait sinon sa coupe (le remplissage des murs coupés) hors du champ.
+- **Sans rotation.** Comme le bouton « 2D » : déplacement et zoom seulement. La rotation revient quand on ouvre une vue 3D,
+  « Vue par défaut » ou qu'on quitte le mode 2D. Une vue 3D parallèle, elle, garde l'orbite.
+- **Boîte de coupe.** Celle du plan, calculée par le viewer : en x et z, le `sectionBox` du plan (avec sa `rotation`) s'il
+  en a un, sinon la boîte du modèle agrandie de 1 m de chaque côté ; en y, de `range.bottom` moins 2 cm (de quoi garder
+  dans la coupe le dessus d'une dalle ou un DWG posé exactement au niveau) à `range.top`, ou, sans `range.bottom`, du bas
+  du modèle moins 1 m. Le y de `sectionBox` n'est pas lu : la plage du plan le remplace.
+- **Étendue lisible.** Un plan a besoin d'un `range.top` fini ; `range.bottom`, s'il est écrit, doit être fini et plus bas
+  que `range.top`. Sinon l'étendue est écartée et l'entrée est lue comme une vue ordinaire (sa caméra, ses masquages et sa
+  phase restent). `range` sur une vue qui n'est pas un plan est sans effet.
+- **Menu « Vues ».** Deux groupes, « Vues 3D » et « Plans d'étage » (chacun s'il a des vues) ; la note d'un plan est son
+  `type` (ou « plan »), puis « masquages » et sa phase.
+- **Mode carte.** Comme pour toute vue : le reste de la vue est appliqué, la caméra attend la fermeture de la carte.
+
+**Compatibilité des plans.** `kind`, `type` et `range` sont des ajouts : un viewer qui ignore `kind` ouvre un plan comme
+une vue parallèle de dessus (sa caméra, ses masquages et sa phase), sans coupe à la hauteur du plan.
+
+**À l'ouverture.** Quand le fichier a au moins une vue 3D, les éléments que **toutes** ses vues 3D masquent (une clé de
+`hiddenElements`, ou une valeur de `hiddenCategories`, comme quand la vue est ouverte) démarrent masqués : Revit ne les
+montre dans aucune vue 3D du fichier. Un élément que seules certaines vues 3D masquent reste visible, puisqu'une autre vue
+le montre ; sans vue 3D, ou si aucun élément n'est masqué par toutes, rien ne change. **Les plans d'étage ne comptent pas
+dans cette règle** : l'ouverture montre la maquette en 3D, et un plan s'écarte de la 3D dans les deux sens (il montre le
+dessin DWG d'un niveau que les vues 3D masquent, et masque celui d'un autre niveau). Les éléments masqués restent dans
+l'arbre, œil éteint : l'utilisateur peut les afficher, et « Tout afficher » les montre. C'est un comportement du viewer,
+pas un changement de format.
+
+**Ce que fait « Vue par défaut ».** Elle retire la boîte, la phase et le filtre, et replace la caméra d'avant l'ouverture de
+la première vue (en perspective, avec la rotation, si c'est ainsi qu'elle était). Elle ramène les masquages à l'état de
+l'ouverture : ce que toutes les vues 3D masquent reste masqué, le reste est affiché (sans vue 3D, ou si aucun élément n'est
+masqué par toutes, tout est affiché).
 
 **Ce qui n'est pas repris** (un `.rvt` le contient, mais le viewer ne le dessine pas) : les remplacements graphiques par
 catégorie ou par élément, les filtres de vue, le niveau de détail, le style visuel, le rendu (ombres, arrière-plan), les
-gabarits de vue (la vue enregistre déjà les valeurs qu'un gabarit lui a appliquées) et la profondeur de découpe. Une
-vue dont la caméra est illisible est ignorée sans empêcher les autres.
+gabarits de vue (la vue enregistre déjà les valeurs qu'un gabarit lui a appliquées) et la profondeur de découpe d'une vue
+3D (celle d'un plan est sa plage `range`). Pour un plan, ne sont pas repris non plus : les plans de plafond, les fonds de
+plan, les régions de plan, les sous-catégories masquées, les styles de ligne, les motifs de coupe, le tracé au-delà de la
+coupe et les annotations (le détail de ce que la lecture d'un `.rvt` prend est dans `docs/lecture-revit.md`). Une vue
+dont la caméra est illisible est ignorée sans empêcher les autres.
 
 ## 2 septies. Compatibilité
 
 Les sections `phases` et `views` sont facultatives et ajoutées sans changer la version du format : un fichier d'avant
 continue de s'ouvrir tel quel, un viewer qui ne les connaît pas les ignore, et une section illisible est ignorée (elle n'empêche
-pas d'ouvrir le modèle). « JSON ↓ » les réécrit telles qu'elles ont été lues.
+pas d'ouvrir le modèle). Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
+viewer qui les ignore ouvre un plan comme une vue parallèle de dessus. « JSON ↓ » les réécrit telles qu'elles ont été lues.
 
 ## 3. Groupes et sous-groupes
 

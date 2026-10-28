@@ -734,9 +734,15 @@ test('les phases et les vues du lecteur WebAssembly se lisent comme le contrat l
   assert.equal(newConstruction.counts.new, model.count);
   assert.equal(newConstruction.hidden.includes(1), false);
 
-  // Vues : la vue par défaut {3D} est parallèle, et sa caméra se convertit pour le repère recentré du modèle.
+  // Vues : la vue par défaut {3D} est parallèle, et sa caméra se convertit pour le repère recentré du modèle. Suivent les deux
+  // plans d'étage du niveau « Level 1 » (plan de structure, de −1,8 à 0,3 m, puis plan d'étage, de 0 à 1,2 m), vus de dessus.
   const views = metadata.views ?? [];
-  assert.deepEqual(views.map((view) => view.name), ['{3D}']);
+  assert.deepEqual(views.map((view) => [view.name, view.kind, view.type ?? null]), [['{3D}', '3d', null], ['Level 1', 'plan', 'Structural Plan'], ['Level 1', 'plan', 'Floor Plan']]);
+  for (const plan of views.slice(1)) {
+    assert.deepEqual(plan.camera.direction, [0, -1, 0], `${plan.type} : vu de dessus`);
+    assert.equal(plan.camera.projection, 'orthographic');
+  }
+  assert.deepEqual(views.slice(1).map((plan) => [plan.range?.bottom, plan.range?.top].map((y) => y === undefined ? y : Math.round(y * 100) / 100)), [[-1.8, 0.3], [0, 1.2]]);
   const [view] = views;
   assert.equal(view.camera.projection, 'orthographic');
   assert.equal(view.phase, 'New Construction');

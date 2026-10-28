@@ -37,12 +37,17 @@ impl Read {
         &self.metadata["phases"]
     }
 
-    fn views(&self) -> &[Value] {
-        self.metadata["views"].as_array().map_or(&[], Vec::as_slice)
+    /// Les vues 3D. Les plans d'étage (`"kind": "plan"`, après les vues 3D) ont leurs essais dans `tests/plans.rs`.
+    fn views(&self) -> Vec<&Value> {
+        self.metadata["views"].as_array().into_iter().flatten().filter(|view| view.get("kind").is_none()).collect()
+    }
+
+    fn plans(&self) -> Vec<&Value> {
+        self.metadata["views"].as_array().into_iter().flatten().filter(|view| view["kind"] == "plan").collect()
     }
 
     fn view(&self, name: &str) -> &Value {
-        self.views().iter().find(|view| view["name"] == name).unwrap_or_else(|| panic!("vue « {name} » absente"))
+        self.views().into_iter().find(|view| view["name"] == name).unwrap_or_else(|| panic!("vue « {name} » absente"))
     }
 
     fn order(&self) -> Vec<&str> {
@@ -350,11 +355,13 @@ fn les_phases_des_vues_de_revit_curtainwall_couvrent_tout_le_projet() {
 }
 
 #[test]
-fn les_anciens_fichiers_sans_vue_gardent_leurs_sections_absentes() {
-    // Un modèle de projet sans vue 3D n'écrit pas de section `views` ; le contrat reste celui d'avant.
+fn un_projet_sans_vue_3d_n_ecrit_que_ses_plans_d_etage() {
+    // Les vues 3D de ce modèle de projet sont des gabarits sans caméra : il n'a aucune vue 3D à écrire. Ses trois plans d'étage (voir
+    // `tests/plans.rs`) sont, eux, dans la section `views` : sans eux, la section serait absente comme avant.
     let Some(path) = sample("RoomsAndExits.rvt") else { return };
     let read = open(&path);
-    assert!(read.metadata.get("views").is_none());
+    assert!(read.views().is_empty());
+    assert_eq!(read.plans().len(), 3);
     assert!(read.metadata.get("phases").is_some());
     assert!(read.metadata.get("elements").is_some());
 }

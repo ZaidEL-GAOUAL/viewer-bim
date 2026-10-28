@@ -35,8 +35,25 @@ export interface HiddenCategories {
   values: string[];
 }
 
+/** `'plan'` : un plan d'étage (vu de dessus, coupé à sa hauteur de coupe) ; `'3d'` : toute autre vue, par défaut. */
+export type ViewKind = '3d' | 'plan';
+
+/** L'étendue verticale d'un plan d'étage, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). */
+export interface PlanRange {
+  /** La profondeur de vue : le plan ne montre rien de plus bas. Absente quand elle est illimitée. */
+  bottom?: number;
+  /** Le plan de coupe : le plan ne montre rien de plus haut. */
+  top: number;
+}
+
 export interface SavedView {
   name: string;
+  /** `'3d'` si le fichier n'en dit rien, ou si un plan n'a pas d'étendue lisible : il s'ouvre alors comme une vue ordinaire. */
+  kind: ViewKind;
+  /** Le type de vue de Revit (« Floor Plan », « Structural Plan »…), pour distinguer deux plans de même nom. */
+  type?: string;
+  /** Plans seulement : de la profondeur de vue (facultative) à la hauteur de coupe. */
+  range?: PlanRange;
   camera: SavedViewCamera;
   sectionBox?: SectionBoxSpec;
   hiddenCategories?: HiddenCategories;
@@ -86,8 +103,24 @@ function parseCamera(raw: unknown): SavedViewCamera | undefined {
 }
 
 /**
+ * L'étendue d'un plan : une hauteur de coupe (`top`) finie ; une profondeur de vue (`bottom`) absente (illimitée) ou finie
+ * et plus basse que la coupe. Tout le reste est illisible : l'étendue est écartée en entier plutôt que devinée.
+ */
+function parseRange(raw: unknown): PlanRange | undefined {
+  if (!isRecord(raw)) return undefined;
+  const { top, bottom } = raw;
+  if (typeof top !== 'number' || !Number.isFinite(top)) return undefined;
+  if (bottom === undefined || bottom === null) return { top };
+  if (typeof bottom !== 'number' || !Number.isFinite(bottom) || bottom >= top) return undefined;
+  return { bottom, top };
+}
+
+/**
  * Lit la section `views`. Une entrée illisible (sans nom, sans caméra valide) est ignorée sans empêcher les autres : un
  * viewer qui ne connaît pas la section l'ignore de même, et le reste du fichier garde son sens.
+ *
+ * Un plan d'étage (`kind: "plan"`) a besoin d'une étendue lisible (`range.top` fini, voir `parseRange`) ; sans elle, il
+ * devient une vue ordinaire : sa caméra, ses masquages et sa phase restent, mais il n'est ni un plan ni coupé à une hauteur.
  */
 export function parseViews(raw: unknown): SavedView[] {
   if (!Array.isArray(raw)) return [];
@@ -96,7 +129,13 @@ export function parseViews(raw: unknown): SavedView[] {
     if (!isRecord(item) || typeof item.name !== 'string' || item.name === '') continue;
     const camera = parseCamera(item.camera);
     if (!camera) continue;
-    const view: SavedView = { name: item.name, camera };
+    const view: SavedView = { name: item.name, kind: '3d', camera };
+    if (typeof item.type === 'string' && item.type !== '') view.type = item.type;
+    const range = item.kind === 'plan' ? parseRange(item.range) : undefined;
+    if (range) {
+      view.kind = 'plan';
+      view.range = range;
+    }
     const min = isRecord(item.sectionBox) ? vec3(item.sectionBox.min) : undefined;
     const max = isRecord(item.sectionBox) ? vec3(item.sectionBox.max) : undefined;
     if (min && max && isRecord(item.sectionBox)) {
@@ -206,9 +245,81 @@ export function hiddenByView(
   return hidden;
 }
 
+/**
+ * Les éléments que toutes les vues 3D enregistrées masquent (l'intersection des `hiddenByView` de chaque vue 3D), ou `null`
+ * s'il n'y a aucune vue 3D ou si aucun élément n'est masqué par toutes. Revit ne montre jamais un tel élément dans une vue
+ * 3D du fichier : à l'ouverture, le viewer le laisse masqué (un élément que seules certaines vues masquent reste visible,
+ * une autre vue le montre). Les clés et les catégories qu'aucun élément ne porte sont sans effet.
+ *
+ * Les plans d'étage (`kind: 'plan'`) sont ignorés : l'ouverture montre la maquette en 3D, et un plan s'écarte de la 3D
+ * dans les deux sens. Il montre ce que la 3D masque (le dessin DWG d'un niveau, que les vues 3D laissent éteint) et masque
+ * ce que la 3D montre (le DWG d'un autre niveau). Compté, un tel plan viderait l'intersection : un élément masqué par
+ * toutes les vues 3D redeviendrait visible dès qu'un seul plan le montre, alors qu'aucune vue 3D ne le montre.
+ */
+export function hiddenInEveryView(
+  allViews: readonly (Pick<SavedView, 'hiddenCategories' | 'hiddenElements'> & { kind?: ViewKind })[],
+  count: number,
+  indexOfKey: ReadonlyMap<string, number>,
+  valueOf: (index: number, property: string) => PropValue | undefined,
+): Uint8Array | null {
+  const views = allViews.filter((view) => view.kind !== 'plan');
+  if (views.length === 0) return null;
+  const hidden = hiddenByView(views[0], count, indexOfKey, valueOf);
+  for (let v = 1; v < views.length && hidden.includes(1); v++) {
+    const other = hiddenByView(views[v], count, indexOfKey, valueOf);
+    for (let i = 0; i < count; i++) hidden[i] &= other[i];
+  }
+  return hidden.includes(1) ? hidden : null;
+}
+
 /** La boîte de coupe dans le repère recentré du modèle. */
 export function sectionBoxLocal(box: SectionBoxSpec, offset: Vec3): SectionBoxSpec {
   return { min: sub(box.min, offset), max: sub(box.max, offset), rotation: box.rotation };
+}
+
+/**
+ * La caméra d'un plan d'étage dans le repère recentré : celle de `cameraPose`, avec l'œil remonté au-dessus de la maquette.
+ * Le fichier place l'œil à la hauteur de coupe ; en projection parallèle cela ne change pas l'image, mais le plan proche
+ * passerait alors dans le plan de coupe, et le remplissage de la coupe (les murs coupés) en serait retranché. Reculer l'œil
+ * sur son axe, jusqu'à ce que toute la sphère englobante soit devant lui, garde la même vue. Un œil déjà assez en recul
+ * (vue sans taille, que `cameraPose` cadre à trois rayons) ne bouge pas.
+ */
+export function planCameraPose(camera: SavedViewCamera, offset: Vec3, bounds: Bounds, aspect: number): CameraPose {
+  const pose = cameraPose(camera, offset, bounds, aspect);
+  const { direction } = camera;
+  const depth = dot(sub(bounds.center, pose.position), direction);
+  const back = Math.max(0, Math.max(bounds.radius, 1e-3) * 1.05 - depth);
+  if (back > 0) pose.position = [pose.position[0] - direction[0] * back, pose.position[1] - direction[1] * back, pose.position[2] - direction[2] * back];
+  return pose;
+}
+
+/** Marge sous la profondeur de vue d'un plan : garde dans la coupe le dessus d'une dalle ou un DWG posé exactement au niveau. */
+const PLAN_DEPTH_MARGIN = 0.02;
+
+/**
+ * La boîte de coupe d'un plan d'étage dans le repère recentré (`offset` retranché), ou `null` pour une vue sans étendue.
+ *
+ * - **x et z** : ceux du recadrage du plan (`sectionBox`, avec sa rotation) s'il en a un ; sinon la boîte du modèle
+ *   agrandie de 1 m de chaque côté (rien n'est coupé sur les côtés). Sans recadrage ni modèle, il n'y a pas de boîte.
+ * - **y** : de la profondeur de vue du plan, moins 2 cm (`PLAN_DEPTH_MARGIN`), à sa hauteur de coupe. Sans profondeur
+ *   (illimitée), du bas du modèle moins 1 m. Le y du recadrage n'est pas lu : la plage du plan le remplace.
+ *
+ * `modelBox` est la boîte du modèle dans le repère recentré (vide ou non finie : sans effet).
+ */
+export function planSectionBox(view: Pick<SavedView, 'sectionBox' | 'range'>, offset: Vec3, modelBox: { min: Vec3; max: Vec3 } | null): SectionBoxSpec | null {
+  const { range } = view;
+  if (!range) return null;
+  const model = modelBox && modelBox.min.every((x, axis) => Number.isFinite(x) && Number.isFinite(modelBox.max[axis]) && x <= modelBox.max[axis]) ? modelBox : null;
+  const top = range.top - offset[1];
+  // Sans profondeur : le bas du modèle moins 1 m. Un modèle tout entier au-dessus de la coupe donne une tranche de 1 m sous
+  // elle : rien n'est montré, mais la boîte reste valide (le bas ne dépasse jamais le haut).
+  const bottom = range.bottom !== undefined ? range.bottom - PLAN_DEPTH_MARGIN - offset[1] : model ? Math.min(model.min[1] - 1, top - 1) : top - 1e4;
+  if (view.sectionBox) {
+    const { min, max, rotation } = view.sectionBox;
+    return { min: [min[0] - offset[0], bottom, min[2] - offset[2]], max: [max[0] - offset[0], top, max[2] - offset[2]], rotation };
+  }
+  if (!model) return null;
+  return { min: [model.min[0] - 1, bottom, model.min[2] - 1], max: [model.max[0] + 1, top, model.max[2] + 1], rotation: 0 };
 }
 
 /** La section `views` au format du contrat (pour réexporter les métadonnées). */
@@ -217,11 +328,15 @@ export function viewsToJson(views: readonly SavedView[]): Record<string, unknown
     const { camera } = view;
     const out: Record<string, unknown> = {
       name: view.name,
+      // Une vue 3D n'écrit pas `kind` : c'est son absence que le contrat appelle « vue 3D ».
+      ...(view.kind === 'plan' ? { kind: 'plan' } : {}),
+      ...(view.type !== undefined ? { type: view.type } : {}),
       camera: {
         position: [...camera.position], direction: [...camera.direction], up: [...camera.up], projection: camera.projection,
         ...(camera.fov !== undefined ? { fov: camera.fov } : {}), ...(camera.size ? { size: [...camera.size] } : {}),
       },
     };
+    if (view.kind === 'plan' && view.range) out.range = { ...(view.range.bottom !== undefined ? { bottom: view.range.bottom } : {}), top: view.range.top };
     if (view.sectionBox) out.sectionBox = { min: [...view.sectionBox.min], max: [...view.sectionBox.max], ...(view.sectionBox.rotation !== 0 ? { rotation: view.sectionBox.rotation } : {}) };
     if (view.hiddenCategories) out.hiddenCategories = { property: view.hiddenCategories.property, values: [...view.hiddenCategories.values] };
     if (view.hiddenElements) out.hiddenElements = [...view.hiddenElements];

@@ -1,4 +1,4 @@
-//! La caméra et la boîte de coupe d'une vue 3D, converties dans le repère du viewer : mètres, axe Y vers le haut,
+//! La caméra et la boîte de coupe d'une vue 3D (et le cadre d'un plan d'étage), converties dans le repère du viewer : mètres, axe Y vers le haut,
 //! `(x, y, z)` pieds devient `(x, z, -y) × 0,3048`, comme la géométrie (`geometry`), mais sans soustraire l'origine du
 //! modèle : ce sont les coordonnées du projet, celles que le viewer recentre en retranchant `Model.offset`.
 
@@ -166,6 +166,71 @@ pub fn section_box(space: &Bounded) -> Option<SectionBox> {
     Some(SectionBox { min: [c[0] - h[0], c[1] - h[1], c[2] - h[2]], max: [c[0] + h[0], c[1] + h[1], c[2] + h[2]], rotation })
 }
 
+/// Le recadrage d'un plan, dans le repère du projet (pieds) : le centre du rectangle, ses demi-côtés le long des axes du plan (droite, haut)
+/// et la rotation de ces axes, en degrés (positive dans le sens anti-horaire vu d'en haut).
+struct PlanCrop {
+    centre: [f64; 2],
+    half: [f64; 2],
+    rotation: f64,
+}
+
+/// Le recadrage actif d'un plan : `Some(None)` si le plan n'est pas recadré, `Some(Some(…))` s'il l'est, `None` si son recadrage est actif mais que
+/// son repère n'est pas celui d'un plan (axes de dessin horizontaux et perpendiculaires) : on ne l'invente pas.
+///
+/// Mesuré sur les 543 plans des fichiers d'essai : le repère du recadrage est exactement celui de la vue (`m_basis` = droite, haut,
+/// et l'opposé du regard : `m_horzDir`, `m_vertDir`, `-m_viewDir`), les décalages de l'axe de dessin (en pieds, du côté positif puis du côté négatif,
+/// le premier plus grand que le second, parfois tous deux positifs ou négatifs quand l'origine est hors du recadrage) sont mesurés depuis
+/// `m_orig`, et le recadrage est actif sur les deux côtés des deux axes (`m_boundActive`) ou sur aucun (517 plans contre 26) ; `m_isOn` est toujours vrai.
+fn plan_crop(space: &Bounded) -> Option<Option<PlanCrop>> {
+    if !space.on || !space.active[0].iter().chain(&space.active[1]).all(|active| *active) {
+        return Some(None);
+    }
+    let [u, v, _] = space.basis;
+    let unit_horizontal = |axis: V3| (length(axis) - 1.0).abs() < 1e-6 && axis[2].abs() < 1e-6;
+    if !unit_horizontal(u) || !unit_horizontal(v) || dot(u, v).abs() > 1e-6 {
+        return None;
+    }
+    let [ou, ov, _] = space.offsets;
+    if ![ou, ov].iter().all(|pair| pair[0] > pair[1] && pair[0].abs() < 1e6 && pair[1].abs() < 1e6) {
+        return None;
+    }
+    let mid = |pair: [f64; 2]| (pair[0] + pair[1]) / 2.0;
+    let half = |pair: [f64; 2]| (pair[0] - pair[1]) / 2.0;
+    let centre = [space.origin[0] + u[0] * mid(ou) + v[0] * mid(ov), space.origin[1] + u[1] * mid(ou) + v[1] * mid(ov)];
+    Some(Some(PlanCrop { centre, half: [half(ou), half(ov)], rotation: u[1].atan2(u[0]).to_degrees() }))
+}
+
+/// Le cadre d'un plan d'étage dans le repère du viewer : sa caméra et, s'il est recadré, la boîte de son recadrage (`min.y` et `max.y` à `0` :
+/// c'est la plage de vue du plan qui les donne, voir `write::views_json`). `cut` est le plan de coupe, en pieds. `None` si le plan n'est pas lisible :
+/// il ne regarde pas vers le bas, son haut est dégénéré, ou son recadrage actif n'est pas un rectangle de plan.
+///
+/// - La caméra regarde droit vers le bas (`[0, -1, 0]`), en projection parallèle, et son haut est `m_vertDir`.
+///   **`m_vertDir` porte déjà la rotation du nord vrai** : sur les 11 plans « nord vrai » (`m_bUseTrueNorth`) des fichiers d'essai, il est celui
+///   du nord vrai du projet (0,6018 ; 0,7986 pour les `DynamoSample` et `SampleModel`, 37° du nord du projet, la rotation de leur emplacement
+///   actif), et il est (0 ; 1) sur les plans qui n'ont pas cet indicateur, dans ces mêmes fichiers. Le nord de l'emplacement du site n'est donc
+///   pas relu : l'appliquer de nouveau doublerait la rotation.
+/// - Recadré sur les deux axes : la taille est celle du rectangle (largeur le long de la droite de la vue, hauteur le long de son haut) et la
+///   position son centre, à la hauteur de coupe. Sinon, ni taille, ni recadrage : la position est l'origine de la vue à la hauteur de coupe, et le
+///   viewer cadre la maquette.
+pub fn plan_camera(view: &ViewRecord, crop: &Bounded, cut: f64) -> Option<(Camera, Option<SectionBox>)> {
+    // Un plan regarde vers le bas : l'opposé de son regard, `m_viewDir`, monte.
+    if unit(view.back)?[2] < 0.999 {
+        return None;
+    }
+    let up = direction(view.up);
+    let up = unit([up[0], 0.0, up[2]])?;
+    let crop = plan_crop(crop)?;
+    let (position, size, section) = match crop {
+        Some(PlanCrop { centre, half, rotation }) => {
+            let c = point([centre[0], centre[1], cut]);
+            let h = [half[0] * FOOT, half[1] * FOOT];
+            (c, Some([2.0 * h[0], 2.0 * h[1]]), Some(SectionBox { min: [c[0] - h[0], 0.0, c[2] - h[1]], max: [c[0] + h[0], 0.0, c[2] + h[1]], rotation }))
+        }
+        None => (point([view.eye[0], view.eye[1], cut]), None, None),
+    };
+    Some((Camera { position, direction: [0.0, -1.0, 0.0], up, perspective: false, fov: None, size }, section))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,6 +305,56 @@ mod tests {
         let camera = super::camera(&view, &default).expect("caméra");
         assert!(camera.fov.is_none());
         near(camera.direction, [1.0, 0.0, 0.0]);
+    }
+
+    fn plan_view(right: V3, up: V3, back: V3) -> ViewRecord {
+        ViewRecord { eye: [2.0, 3.0, 0.0], right, up, back, ..ViewRecord::default() }
+    }
+
+    fn plan_space(active: bool, basis: [[f64; 3]; 3], origin: V3, offsets: [[f64; 2]; 2]) -> Bounded {
+        Bounded { basis, origin, offsets: [offsets[0], offsets[1], [100.0, -100.0]], active: [[active; 2], [active; 2], [false; 2]], on: true }
+    }
+
+    #[test]
+    fn un_plan_regarde_vers_le_bas_avec_son_haut_et_sans_recadrage_n_a_ni_taille_ni_boite() {
+        let view = plan_view([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
+        let space = plan_space(false, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]], [0.0; 3], [[100.0, -100.0], [100.0, -100.0]]);
+        let (camera, section) = plan_camera(&view, &space, 5.0).expect("caméra");
+        assert!(!camera.perspective && camera.fov.is_none() && camera.size.is_none() && section.is_none());
+        near(camera.direction, [0.0, -1.0, 0.0]);
+        // Le nord du projet (+Y de Revit) est le haut de l'écran : -Z du viewer.
+        near(camera.up, [0.0, 0.0, -1.0]);
+        // Sans recadrage : l'origine de la vue (2 ; 3) à la hauteur de coupe (5 pieds).
+        near(camera.position, point([2.0, 3.0, 5.0]));
+        // Un plan de plafond regarde vers le haut (l'opposé du regard descend) : pas un plan d'étage.
+        assert!(plan_camera(&plan_view([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]), &space, 5.0).is_none());
+    }
+
+    #[test]
+    fn un_plan_recadre_prend_la_taille_le_centre_et_la_rotation_de_son_rectangle() {
+        // Repère tourné de 30° : droite (cos, sin), haut (−sin, cos) ; le rectangle va de −2 à +6 le long de la droite et de −1 à +3 le long du haut.
+        let (s, c) = (30f64.to_radians().sin(), 30f64.to_radians().cos());
+        let view = plan_view([c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]);
+        let space = plan_space(true, [[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, -1.0]], [10.0, 20.0, 7.0], [[6.0, -2.0], [3.0, -1.0]]);
+        let (camera, section) = plan_camera(&view, &space, 12.0).expect("caméra");
+        let size = camera.size.expect("taille");
+        assert!((size[0] - 8.0 * FOOT).abs() < 1e-9 && (size[1] - 4.0 * FOOT).abs() < 1e-9, "{size:?}");
+        // Centre : origine + 2 le long de la droite + 1 le long du haut.
+        let centre = [10.0 + 2.0 * c - s, 20.0 + 2.0 * s + c, 12.0];
+        near(camera.position, point(centre));
+        // Le haut de l'écran est le haut du plan : (−sin, cos) → (−sin, 0, −cos) dans le viewer.
+        near(camera.up, [-s, 0.0, -c]);
+        let found = section.expect("boîte");
+        assert!((found.rotation - 30.0).abs() < 1e-9, "{}", found.rotation);
+        near([found.max[0] - found.min[0], 0.0, found.max[2] - found.min[2]], [8.0 * FOOT, 0.0, 4.0 * FOOT]);
+        near([(found.max[0] + found.min[0]) / 2.0, 0.0, (found.max[2] + found.min[2]) / 2.0], [point(centre)[0], 0.0, point(centre)[2]]);
+        // Les deux axes doivent être actifs : un recadrage actif sur un seul n'est pas un recadrage du plan.
+        let mut one = space.clone();
+        one.active[1] = [false, false];
+        assert!(plan_camera(&view, &one, 12.0).expect("caméra").0.size.is_none());
+        // Un repère de recadrage qui n'est pas horizontal et orthonormé n'est pas représentable.
+        let tilted = Bounded { basis: [[1.0, 0.0, 0.0], [0.0, 0.7, 0.7], [0.0, -0.7, 0.7]], ..space };
+        assert!(plan_camera(&view, &tilted, 12.0).is_none());
     }
 
     #[test]

@@ -147,7 +147,8 @@ fn native_fiches(file: &mut rvt::RevitFile, context: &mut Context, ids: &[u64], 
     let step = Stopwatch::start();
     let resolver = Resolver::with_owners(&collected, move |id| owners.get(id), document_family);
     let fiches: Vec<fiche::Fiche> = ids.iter().enumerate().map(|(i, id)| resolver.fiche(*id as i64, guid_of(keys, i, *id))).collect();
-    let sections = sections(context.retained.views(), ids, keys, &fiches);
+    let imports = resolver.imports(ids);
+    let sections = sections(context.retained.views(), ids, keys, &fiches, &imports);
     // Les phases, filtres et vues que possède une famille dont on ne sait pas si elle est chargée restent dans les sections : on le dit.
     context.warnings.extend(crate::views::unread_warning(context.retained.views().unread()));
     Ok((fiches, georeference, sections, step.seconds()))
@@ -155,12 +156,13 @@ fn native_fiches(file: &mut rvt::RevitFile, context: &mut Context, ids: &[u64], 
 
 /// Les sections `phases` et `views` du contrat, écrites avec les noms des propriétés des fiches (le viewer ne connaît
 /// aucun nom : il les lit dans le fichier).
-fn sections(digest: &crate::views::Digest, ids: &[u64], keys: &[String], fiches: &[fiche::Fiche]) -> Sections {
+fn sections(digest: &crate::views::Digest, ids: &[u64], keys: &[String], fiches: &[fiche::Fiche], imports: &(Vec<usize>, std::collections::HashMap<i64, String>)) -> Sections {
     let keys_by_id: std::collections::HashMap<i64, &str> = ids.iter().zip(keys).map(|(id, key)| (*id as i64, key.as_str())).collect();
+    let import_keys: Vec<&str> = imports.0.iter().map(|index| keys[*index].as_str()).collect();
     let categories: std::collections::BTreeSet<String> = fiches.iter().filter_map(|fiche| fiche.head.iter().find(|(name, _)| *name == fiche::CATEGORY)).filter_map(|(_, value)| if let Val::Text(text) = value { Some(text.clone()) } else { None }).collect();
     Sections {
         phases: crate::views::phases_json(digest, fiche::PHASE_CREATED, fiche::PHASE_DEMOLISHED),
-        views: crate::views::views_json(digest, &crate::views::Elements { keys: &keys_by_id, categories: &categories, category_property: fiche::CATEGORY }),
+        views: crate::views::views_json(digest, &crate::views::Elements { keys: &keys_by_id, categories: &categories, category_property: fiche::CATEGORY, imports: &imports.1, import_keys: &import_keys }),
     }
 }
 

@@ -2,7 +2,7 @@ import { Box3, Sphere } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { IFC_READ_ONLY, PropertyStore, flattenProperties, unflattenProperties, mergeProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
 import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
-import { cameraPose, hiddenByView, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
+import { cameraPose, hiddenByView, hiddenInEveryView, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
 import { combineHidden, layerChanges } from '../data/viewLayer.ts';
 import { writeGlb } from '../engine/writeGlb.ts';
 import { PropertyEdits } from '../data/PropertyEdits.ts';
@@ -149,6 +149,8 @@ export class App {
   activeView: SavedView | null = null;
   /** Éléments que la vue enregistrée masque (éléments et catégories), ou null. */
   private viewHidden: Uint8Array | null = null;
+  /** Éléments que toutes les vues enregistrées masquent : masqués à l'ouverture, comme dans Revit ; « Vue par défaut » y revient. */
+  private openingHidden: Uint8Array | null = null;
   /** Éléments que la phase et la vue masquent en ce moment : de quoi les réafficher quand elles changent. */
   private layerHidden: Uint8Array | null = null;
   /** La caméra d'avant l'ouverture de la première vue enregistrée : « Vue par défaut » la rétablit. */
@@ -688,7 +690,15 @@ export class App {
 
   /**
    * Ouvre une vue enregistrée : la caméra (en glissant), la boîte de coupe, les éléments et catégories masqués, la phase et
-   * son filtre. `null` : la vue par défaut, c'est-à-dire l'affichage normal, la caméra d'avant la première vue ouverte.
+   * son filtre. `null` : la vue par défaut, c'est-à-dire l'état de l'ouverture (ce que toutes les vues 3D enregistrées
+   * masquent reste masqué, le reste est affiché), sans boîte de coupe ni phase, avec la caméra d'avant la première vue
+   * ouverte.
+   *
+   * Un plan d'étage (`kind: 'plan'`) s'ouvre en vue 2D, vu de dessus, sans rotation : la caméra est parallèle (celle du
+   * fichier), puis `setProjection('orthographic', false)` retire l'orbite (déplacement et zoom seulement, comme le bouton
+   * « 2D »). La boîte de coupe est celle du plan (`planSectionBox`) : son recadrage en x et z, sa profondeur de vue et sa
+   * hauteur de coupe en y. La rotation revient à la sortie du plan : toute autre vue passe par `Viewer.setCameraPose` ou
+   * `restorePose`, qui rétablissent l'orbite (voir `Viewer.moveTo`).
    */
   openView(view: SavedView | null): void {
     const model = this.model, { viewer } = this;
@@ -696,7 +706,7 @@ export class App {
     if (view === null) {
       viewer.sections.setBox(null);
       viewer.sectionsChanged();
-      this.viewHidden = null;
+      this.viewHidden = this.openingHidden;
       this.applyPhase(null);
       this.refreshLayers();
       if (this.cameraBeforeViews) viewer.restorePose(this.cameraBeforeViews);
@@ -708,8 +718,13 @@ export class App {
       return;
     }
     if (!this.mapPanel.isOpen) this.cameraBeforeViews ??= viewer.capturePose();
-    // Boîte de coupe : celle de la vue, ou aucune.
-    viewer.sections.setBox(view.sectionBox ? sectionBoxLocal(view.sectionBox, model.offset.toArray()) : null);
+    const plan = view.kind === 'plan';
+    const offset = model.offset.toArray();
+    // Boîte de coupe : celle de la vue, ou aucune. Un plan a la sienne (recadrage en x et z, plage de hauteur en y).
+    const box = plan
+      ? planSectionBox(view, offset, model.box.isEmpty() ? null : { min: model.box.min.toArray(), max: model.box.max.toArray() })
+      : view.sectionBox ? sectionBoxLocal(view.sectionBox, offset) : null;
+    viewer.sections.setBox(box);
     viewer.sectionsChanged();
     const hidden = hiddenByView(view, model.count, this.indexOfKey(), (index, property) => ownValue(this.store.propsOf(index), property));
     this.viewHidden = hidden.includes(1) ? hidden : null;
@@ -720,7 +735,17 @@ export class App {
     } else {
       const sphere = model.box.getBoundingSphere(new Sphere());
       const { width, height } = viewer.size;
-      viewer.setCameraPose(cameraPose(view.camera, model.offset.toArray(), { center: sphere.center.toArray(), radius: sphere.radius }, width / Math.max(height, 1)));
+      const bounds = { center: sphere.center.toArray(), radius: sphere.radius };
+      const aspect = width / Math.max(height, 1);
+      if (plan) {
+        // Un plan est toujours vu en projection parallèle : un fichier qui lui donnerait une perspective est lu comme parallèle.
+        const camera = { ...view.camera, projection: 'orthographic' as const };
+        // `setCameraPose` laisse l'orbite en place (une vue parallèle 3D la garde) : le plan la retire ensuite. La projection
+        // est alors déjà parallèle, `setProjection` ne fait que fixer `enableRotate` à faux.
+        if (viewer.setCameraPose(planCameraPose(camera, offset, bounds, aspect))) viewer.setProjection('orthographic', false);
+      } else {
+        viewer.setCameraPose(cameraPose(view.camera, offset, bounds, aspect));
+      }
       this.syncProjectionUi();
     }
     this.activeView = view;
@@ -857,6 +882,7 @@ export class App {
         await this.loadRevit(ticket, sourceFile.file, candidates, metadataError);
       } else if (!modelFile && sourceFile) {
         await this.loadIfc(ticket, sourceFile.file);
+        if (ticket === this.loadTicket) this.announceOpeningHidden();
       } else if (modelFile) {
         const { candidates, metadataError } = readCandidates();
         // Au-delà de cette taille, le navigateur ne peut plus lire le fichier d'un seul bloc.
@@ -906,6 +932,8 @@ export class App {
           this.toast(`Modèle chargé sans métadonnées. ${metadataError}`, true);
         } else if (modelFiles.length > 1) {
           this.toast(`${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`);
+        } else {
+          this.announceOpeningHidden();
         }
       } else if (metadataFiles.length && reading && this.revitReading === reading) {
         // La lecture a son propre JSON (celui du fichier) : ceux-ci sont départagés avec lui à la fin, par leurs identifiants.
@@ -1090,7 +1118,8 @@ export class App {
     const { report } = result;
     const { text, warning } = describeRevitReport(report);
     this.conversionTitle.textContent = 'Fichier Revit lu';
-    this.conversionText.textContent = text;
+    // Ce que l'ouverture a masqué est dit à la suite du compte rendu ; la phrase n'est pas un avertissement.
+    this.conversionText.textContent = [text, this.openingHiddenSentence(true)].filter(Boolean).join(' ');
     this.conversionText.classList.toggle('warning', warning);
     this.conversionEl.hidden = false;
     this.syncDownloads();
@@ -1244,7 +1273,10 @@ export class App {
     try {
       const base = `${import.meta.env.BASE_URL}samples/${name}`;
       const [gltf, text, glb] = await Promise.all([loadModelUrl(`${base}.glb`), fetch(`${base}.json`).then((r) => r.text()), fetch(`${base}.glb`).then((r) => r.blob())]);
-      if (await this.installModel(ticket, gltf, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) this.originalGlb = glb;
+      if (await this.installModel(ticket, gltf, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) {
+        this.originalGlb = glb;
+        this.announceOpeningHidden();
+      }
     } catch (error) {
       if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
     } finally {
@@ -1322,6 +1354,7 @@ export class App {
     this.phaseEvaluation = null;
     this.activeView = null;
     this.viewHidden = null;
+    this.openingHidden = null;
     this.layerHidden = null;
     this.cameraBeforeViews = null;
     this.keyIndex = null;
@@ -1402,6 +1435,13 @@ export class App {
 
     this.emptyEl.hidden = true;
     this.rebuildStore();
+    // À l'ouverture, ce que toutes les vues enregistrées masquent l'est aussi ici (Revit ne le montre dans aucune vue 3D) :
+    // la couche des vues s'en charge, l'arbre, le cadrage, les clics et la carte le voient. `'visibility'` est émis plus bas.
+    this.openingHidden = hiddenInEveryView(this.savedViews, model.count, this.indexOfKey(), (index, property) => ownValue(this.store.propsOf(index), property));
+    if (this.openingHidden) {
+      this.viewHidden = this.openingHidden;
+      this.refreshLayers();
+    }
     if (Array.isArray(embeddedReadOnly)) this.store.readOnly = [...new Set([...this.store.readOnly, ...embeddedReadOnly.filter((p): p is string => typeof p === 'string')])];
     this.emit('selection');
     this.emit('visibility');
@@ -1441,6 +1481,30 @@ export class App {
     let matched = 0;
     for (const key of this.model?.keys ?? []) if (metadata.elements.has(key)) matched++;
     return matched;
+  }
+
+  /** Le nombre d'éléments que l'ouverture a masqués (voir `openingHidden`). */
+  private openingHiddenCount(): number {
+    let count = 0;
+    for (const flag of this.openingHidden ?? []) count += flag;
+    return count;
+  }
+
+  /**
+   * La phrase qui dit ce que l'ouverture a masqué (vide s'il n'y a rien) : « Tout afficher » le montre. `revit` : les vues
+   * sont celles du fichier Revit lui-même ; sinon, celles de son JSON.
+   */
+  private openingHiddenSentence(revit: boolean): string {
+    const count = this.openingHiddenCount();
+    if (count === 0) return '';
+    const views = revit ? 'les vues 3D du fichier Revit' : 'les vues enregistrées du fichier';
+    return `${counted(count, 'élément')} ${count < 2 ? 'masqué' : 'masqués'} à l’ouverture, comme dans ${views} : « Tout afficher » ${count < 2 ? 'le montre' : 'les montre'}.`;
+  }
+
+  /** Dit ce que l'ouverture a masqué dans un message, sans remplacer un message d'erreur déjà affiché (hors Revit : voir `loadRevit`). */
+  private announceOpeningHidden(): void {
+    const sentence = this.openingHiddenSentence(false);
+    if (sentence && !(!this.toastEl.hidden && this.toastEl.classList.contains('error'))) this.toast(sentence);
   }
 
   private reportMatching(): void {

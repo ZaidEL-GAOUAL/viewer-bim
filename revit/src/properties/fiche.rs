@@ -154,13 +154,42 @@ impl<'a> Resolver<'a> {
     /// importées »), ou une catégorie de Revit (« Styles d'objet d'importation » pour `SiteModel.dwg` de `dynamo-nyc-site-2013`). `None` pour
     /// tout autre élément, et pour un import dont le symbole ne se lit pas ou n'a pas de nom : il garde alors son libellé de catégorie et d'identifiant.
     fn import_naming(&self, raw: &Raw, type_raw: Option<&Raw>) -> Option<(String, Option<String>)> {
+        let (file, category) = self.import_symbol(raw, type_raw)?;
+        Some((file, category.map(|(_, label)| label)))
+    }
+
+    /// [`Self::import_naming`] avec, en plus du libellé de la catégorie de l'import, l'identifiant que le symbole désigne (`m_categoryId` : l'élément
+    /// `CategoryElem` s'il est positif, une `BuiltInCategory` s'il est négatif).
+    fn import_symbol(&self, raw: &Raw, type_raw: Option<&Raw>) -> Option<(String, Option<(i64, String)>)> {
         if raw.class != crate::geometry::classes::IMPORT_CLASS {
             return None;
         }
         let symbol = type_raw.filter(|symbol| symbol.class == "MasterImportSymbol")?;
         let file = symbol.name.clone()?;
-        let category = symbol.import_category.and_then(|id| if id > 0 { self.record(id).and_then(|record| record.name.clone()) } else { catalog::category(id).map(|category| category.label.to_string()) });
+        let category = symbol.import_category.and_then(|id| {
+            let label = if id > 0 { self.record(id).and_then(|record| record.name.clone()) } else { catalog::category(id).map(|category| category.label.to_string()) };
+            label.map(|label| (id, label))
+        });
         Some((file, category))
+    }
+
+    /// Les imports CAD parmi les éléments `ids` (dessinés, dans l'ordre de leurs clés) : leurs indices, et leurs catégories par identifiant de
+    /// l'élément `CategoryElem`, avec le libellé que leurs fiches portent. Pour les vues, qui masquent un import par sa catégorie ou en bloc
+    /// (`views::Elements`) ; la même résolution que la fiche (`import_symbol`), non une autre.
+    pub fn imports(&self, ids: &[u64]) -> (Vec<usize>, HashMap<i64, String>) {
+        let mut indices = Vec::new();
+        let mut categories = HashMap::new();
+        for (index, id) in ids.iter().enumerate() {
+            let Some(raw) = self.record(*id as i64).filter(|raw| raw.class == crate::geometry::classes::IMPORT_CLASS) else { continue };
+            indices.push(index);
+            if let Some((_, Some((category, label)))) = self.import_symbol(raw, self.type_of(raw)) {
+                // Un identifiant négatif est une catégorie de Revit : les vues la masquent déjà par le catalogue.
+                if category > 0 {
+                    categories.insert(category, label);
+                }
+            }
+        }
+        (indices, categories)
     }
 
     /// Le libellé d'un élément : « Famille : Type », à défaut la famille seule, la catégorie et le type, la catégorie et l'identifiant.
@@ -1334,5 +1363,41 @@ mod tests {
         assert_eq!(nameless.label, "Élément Revit 100");
         let other = fiche_of(100, vec![(100, import()), (200, Raw { is_type: true, name: Some("Autre".to_string()), ..record("FamilySymbol") })], &[], None);
         assert_eq!(other.label, "Élément Revit : Autre");
+    }
+
+    /// Les vues masquent un import par sa catégorie (un identifiant positif de `m_categoryIds` : l'élément `CategoryElem`) ou en bloc
+    /// (`m_importsExcluded`) : `Resolver::imports` rend les indices des imports parmi les éléments dessinés et, pour chaque catégorie d'import
+    /// positive lisible, le libellé que la fiche de l'import porte dans « Catégorie ».
+    #[test]
+    fn les_imports_dessines_et_leurs_categories_sont_ceux_des_fiches() {
+        let symbol = |name: Option<&str>, category: Option<i64>| Raw { is_type: true, name: name.map(str::to_string), import_category: category, ..record("MasterImportSymbol") };
+        let import = |symbol: i64| Raw { refs: vec![("m_symbolId".to_string(), symbol)], ..record("ImportInstance") };
+        let category = |name: &str| Raw { name: Some(name.to_string()), ..record("CategoryElem") };
+        let wall = Raw { refs: vec![], ..record("SWall") };
+        let collected = Collected {
+            records: vec![
+                (10, wall),
+                (100, import(200)),
+                (200, symbol(Some("MAN-GF.dwg"), Some(500))),
+                (500, category("MAN-GF.dwg")),
+                // Une catégorie de Revit (négative) : les vues la masquent par le catalogue, pas par cette table.
+                (101, import(201)),
+                (201, symbol(Some("SiteModel.dwg"), Some(-2000196))),
+                // Une catégorie dont l'élément ne se lit pas, et un symbole sans nom : rien à nommer.
+                (102, import(202)),
+                (202, symbol(Some("MAN-1F.dwg"), Some(501))),
+                (103, import(203)),
+                (203, symbol(None, Some(500))),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let resolver = Resolver::new(&collected);
+        // Éléments dessinés : un mur (indice 0), puis les quatre imports ; le mur, l'import 100 et un identifiant sans enregistrement.
+        let (indices, categories) = resolver.imports(&[10, 100, 101, 102, 103, 999]);
+        assert_eq!(indices, vec![1, 2, 3, 4]);
+        assert_eq!(categories, HashMap::from([(500, "MAN-GF.dwg".to_string())]));
+        // La même résolution que la fiche : la valeur de « Catégorie » de l'import 100 est ce libellé.
+        assert_eq!(head_text(&resolver.fiche(100, None), CATEGORY), some("MAN-GF.dwg"));
     }
 }

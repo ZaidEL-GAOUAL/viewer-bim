@@ -266,7 +266,8 @@ d'essai tranchent (mesurés par `examples/census.rs`, partie 4, et `examples/gra
     celui de sa fiche (`m_assocLevelId`). Sans symbole lisible, il garde le libellé d'un élément sans type.
   - *Ce que cela fait dessiner.* `wadduwa.rvt` : 5 plans DWG (« MAN-GF.dwg », « MAN-1F.dwg », « MAN-2F.dwg », « MAN-RF.dwg », « MAN-URF.dwg », de 128 à 773 triangles),
     des régions pleines à plat à la hauteur de chaque niveau, donc exactement dans le plan du dessus des dalles : c'est la surcouche qui les montre. Le {3D} enregistré de ce
-    fichier les cache d'ailleurs tous les cinq (`hiddenElements`) : dans cette vue, ils ne sont pas montrés. `Vignette-04-BaseFile` : `existingSite-meerkat.sat` (308836), un
+    fichier les cache d'ailleurs tous les cinq (`hiddenElements`) : dans cette vue, ils ne sont pas montrés. Ce {3D}, seule vue 3D du fichier, cache aussi 3 murs « Mur de base : BRICK WALL 100mm » (562167, 559829, 559574) : ces 8 éléments démarrent donc masqués
+    dans le viewer, comme dans Revit (il masque à l'ouverture ce que toutes les vues enregistrées masquent). Ils restent dans l'arbre, œil éteint, et « Tout afficher » les montre. `Vignette-04-BaseFile` : `existingSite-meerkat.sat` (308836), un
     import SAT de 5 708 faces et 16 632 triangles qui s'étend sur 1,5 km (x de 501 à 2 073 m, y jusqu'à 508 m), est dans une famille sur place de masse (« Mass 1 ») : il se
     lit, mais il n'est pas dessiné, comme les masses (« Familles sur place », ci-dessous). `dynamo-nyc-site-2013` : `SiteModel.dwg` (230266), 56 916 triangles en forme partielle (une face `Plane` au contour non raccordé), dans la famille
     sur place « Site 1 », dont l'instance (230269) en dessine le même contenu 555 m plus loin : cet import n'est donc pas dessiné à son tour, à l'endroit où la famille a
@@ -593,7 +594,7 @@ lecture française de l'identifiant pour les autres.
 `readOnly` liste tous les noms de premier niveau et tous les noms de groupe utilisés : les données
 de Revit sont en lecture seule, comme celles d'un IFC. Le bloc `georeference` est écrit quand
 rvt-rs donne l'emplacement du site (voir `src/geo/georeference.ts` pour sa forme) ; la carte du viewer
-s'en sert. Les blocs `phases` et `views` (§ 4 bis) viennent des mêmes enregistrements que la géométrie décode déjà
+s'en sert. Les blocs `phases` et `views` (§ 4 bis, plans d'étage compris) viennent des mêmes enregistrements que la géométrie décode déjà
 (`properties::Retained`, module `revit/src/views/`) : aucune passe de plus sur le fichier.
 
 ### Position sur Terre
@@ -622,7 +623,7 @@ fichier, avec nord vrai ou `IfcMapConversion`) n'existe pour un fichier d'essai 
 non trivial : le signe de la rotation repose sur le sens de `m_Trf` ci-dessus
 (`tests/properties.rs`, `le_sens_de_la_transformation_d_un_emplacement`).
 
-## 4 bis. Phases et vues 3D enregistrées
+## 4 bis. Phases, vues 3D et plans d'étage enregistrés
 
 ### Phases
 
@@ -659,8 +660,9 @@ vérifient donc que par des essais sur des données écrites à la main (`tests/
 
 Une vue 3D est un enregistrement `DBView3d` (le nom, `m_viewName`) lié à un `Viewer3d` (la caméra) et, par lui, à un `ModelClipBox`
 (la boîte de coupe). Le lecteur retient les vues 3D qui ne sont pas des gabarits (`m_isTemplate`) et qui ont une caméra : la vue
-par défaut `{3D}` en fait partie, les vues « Façade », « Coupe en perspective »… nommées par l'utilisateur aussi. Les vues de plan, de
-coupe, d'élévation, de nomenclature et de feuille ne sont pas des vues 3D.
+par défaut `{3D}` en fait partie, les vues « Façade », « Coupe en perspective »… nommées par l'utilisateur aussi. Les vues de coupe,
+d'élévation, de nomenclature et de feuille ne sont pas des vues 3D et ne sont pas lues ; les plans d'étage se lisent à part (« Plans d'étage »,
+ci-dessous).
 
 - **Caméra.** `m_origin` est l'œil (pieds) ; `m_vertDir` le haut ; `m_viewDir` le sens **inverse** du regard (vérifié : pour « Cuisine »,
   l'œil est dans la maison et regarde +X alors que `m_viewDir` vaut −X) ; la droite est regard × haut, comme dans l'API de Revit.
@@ -682,7 +684,8 @@ coupe, d'élévation, de nomenclature et de feuille ne sont pas des vues 3D.
   Revit ne produit) fait ignorer la boîte.
 - **Éléments et catégories masqués.** `HiddenElementsViewSettings.m_hiddenElements` (identifiants d'éléments, repris s'ils sont dessinés :
   une vue peut masquer sa propre boîte de coupe) et `IckyExcludedCategoriesSetPtrWrapper.m_categoryIds` (catégories masquées,
-  identifiants négatifs de BuiltInCategory : leur nom français est celui de la propriété `Catégorie` des éléments). Seules les
+  identifiants négatifs de BuiltInCategory : leur nom français est celui de la propriété `Catégorie` des éléments ; un identifiant positif
+  est l'élément `CategoryElem` d'une catégorie du projet, voir « Ce que les vues masquent », ci-dessous). Seules les
   catégories que portent des éléments dessinés sont écrites : un gabarit masque quelque 70 catégories (analytique, annotations,
   masses…), dont presque aucune n'a d'élément dessiné. Dans les fichiers d'essai : « Demo Export » de `2024_Core_Interior.rvt`
   (les murs, et 146 éléments), « 3D Plumbing » de `DuctSegmentFlow.rvt` (bouches d'air, gaines, raccords) et des éléments masqués dans les
@@ -700,16 +703,79 @@ par le même changement d'axes.
 
 **Ce qui est ignoré** : les remplacements graphiques par catégorie, par élément et par filtre de vue (`GraphicOverrides`, `FilterOverrides`), le
 niveau de détail, le style visuel (`m_modelDisplayMode`), les ombres et l'arrière-plan, la profondeur de découpe, les liens Revit et les
-sous-projets (worksets), les options de conception, et les vues qui ne sont pas des vues 3D.
+sous-projets (worksets), les options de conception, et les vues qui ne sont ni des vues 3D ni des plans d'étage.
 
 Mesuré sur les fichiers d'essai. Avant 2015, les vues 3D et les phases de chaque famille chargée (« {3D} », « View 1 », ses phases et
 ses filtres de phase) sont écrites parmi celles du projet, possédées par leur `Family` : elles sont écartées comme ses éléments (§ 6), et
 `DynamoSample_2014.rvt` rend exactement les vues, caméras comprises, et les phases de `DynamoSample_2023.rvt` (41 vues sans la règle).
 Vues retenues : `DynamoSample_*` 7 (dont 2 avec boîte de coupe, 1 avec un élément masqué), `SampleModel` 7 (3 boîtes),
 `mega_advanced_sample_file` et `rac_advanced_sample_project` 7 (3 boîtes), `Vignette-04-BaseFile` 7, `revit-curtainwall-byprofile_v21` 10, les
-autres 0 à 2 (les familles `.rfa` ont aussi leurs vues 3D, sans phases). Les vues de `RoomsAndExits.rvt` et `singleDirectShape.rvt` sont des
-gabarits sans caméra : pas de section `views`. Les sections `phases` et `views` s'écrivent dans le JSON de métadonnées : le module wasm n'a pas
-d'autre sortie à ce sujet.
+autres 0 à 2 (les familles `.rfa` ont aussi leurs vues 3D, sans phases). Les vues 3D de `RoomsAndExits.rvt` et `singleDirectShape.rvt` sont des
+gabarits sans caméra : leur section `views` ne compte que leurs plans d'étage (3 chacun). Les sections `phases` et `views` s'écrivent dans le JSON de
+métadonnées : le module wasm n'a pas d'autre sortie à ce sujet.
+
+### Plans d'étage
+
+Un plan d'étage est un enregistrement `DBViewPlan` dont `m_planViewType` vaut 1 (le plan regarde vers le bas) et qui n'est pas un gabarit
+(`m_isTemplate`). Il a les champs d'une vue 3D (nom, repère `m_horzDir` / `m_vertDir` / `m_viewDir`, éléments et catégories masqués, phase et
+filtre de phase, dans les mêmes objets du graphe) et sa plage de vue en plus. Il s'écrit dans `views[]` avec `"kind": "plan"`, après les vues 3D
+(voir [contrat-metadonnees.md](contrat-metadonnees.md), § 2 sexies) : le viewer l'ouvre en 2D, vu de dessus, coupé à sa hauteur de coupe, entre sa
+profondeur de vue et sa coupe, comme Revit (`wadduwa.rvt` : le plan « GF » montre `MAN-GF.dwg`, le plan « 2F » masque `MAN-2F.dwg`).
+
+- **Enregistrements.** `DBViewPlan` (le plan), `Viewer` (son recadrage, `m_boundedSpace`, décodé comme celui d'une vue 3D) et `DBViewType`
+  (`SymbolInfo.m_name` : « Floor Plan », « Structural Plan », « E-Working Plan »…). Un plan de surface (Revit : « Area Plan ») a aussi
+  `m_planViewType` 1 ; son type est d'une classe à part, `DBViewTypeAreaPlan` (« Gross Building »). Ces classes étaient écartées avant tout décodage
+  (`classes::excluded_class` : « vue, coupe ou caméra ») ; ce sont maintenant des classes d'appui (`views::is_view_class`), que
+  `geometry::saved::read_records` décode avec les autres dans la même passe sur les enregistrements d'éléments : **aucune passe de plus** sur le fichier.
+  Seul ce qui sert est gardé, sans graphe (`Digest` : un `Plan` par plan, le recadrage de chaque `Viewer`, le nom de chaque type), et
+  `Digest::settle` ne garde que les `Viewer` et les types que les plans retenus désignent. Le coût (mémoire, durée) est mesuré au § 7.
+- **Ce que les fichiers d'essai contiennent.** 905 enregistrements `DBViewPlan` dans les 55 fichiers lisibles : 161 gabarits, 201 plans de plafond (`m_planViewType` 2)
+  et 543 plans vus de dessus (484 « Floor Plan », 51 « Structural Plan », 1 « E-Working Plan » et 7 plans de surface). Avant 2015, 370 de ces 543 sont des pièces des
+  familles chargées, que le projet écrit parmi les siens (`DynamoSample_2014.rvt` : 66 enregistrements contre 3 en 2023) : écartés comme les
+  vues 3D (§ 6), ils laissent **173 plans d'étage** écrits sur les 55 fichiers (153 « Floor Plan », 12 « Structural Plan », 1 « E-Working Plan », 6 « Gross Building » et 1 « Rentable » :
+  les 7 plans de surface), dont 26 recadrés (6 recadrages tournés) et 51 sans profondeur de vue. Aucun n'a été écarté faute de pouvoir être lu.
+- **Plage de vue.** `m_cutPlaneElev`, `m_bottomClipElev` et `m_topClipElev` sont des altitudes absolues en pieds, déjà résolues par Revit à partir du niveau et
+  des décalages ; au-delà de 1e8 en valeur absolue (±999 999 999,99 : un bas « niveau en dessous » sans niveau en dessous), c'est « illimité ». Les niveaux et
+  les décalages qui les ont donnés sont dans `PlanViewRange2` (`m_viewDepthPlaneLevelIds` et `m_viewDepthPlaneOffsets` dans les fichiers récents, `m_levelIds`
+  et `m_offsets` dans les autres, 492 plans sur 543 : même sens) ou, à défaut, dans `PlanViewRange` (`m_levelPos`, `m_offsets` ; aucun plan des fichiers d'essai n'a
+  que celui-là), cinq entrées chacun, dans l'ordre **coupe, haut, bas, profondeur de vue, (inutilisée)**. L'ordre se vérifie sur les plans dont la coupe et le haut (ou le
+  bas) sont sur le même niveau : coupe − décalage de coupe = haut − décalage du haut (527 plans sur 527) = bas − décalage du bas (502 sur 502). Un niveau d'identifiant
+  -1 est illimité, -4 « le niveau en dessous » ; -2 et -3 sont les niveaux relatifs des gabarits.
+  Le plan montre le modèle entre sa **profondeur de vue** et sa **coupe** : `range.top` est la coupe, `range.bottom` la profondeur (absente si elle est illimitée). La
+  profondeur est (`views::ViewRange::depth_feet`) : 1. si son niveau est celui du bas de la plage (même identifiant, ou même position de niveau ; pas -1), `m_bottomClipElev` −
+  décalage du bas + décalage de la profondeur (« GF » de wadduwa : coupe à 4,921 pieds = 1,50 m, bas et profondeur au niveau 0,984 pied = 0,30 m ; son plan de structure « 1F » : bas −3,937,
+  profondeur −5,906 pieds du niveau, soit 2,10 m à 4,20 m) ; 2. sinon, si le niveau de la profondeur est « illimité » (-1) ou si le bas l'est, pas de limite ; 3. sinon (une profondeur sur
+  un autre niveau, dont le fichier ne donne pas l'altitude : 110 plans sur 543), `m_bottomClipElev`, qui est prudent (le plan montre au plus ce que Revit montre). **Le haut de la plage
+  (`m_topClipElev`) n'est pas lu** : le viewer ne montre rien au-dessus de la coupe. Un plan dont la coupe est absente ou illimitée (aucun, hors gabarit), dont le `Viewer` est introuvable, dont le
+  recadrage actif n'est pas un rectangle de plan ou dont la profondeur est au-dessus de la coupe n'est pas écrit : rien n'est inventé.
+- **Caméra.** Parallèle, droit vers le bas (`direction` `[0, -1, 0]`), `up` = `m_vertDir` converti comme toute direction, `(x, y, z)` → `(x, z, −y)`. **`m_vertDir` porte déjà
+  la rotation du nord vrai** : le plan est orienté sur le nord vrai quand `m_bUseTrueNorth` est vrai (11 plans des fichiers d'essai), et son `m_vertDir` est alors le nord vrai
+  du projet. Dans `DynamoSample_2014` à `_2025` et `SampleModel` (le même modèle), le plan « Site » a `m_vertDir` = (0,6018 ; 0,7986) et `m_horzDir` = (0,7986 ; −0,6018) : la rotation
+  de 37° de l'emplacement actif que `properties::geo` lit, au chiffre près (`georeference.trueNorth`) ; les plans de ces fichiers qui n'ont pas l'indicateur ont (0 ; 1). Les six autres plans
+  « nord vrai » (`2D Site` de quatre fichiers, deux plans analytiques de `dynamo-structural-framing-2014`) sont dans des fichiers dont le nord vrai est (0 ; 1), et leur `m_vertDir` aussi.
+  Le nord vrai de l'emplacement n'est donc **pas relu** : le composer
+  avec `m_vertDir` compterait la rotation deux fois (`tests/plans.rs`, `le_haut_d_un_plan_nord_vrai_est_m_vert_dir_qui_porte_deja_la_rotation` : `up` est le nord vrai de `georeference`).
+- **Recadrage.** Le `Viewer` du plan a un `m_boundedSpace` dont le repère est exactement celui de la vue (`m_basis` = `m_horzDir`, `m_vertDir`, `−m_viewDir` sur les 543 plans) : deux décalages
+  (côté positif, côté négatif) par axe, depuis `m_orig`, et `m_boundActive` par côté. Le recadrage est actif sur les deux côtés des deux axes (26 plans) ou sur aucun (517) ; `m_isOn` est toujours vrai.
+  Actif : `camera.size` est sa largeur (le long de la droite de la vue) et sa hauteur (le long de son haut), en mètres, `camera.position` son centre à la hauteur de coupe, et `sectionBox` son
+  rectangle (x et z, avec sa `rotation` quand la vue est tournée : −37° pour « Site » de `DynamoSample`, −29° pour `ROOF_02` de `Vignette-04-BaseFile`), avec pour y la plage du plan (`range.bottom`, ou `-10000` sans
+  profondeur : le JSON n'a pas d'infini ; `range.top`). Sans recadrage : ni taille ni boîte, la position est l'origine de la vue à la hauteur de coupe, et le viewer cadre le modèle.
+- **Ce que les vues masquent** (plans et vues 3D). Les catégories masquées (`IckyExcludedCategoriesSetPtrWrapper.m_categoryIds`) : un identifiant négatif est une catégorie de Revit, écrite sous son nom
+  français comme avant ; un identifiant positif est un élément `CategoryElem`, soit la catégorie d'un import CAD (nommée comme le fichier : « MAN-GF.dwg »), soit une **sous-catégorie** (le calque d'un import, « A-Area », ou « Plan Swing »). La
+  catégorie d'un import **dessiné** est écrite sous le libellé que la fiche de cet import porte dans `Catégorie` (`Resolver::imports`, la même résolution que la fiche : `import_symbol`). Une
+  sous-catégorie est ignorée : elle masque une partie d'une forme (un calque d'un DWG), ce que le viewer ne sait pas faire ; les plans de `wadduwa.rvt` masquent ainsi des calques (« A-Area », « A-GinI Kathira »…) sans masquer leur DWG, et c'est
+  `HiddenElementsViewSettings.m_hiddenElements` qui masque le DWG entier (`MAN-2F.dwg` dans « 2F », `MAN-RF.dwg` dans le plan « RF » de type « Floor Plan », `MAN-URF.dwg` dans « URF » ; « GF » et le plan de structure « RF » n'en masquent aucun).
+  `IckyExcludedCategoriesSetPtrWrapper.m_importsExcluded` (vrai sur 2 plans sur 744, plans de plafond compris, et 1 vue 3D sur 354) ajoute à `hiddenElements` les clés de tous les imports CAD dessinés. Dans les fichiers
+  d'essai, 4 vues 3D hors gabarit sur 354 masquent des catégories positives et 1 masque les imports : comparées avant et après (`dump` de chaque fichier), aucune des 128 vues 3D écrites ne change de ce fait.
+- **Phase et filtre de phase.** Comme une vue 3D (`VIEW_PHASE`, `VIEW_PHASE_FILTER`).
+- **Ordre.** Les vues 3D d'abord, comme avant (`{3D}`, puis par nom), puis les plans par hauteur de coupe croissante (au millimètre), par nom, par identifiant. `type` distingue deux plans de même nom (le plan d'étage et
+  le plan de structure d'un même niveau).
+- **Avant 2015.** Le plan, son `Viewer` (possédé par lui) et son `DBViewType` sont enregistrés avec leur propriétaire d'ElemTable, et `Digest::settle` écarte ceux d'une famille chargée comme les vues 3D : `DynamoSample_2014.rvt`
+  et `DynamoSample_2023.rvt` rendent les mêmes 3 plans, `drone-hangar-building-2014.rvt` ses 7 (sur 65 plans vus de dessus enregistrés).
+- **Ce qui n'est pas lu** (le viewer ne dessine que des triangles, sans traits ni motifs) : les plans de plafond (`m_planViewType` 2) ; les calques sous-jacents (`m_idUnderlayLevel`, `m_underlayOrientation`…) ; les zones de plan
+  (`m_planRegionIds`, qui changent la plage de vue sur un rectangle) ; la visibilité des sous-catégories ; les styles et épaisseurs de ligne, les remplacements graphiques et les filtres de vue ; les motifs de coupe et de surface ;
+  les lignes « au-delà » (ce qui est sous la profondeur de vue, vu en traits) ; les annotations (étiquettes, cotes, textes, repères, pièces et surfaces) ; le gabarit de vue (le plan en a déjà enregistré les valeurs, comme une vue 3D) ; l'échelle et
+  le niveau de détail ; le haut de la plage de vue (`m_topClipElev`) ; et, pour un plan de surface, ses limites et ses remplissages. Un élément que la coupe traverse est coupé par la boîte de coupe, non dessiné avec le motif de coupe de Revit.
 
 ## 5. Identifiant des éléments
 
@@ -1095,6 +1161,13 @@ qui pèse, par étape (`examples/peak.rs --etapes`) :
   (394 Mo en natif à l'étape des symboles, 143 Mo à la fin de l'étape) ;
 - le lot en cours (128 Kio d'enregistrements, décodés) et le morceau en cours (7 à 10 Mo) : des dizaines de Mo.
 
+Les plans d'étage (§ 4 bis) ne coûtent ni passe ni mémoire mesurable. Les `DBViewPlan` et les `Viewer` sont décodés dans la passe des enregistrements d'éléments
+qui existait déjà, avec les autres classes d'appui : 4 323 enregistrements de plus sur les 56 fichiers d'essai (395 824 → 400 147, 1,1 %), 37 pour `2024_Core_Interior`,
+557 pour `drone-hangar-building-2014.rvt` (106 plans et 451 `Viewer`). Les `DBViewType` l'étaient déjà (une classe dont le nom finit par « Type » est une définition), mais leur
+graphe attendait la fin des définitions pour être projeté en fiche : 1 734 pour le hangar, qui n'attendent plus (les fiches n'en ont pas besoin). `examples/dump` (`/usr/bin/time -l`,
+médiane de 5 lectures, un fichier par processus) avant et après : `2024_Core_Interior` 1,25 s et 284 Mo → 1,25 s et 285 Mo ; `drone-hangar-building-2014` 1,14 s et 283 Mo → 1,16 s et
+275 Mo ; `wadduwa` 3,17 s et 975 Mo → 3,16 s et 977 Mo. Le pic de l'allocateur compteur (`examples/peak.rs`) ne bouge pas non plus (199 → 199 Mo, 203 → 203 Mo pour les deux premiers).
+
 Deux limites restent, dites en « mémoire insuffisante », que le viewer traduit comme tout manque de mémoire (`isMemoryFailure`,
 `src/revit/readRevit.ts`) : plus de 4 millions d'éléments indexés (`MAX_INDEXED_ELEMENTS`, `revit/src/lib.rs` : le préambule
 seul atteindrait le gigaoctet, au-delà de ce qui a été essayé), et plus de 150 Mo quand il faut reconstruire les formes par
@@ -1179,7 +1252,8 @@ changent d'une année à l'autre) ; `cargo test --release --test legacy` vérifi
 `DynamoSample_2023.rvt`, la couverture de chaque fichier ancien et les familles ; `cargo test --release --test workshared`
 celle des copies locales de modèles partagés avec leur central (§ 6). `cargo test --release --test views` vérifie les phases (ordre, filtres,
 remplacements, phase d'identifiant 0) et les vues (caméra qui regarde le bâtiment, boîtes de coupe dans les étendues du modèle, clés des
-éléments masqués) ; `cargo run --release --example views -- fichier` montre les sections `phases` et `views` d'un fichier,
+éléments masqués), `cargo test --release --test plans` les plans d'étage (plage de vue, caméra et nord vrai, recadrage, DWG masqués par plan de `wadduwa.rvt`, mêmes plans avant et après 2015) ;
+`cargo run --release --example views -- fichier` montre les sections `phases` et `views` d'un fichier,
 `--classes`, `--dump` et `--id` les enregistrements bruts, `--scan` les phases de création et de démolition de tous les éléments.
 
 Le test de bout en bout (`tests/revitRead.test.ts`) lit `Revit_IFC5_Einhoven.rvt` avec le vrai module
@@ -1222,11 +1296,14 @@ Limites actuelles.
 - Une forme reconstruite ou une boîte englobante n'est pas la forme exacte de Revit. La propriété
   « Source de la géométrie » dit lesquelles. Un nœud graphique ou une surface que le lecteur ne
   comprend pas encore donne une forme partielle.
-- Un seul état du modèle par défaut : celui de la vue 3D complète. Les phases et les vues 3D enregistrées se reprennent (§ 4 bis) ; les
+- Plans d'étage (§ 4 bis) : le modèle, vu de dessus, entre la profondeur de vue et la coupe, sans ce que Revit dessine en traits ou en motifs : plans de plafond, calques sous-jacents, zones de
+  plan, sous-catégories (le calque d'un DWG), styles de ligne, motifs de coupe, lignes « au-delà », annotations, et le haut de la plage de vue ; un plan de surface est lu comme un plan
+  d'étage, sans ses limites ni ses remplissages. Une profondeur sur un autre niveau que le bas de la plage est prise au bas de la plage (prudent).
+- Un seul état du modèle par défaut : celui de la vue 3D complète. Les phases, les vues 3D et les plans d'étage enregistrés se reprennent (§ 4 bis) ; les
   filtres de vue, les remplacements graphiques par catégorie ou par élément, le niveau de détail, le style visuel et les nomenclatures ne
   sont pas reconstitués. Un remplacement graphique de phase est une couleur et une opacité, pas les traits ni les motifs de Revit.
 
 Feuille de route, sans ordre de priorité : plusieurs workers pour mailler un fichier de plusieurs centaines de mégaoctets
 en moins d'une minute (§ 7), les enregistrements géants décodés sans construire tout leur graphe (dans rvt-rs), la file
 des définitions en deux lectures plutôt qu'en attente, remplacements graphiques par catégorie et filtres de vue, vues de
-plan et de coupe enregistrées.
+coupe et de façade enregistrées, plans de plafond.
