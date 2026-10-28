@@ -100,7 +100,7 @@ n'existe pas en WebAssembly.
 | `normals` | `Float32Array`, une normale unitaire par sommet. |
 | `indices` | `Uint32Array`, coins des triangles, locaux au premier sommet de leur primitive. |
 | `primitives` | `Uint32Array`, six entiers par primitive : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. |
-| `materials` | `Uint8Array`, sept octets par matériau : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1), surcouche (0 ou 1 : les triangles se dessinent par-dessus les surfaces coplanaires, voir § 3). Ce tableau est interne entre le module et le viewer, pas le contrat de métadonnées. |
+| `materials` | `Uint8Array`, sept octets par matériau : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1), priorité de profondeur (0 ordinaire, 1 surcouche, 2 hôte : qui l'emporte quand des faces de deux éléments sont dans le même plan, voir § 3). Ce tableau est interne entre le module et le viewer, pas le contrat de métadonnées. |
 | `metadata` | Texte JSON, exactement le format de [contrat-metadonnees.md](contrat-metadonnees.md) (version 1, `readOnly`, `elements`, et si le fichier les donne `georeference`, `phases` et `views`). |
 | `report` | Bilan de la lecture, voir ci-dessous. |
 
@@ -231,15 +231,9 @@ d'essai tranchent (mesurés par `examples/census.rs`, partie 4, et `examples/gra
     `GPolyMesh` (les facettes sont reprises telles quelles) et des faces planes, qui ne se tessellent pas à une flèche. Une matrice qui n'est pas
     une échelle uniforme (étirement, cisaillement) n'a pas de lecture établie : un symbole qui porte des surfaces reste un diagnostic
     (« instance à échelle non uniforme non prise en charge », forme partielle) ; un symbole sans surface (calque vide comme `.AVE_RENDER`,
-    lignes seulement) n'a rien à perdre, l'instance se saute. Les deux voitures sont donc entières : « Forme Revit ». **Exception : les imports
-    CAD du projet (classe `ImportInstance`, une DWG importée dans le modèle et non dans une famille).** Leurs blocs à échelle restent non placés,
-    comme avant, en attendant une décision à part : Revit montre ou non un import CAD du projet dans une vue 3D selon la visibilité de sa catégorie
-    d'import, que le lecteur ne lit pas, et les placer ferait apparaître sans que personne l'ait décidé sept éléments qui ne l'étaient pas. Cas mesurés :
-    les 5 plans DWG de `wadduwa.rvt` (508410, 508602, 508706, 509408, 509601 : des régions pleines plates, de 128 à 773 triangles, à la hauteur de chaque
-    niveau donc coplanaires avec le dessus des dalles), l'import de `Vignette-04-BaseFile` (308836 : 16 632 triangles sur 1,5 km, qui déplacerait de
-    230 m le centre du modèle) et le second import de `dynamo-nyc-site-2013` (230266). Cet élément reste donc, comme avant, une forme qui n'est pas dessinée
-    (`Settings::uniform_scales` faux pour sa classe, `saved::PROJECT_IMPORT_CLASS`). Aucun autre fichier d'essai ne change : sur les 57 fichiers, seules les 5 voitures
-    de `wadduwa.rvt` ont une sortie différente (435 éléments, 1 034 248 triangles, sources 432/3/0/0).
+    lignes seulement) n'a rien à perdre, l'instance se saute. Les deux voitures sont donc entières : « Forme Revit ». Les imports CAD du projet (`ImportInstance`) n'ont aucune
+    exception : leurs blocs à échelle (25,4 ; 75 ; 2 413,27 chez les plans DWG de `wadduwa.rvt`) se placent comme les autres (voir « Imports CAD du
+    projet » plus bas).
   - *La couleur.* Les facettes n'ont ni matériau ni style de rendu (`m_materialID` et `m_interiorGStyleID` à −1) : rvt-rs les résout au gris du
     viewport. Leur couleur est dans le `GStyleElem` que cite `GInfo.m_categoryId` du groupe de leur calque (type 3, possédé par
     le `MasterImportSymbol`), par son `GStyle.m_materialElemId` : un style d'objet, que Revit applique à une surface sans matériau. Le `CategoryElem`
@@ -255,20 +249,88 @@ d'essai tranchent (mesurés par `examples/census.rs`, partie 4, et `examples/gra
     carrosserie bleue (0,1 %), « CITROEN C4 5 » (ombrage 66 66 66) une apparence rouge vive (2,4 %). La carrosserie, elle, ne change pas de couleur.
     Les huit roues de la Peugeot (7 120 triangles) sont blanches : leur groupe est celui du calque « 0 » (style de type 1, `GStyleElem` 367827,
     matériau « Render Material 255-255-255 »), pas celui du bloc qui les place ; le lecteur suit les octets du fichier.
-- **Contenu RPC posé sur le sol (surcouche).** Le symbole d'un arbre RPC (« M_RPC Tree », `GImposter` à actif nul) a pour voisin un
-  `GPolyMesh` : la silhouette et l'empreinte au sol que Revit dessine en vue ombrée. Les 14 triangles horizontaux de l'empreinte
-  d'un de ces arbres, dans `wadduwa.rvt`, sont à −6,53 m, exactement la face supérieure de la dalle (575046) : deux surfaces
-  coplanaires que le viewer dessinait en scintillant (« z-fighting »), là où Revit montre l'arbre plein sur le sol. Les triangles de ce
-  `GPolyMesh` (celui d'un `GFilter` ou d'un `GGroup` qui porte aussi un `GImposter`, `faces::select::Selected::overlay`) sont marqués
-  « surcouche » : un septième octet de la table des matériaux (`materials`, voir § 2), jamais groupé avec des triangles
-  ordinaires de la même couleur (primitive et matériau à part). Le viewer dessine un lot de surcouche avec un décalage de profondeur
-  négatif (`polygonOffset`, facteur −1, unités −4 : `OVERLAY_POLYGON_OFFSET` dans `src/engine/buildModel.ts`), qui le fait gagner contre
-  une face coplanaire sans traverser ce qui est vraiment devant. L'export GLB n'en dit rien (glTF n'a pas de décalage de profondeur) et la carte
-  Cesium non plus : l'arbre y reste coplanaire avec le sol. Les triangles de surcouche ne se trouvent que là où un `GImposter` existe :
-  `wadduwa.rvt` (4 arbres, 2 594 triangles), `rac_advanced` et `mega_advanced` (35 primitives, 29 961 triangles chacun), `SampleModel`
-  (18 primitives, 10 187), `RE1-Electrical` (2 primitives, 1 088) et `DynamoSample_2014`, `_2023`, `_2024` et `_2025` (2 primitives, 332 chacun) ;
-  aucun des autres fichiers d'essai. Les triangles dessinés ne changent pas, seules leurs primitives se séparent (l'empreinte exacte de la forme, que
-  comparent les essais de non-régression, ne dépend pas de la surcouche).
+- **Imports CAD du projet.** Une DWG, un SAT… importé dans le modèle (et non dans une famille) est un élément `ImportInstance`. Il se dessine
+  comme tout élément du modèle, et son dessin est réglé en surcouche (voir plus bas). Il suffit pour cela que ses blocs à échelle (`m_bHasScale`,
+  voir ci-dessus) se placent : ils étaient refusés, et un élément d'une classe qui n'est pas de modèle dont la forme ne se lit pas était écarté en
+  silence (`geometry::nothing_to_lose`). Cette exception est supprimée pour les imports : un import lisible se dessine, un import qui ne se lit qu'en partie
+  est « Forme Revit partielle », un import illisible se montre par la boîte que Revit a enregistrée (« Inconnue », avec l'avertissement habituel), et
+  un import sans surface (des polylignes seulement, comme `existingSite-elk.dwg` de `Vignette-04`) est compté sans géométrie.
+  - *Propre à une vue ou au modèle.* Un import placé « vue actuelle seulement » a une vue propriétaire (`m_ownerDBViewId` ≠ −1) : Revit ne le montre jamais en
+    3D, et il reste écarté avec les annotations (`classes::excluded_relation`, « propre à une vue »). Mesuré par fichier (model / propres à une vue) :
+    `wadduwa.rvt` 5 / 0, `Vignette-04-BaseFile` 2 / 0, `dynamo-nyc-site-2013` 1 / 0, `rac_advanced_sample_project` et `mega_advanced_sample_file`
+    0 / 1 (« Roofing Detail.dwg », propre à la vue 228707, jamais dessiné) ; les 21 imports de `drone-hangar-building-2014` sont ceux d'une famille chargée (écartés par la règle des
+    familles chargées d'avant 2015).
+  - *Le nom.* Un import est nommé par le fichier importé : le nom de son symbole d'import (`MasterImportSymbol`, que son `InstanceInfo` désigne par
+    `m_symbolId`), « MAN-GF.dwg », et rangé dans la catégorie que le fichier donne à ce symbole (`MasterImportSymbol.m_categoryId`) : le `CategoryElem`
+    de même nom (Revit les liste sous « Catégories importées »), ou une catégorie de Revit (« Styles d'objet d'importation » pour `SiteModel.dwg`). Son niveau est
+    celui de sa fiche (`m_assocLevelId`). Sans symbole lisible, il garde le libellé d'un élément sans type.
+  - *Ce que cela fait dessiner.* `wadduwa.rvt` : 5 plans DWG (« MAN-GF.dwg », « MAN-1F.dwg », « MAN-2F.dwg », « MAN-RF.dwg », « MAN-URF.dwg », de 128 à 773 triangles),
+    des régions pleines à plat à la hauteur de chaque niveau, donc exactement dans le plan du dessus des dalles : c'est la surcouche qui les montre. Le {3D} enregistré de ce
+    fichier les cache d'ailleurs tous les cinq (`hiddenElements`) : dans cette vue, ils ne sont pas montrés. `Vignette-04-BaseFile` : `existingSite-meerkat.sat` (308836), un
+    import SAT de 5 708 faces et 16 632 triangles qui s'étend sur 1,5 km (x de 501 à 2 073 m, y jusqu'à 508 m), est dans une famille sur place de masse (« Mass 1 ») : il se
+    lit, mais il n'est pas dessiné, comme les masses (« Familles sur place », ci-dessous). `dynamo-nyc-site-2013` : `SiteModel.dwg` (230266), 56 916 triangles en forme partielle (une face `Plane` au contour non raccordé), dans la famille
+    sur place « Site 1 », dont l'instance (230269) en dessine le même contenu 555 m plus loin : cet import n'est donc pas dessiné à son tour, à l'endroit où la famille a
+    été créée (« Familles sur place », ci-dessous).
+- **Familles sur place : leur contenu est dessiné par leur instance.** Une famille créée dans l'éditeur de modèle sur place (`Family.m_inPlace` vrai : une
+  armoire, un cadre de fenêtre, un site, une poutre) écrit ses formes parmi les éléments du projet, dans le repère du projet, là où l'auteur les a créées : extrusions,
+  balayages, fusions, révolutions et formes de masse (`catalog::is_family_form`), et les imports CAD qu'elle contient (`ImportInstance`). Chaque forme a pour propriétaire
+  d'ElemTable (`Identity::owning_element_id`) la `Family`, directement ou par des intermédiaires (un groupe, une courbe : la chaîne se remonte comme celle des familles
+  chargées, 16 maillons au plus, `native::families::in_place_family`). La `FamilyInstance` de la famille (celle qui place un `FamilySymbol` dont `m_familyId` est la `Family`)
+  dessine ces mêmes formes à l'endroit où elle est aujourd'hui, et Revit ne montre que l'instance. Le lecteur dessinait les deux : **deux fois au même endroit** quand l'instance n'a
+  pas bougé (`wadduwa.rvt` : l'extrusion 752500 et l'instance 752689, les mêmes 32 triangles), **en fantôme** quand l'instance a été déplacée (l'extrusion 760354, copie de
+  la famille précédente, restait à l'endroit d'origine, sur 752500, alors que son instance 760361 est 3,56 m plus bas), **empilées** (`drone-hangar-building-2014` : les formes de quatre
+  familles « Generic Models » au même point, de trois autres à un autre, leurs instances ailleurs) ou **à 555 m** de l'instance (`dynamo-nyc-site-2013`, l'import de « Site 1 » : 460 m en x et 310 m en z).
+  - *La règle, de toute année.* Une forme ou un import dont la chaîne mène à une `Family` sur place, qui n'est pas celle du document (un `.rfa` dessine ses propres formes), **n'est pas
+    dessiné** quand la lecture a dessiné une instance de cette famille par sa forme enregistrée (source 0 ou 1, non par sa boîte) avec au moins autant de triangles que tout le contenu de la famille :
+    raison « contenu d'une famille sur place, dessiné par son instance » (`classes::RELATION_REASONS`, comptée dans le recensement). Sinon (instance masquée, vide, illisible, absente,
+    ou qui ne porte pas tout ce que la famille a écrit), le contenu est dessiné comme avant et un avertissement le compte (« … éléments du contenu de familles sur place sont dessinés à l'endroit où les familles
+    ont été créées »). Rien n'est perdu en silence. La décision se prend à la fin de la lecture (`geometry::Rules::release_in_place`) : le contenu attend hors de la sortie, pour les seules
+    familles qu'une instance non écartée d'avance (ni masquée, ni masse que Revit masque par défaut) peut dessiner ; les autres le dessinent tout de suite, dans l'ordre, comme avant.
+  - *Une famille de masse.* Le contenu suit la règle de visibilité de son instance : quand l'instance de la famille est écartée comme une masse (`RELATION_REASONS[5]`, « masse (masquée par
+    défaut dans Revit) »), son contenu l'est aussi, avec la même raison, et compte dans les masses que l'avertissement des masses annonce (`Stats::masses_hidden`) ; aucun avertissement ne lui est propre. Ce sont les formes
+    de masse « Main Building » (139682) et « Pavillion » (139763) de `rac_advanced_sample_project` et de `mega_advanced_sample_file` (28 et 12 triangles, 66 m × 53 m pour la première) et l'import SAT 308836 de `Vignette-04-BaseFile`
+    (famille « Mass 1 », 16 632 triangles : les imports de famille suivent leur famille, la décision de dessiner les imports du projet ne vaut pas pour eux). Les vues 3D enregistrées de rac et de mega cachent d'ailleurs déjà la
+    catégorie « Masses » (`hiddenCategories` : `Catégorie` = `Masses`), dans laquelle ces formes étaient rangées : elles étaient cachées dans ces vues, et dessinées dans la vue libre. Seule une instance masquée pour une autre raison (invisible),
+    illisible ou absente laisse le contenu dessiné, avec l'avertissement.
+  - *Ce qui reste dessiné.* Un élément que la famille possède sans être une forme de sa définition est un élément du modèle, que l'instance ne dessine pas : les murs 757897 et
+    760541 de `wadduwa.rvt` (« BRICK WALL 100mm », niveau 1F, avec leur GUID : 12 triangles chacun, dont l'étendue dépasse de 5 cm celle des murs 549376 et 548874, qu'ils doublent sur 37,5 et 24,4 m² de faces coplanaires), les toitures 198779
+    et 199509 et le mur 198010 du hangar, la toiture 201344 de la poutre courbe de rac et de mega, les 4 murs de « water » dans les quatre `DynamoSample`. L'instance du cadre de wadduwa a 32 triangles, la forme et le mur de sa famille en font 44 : elle ne dessine pas le mur.
+  - *Mesuré* (`cargo run --release --example inplace -- <fichier>`, un tableau par forme : famille, forme, instance, source, triangles, boîtes, déplacement) : 25 formes écartées par leur instance dans 8 fichiers, toutes avec une instance
+    dessinée en source 0 (une en source 1, l'import de nyc) et exactement les triangles de leur famille ; les sommets de chaque forme, translatés de son déplacement, se retrouvent dans l'instance à 1 mm près,
+    sauf pour trois : le cadre 752500 et sa copie 760354 (l'instance a 6,5 cm d'épaisseur au lieu de 9 cm : elle est tronquée d'un côté) et le mur sur place 180076 de `clockwork-wall-stuff-2014` (la forme est la tranche de 0,25 m du bas de l'instance, qui a 8 m de haut, sur le même
+    contour). L'instance porte le même libellé, la même catégorie, la même famille et le même type que la forme qu'elle remplace (24 paires sur 24 ; l'import de nyc est nommé « SiteModel.dwg », son instance « Site 1 : Site 1 »).
+    Par fichier (formes écartées par leur instance ; il n'y a aucune forme gardée avec avertissement dans les fichiers d'essai) : `wadduwa.rvt` 3 ; `SampleModel` 3 (les deux armoires et le caisson de hotte) ; `clockwork-roof-floor-stuff-2014` 1 (68 486 triangles) ; `clockwork-wall-stuff-2014` 1 ;
+    `drone-hangar-building-2014` 14 (douze familles) ; `dynamo-nyc-site-2013` 1 (56 916 triangles, à 555 m) ; `rac_advanced_sample_project` et `mega_advanced_sample_file` 1 écartée (la poutre
+    courbe 201286) et 2 formes de masse masquées (139682 et 139763, leurs instances étant des masses que Revit masque par défaut) ; `Vignette-04-BaseFile` 1 forme de masse masquée (l'import 308836) ; aucun
+    changement, octet pour octet, dans les autres fichiers (`DynamoSample_2014` à `2025` ont une famille sur place, « water », dont seul le contenu qui n'est pas une forme se dessine).
+    Les vues 3D enregistrées (`hiddenElements`, `hiddenCategories`) sont identiques partout, sauf dans rac et dans mega : leurs sept vues cachent la catégorie « Masses » (`hiddenCategories`), et l'entrée disparaît des sept vues, parce
+    que cette liste ne nomme que les catégories des éléments dessinés (`views/write.rs`) et que les deux formes de masse 139682 et 139763 étaient les seuls éléments « Masses » : aucune masse n'est plus dessinée dans aucune vue, ce que ces vues demandaient déjà.
+  - *Limites.* Le critère est le nombre de triangles, non la forme : une instance qui en porte autant mais pas les mêmes les ferait écarter (jamais vu : les 25 paires sont vérifiées sommet par sommet). Le cas « dessiné comme avant, avec un avertissement » (instance masquée pour une autre raison, illisible, absente, ou plus petite que le contenu) n'arrive sur aucun fichier d'essai : il n'est essayé que par les essais unitaires de `geometry`. Le contenu tenu en attente occupe la mémoire
+    des formes des seules familles à instance dessinable (la plus lourde est celle de nyc, 56 916 triangles) jusqu'à la fin de la lecture : le pic de mémoire (`/usr/bin/time -l`, `examples/dump`, le plus grand de deux lectures) ne bouge
+    pas de plus de 2,4 % sur les sept fichiers concernés (`wadduwa.rvt` 982 → 975 Mo, `SampleModel` 391 → 382, `rac_advanced` 475 → 478, `mega_advanced` 451 → 458, `dynamo-nyc-site-2013` 228 → 225, `drone-hangar-building-2014` 280 → 286, `Vignette-04` 545 → 538 : le bruit d'une lecture à l'autre).
+- **Priorité de profondeur : qui l'emporte entre des faces coplanaires.** Des faces de deux éléments exactement dans le même plan (à 0 mm, de même normale, qui se
+  recouvrent) se disputent les mêmes pixels et le viewer les montre en scintillant (« z-fighting ») : le dessus d'un poteau au niveau du dessus de la dalle qui l'entoure,
+  le côté d'un limon d'escalier contre le mur qui le longe, un cadre de fenêtre à fleur de façade, l'empreinte d'un arbre sur le sol, un plan importé sur une dalle.
+  Chaque face a donc une priorité, l'octet 6 de la table des matériaux (`geometry::pack::Depth`), qui ne change ni les triangles ni leur couleur :
+  - **0 ordinaire** : tout le reste (familles, escaliers, garde-corps, poteaux, imports de famille…), sans décalage ;
+  - **2 hôte** : les hôtes système, d'après la classe de l'élément (`geometry::classes::HOST_CATEGORIES`, la table des classes que lit la géométrie) : `SWall`, `FaceWall`,
+    `ArcWall` (murs), `Floor` (sols, sans les nez de dalle `EdgeSlab` ni les fondations filantes `ContFooting`), `Roof`, `ProfileRoof`, `FaceRoof` (toitures), `Ceiling`
+    (plafonds), `SiteSurface` (topographie) et `BuildingPad` (plateformes). Aucun schéma des fichiers d'essai n'a de classe de toposolide ; elle n'est pas dans la table ;
+  - **1 surcouche** : le `GPolyMesh` voisin d'un `GImposter` (la silhouette et l'empreinte au sol d'un arbre RPC, `faces::select::Selected::overlay` : les 14 triangles
+    horizontaux de l'empreinte d'un arbre de `wadduwa.rvt` sont à −6,53 m, le dessus de la dalle 575046), et toute la géométrie des `ImportInstance` du projet.
+  Le viewer dessine chaque priorité dans son propre lot et son propre matériau (jamais fusionnés avec des triangles de même couleur d'une autre priorité) avec un décalage
+  de profondeur négatif (`polygonOffset`, `DEPTH_POLYGON_OFFSET` dans `src/engine/buildModel.ts`) : hôte facteur −1 et unités −2, surcouche facteur −2 et unités −6. À faces
+  coïncidentes, la surcouche l'emporte sur l'hôte, et l'hôte sur l'ordinaire : le mur cache la face du limon qui est dans son plan, la dalle le dessus du poteau, la surcouche le dessus de la dalle.
+  L'export GLB n'a pas de décalage de profondeur possible, ni la carte Cesium : rien n'y change. `exact_fingerprint` (les essais de non-régression) ne distingue pas les priorités.
+  Limites, mesurées sur `wadduwa.rvt` (recherche des faces coplanaires sur le GLB de `examples/glb`, **restreint aux éléments que la lecture dessine** : les nœuds dont
+  l'identifiant est dans les métadonnées de la lecture, 437 ; `examples/glb` dessine aussi 25 nœuds que la lecture écarte, dont les volées, paliers et supports d'un escalier que son propriétaire dessine déjà et
+  les formes de familles sur place, et leurs recouvrements ne comptent pas : les 69,3 m² « d'un escalier contre ses propres volées » d'une première mesure venaient de là) : 213 paires de faces coplanaires de même sens qui se
+  recouvrent, 233,8 m² ; 105,5 m² (93 paires) ont des priorités différentes et sont départagés ; 128,3 m² d'hôte contre hôte restent à priorité égale (101,9 m² de murs contre murs, 8 paires de murs en double, jusqu'à 37,5 m², dont deux
+  sont les murs 757897 et 760541 que possèdent des familles sur place ; 26,4 m² de sols contre murs, 109 paires) ; ordinaire contre ordinaire, 3 paires de moins de 0,01 m² chacune (un poteau et un cadre de fenêtre, une lisse et son garde-corps, une porte et un escalier). L'escalier
+  contre les murs (la ligne en pointillé de l'utilisateur) est une bande étroite de 0,08 m² : le mur 567439 contre les escaliers 676369 et 680413, départagée (le mur, hôte, passe devant). Avant que le contenu des familles sur place soit dessiné par leur instance, la même mesure
+  donnait 217 paires et 243,1 m², dont 9,2 m² d'ordinaire contre ordinaire : quatre paires entre les cadres de fenêtre 752500, 752831 et 760354 (des formes) et leurs instances (« Familles sur place », ci-dessus), qui
+  se superposaient ; elles ont disparu avec les trois formes. Le décalage dépend de la pente de la face (le facteur) : à incidence rasante, un hôte
+  peut passer devant un objet qui le touche de quelques millimètres.
 - **Les textures ne sont pas dans le fichier.** Les 359 chemins d'image de `wadduwa.rvt` (`1/Mats/…jpg`) désignent la bibliothèque de
   matériaux d'Autodesk sur la machine de l'auteur : aucun flux d'image n'existe dans le fichier, sauf l'aperçu `RevitPreview4.0`. Le
   lecteur ne dessine donc que les couleurs des matériaux, jamais de texture.
@@ -415,7 +477,8 @@ La `Catégorie` vient, dans l'ordre (`properties/fiche.rs`, `category_of`) :
 
 Chaque règle est vérifiée sur les fichiers d'essai par une seconde source du fichier, les styles graphiques que Revit
 enregistre avec la forme de l'élément : ils portent la même catégorie. Une source manquante ou ambiguë ne range pas :
-l'élément garde « Classe Revit » et se groupe sous « (non défini) ». Sur les 15 667 éléments dessinés des fichiers d'essai,
+l'élément garde « Classe Revit » et se groupe sous « (non défini) ». Sur les 15 642 éléments dessinés des fichiers d'essai (15 667 avant que le contenu des
+familles sur place soit dessiné par leur instance, § 3 : 21 formes de moins, et 4 formes de masses masquées),
 aucun ne reste sans catégorie. Les 5 surfaces divisées d'une famille de masse de 2013 (`DividedSurface`) sont « Surface
 divisée » (OST_DividedSurface, -2003323) : leur propriétaire dit « Masses », mais tous les styles dont elles sont dessinées sont
 des sous-catégories de cette catégorie (`_Nodes`, `_Gridlines`, `_PatternLines`, `_PatternFill`), et une sous-catégorie est
@@ -431,11 +494,13 @@ désigner un enregistrement de type ; la famille est celle du type, à défaut l
 famille système « Garde-corps » ; une lisse haute a pour type son `m_typeId` (`TopRailType`) et non le symbole interne
 (`ContinuousRailSymbol`, « 1 », « 3 »…) que le balayage prenait ; une gaine et un tuyau l'ont dans `m_idType` ; un profilé de mur
 intégré à un type de mur (`WallSweep` à `m_fixed`), sans type, prend la famille et le type du mur qui le possède (ElemTable), et son
-libellé ; une forme d'une famille sur place (extrusion, balayage, forme de masse…) prend le nom de la `Family` qui la possède et le
-type du `FamilySymbol` qui possède cette `Family`, accepté si ce symbole est un type de cette famille (sinon le type reste vide) :
-ni l'un ni l'autre ne reçoit les paramètres de type d'un autre élément. Une forme de la famille d'un `.rfa` n'a ni famille ni type :
+libellé. Une forme d'une famille sur place (extrusion, balayage, forme de masse…) n'est plus un élément dessiné : c'est l'instance de sa famille qui est
+dessinée et décrite (§ 3, « Familles sur place »), avec le même libellé, la même catégorie, la même famille et le même type que la forme qu'elle remplace (24 formes sur 24 mesurées), et la forme d'une
+famille de masse, comme son instance, n'est pas dessinée (masses masquées par défaut). Le nom que prendrait une forme encore dessinée (aucune dans les fichiers d'essai) est le nom de la `Family` qui la
+possède et le type du `FamilySymbol` qui possède cette `Family`, accepté si ce symbole est un type de cette famille (sinon le type reste vide) : ni l'un ni l'autre ne reçoit les paramètres de type d'un autre élément
+(essais unitaires de `properties::fiche`). Une forme de la famille d'un `.rfa` n'a ni famille ni type :
 son libellé est sa sorte (Extrusion, Raccordement, Balayage, Raccordement par balayage, Révolution, Forme, Forme libre) et son
-identifiant. Sur les 15 667 éléments des fichiers d'essai, 271 étaient sans famille et 176 sans type ; il en reste 61 et 61, que
+identifiant. Sur les 15 667 éléments des fichiers d'essai d'alors (dont les 25 formes de familles sur place, qui ne sont plus dessinées), 271 étaient sans famille et 176 sans type ; il en reste 61 et 61, que
 Revit ne nomme pas non plus : 25 topographies, 8 sols de masse, 20 formes d'un `.rfa`, 5 surfaces divisées et 3 formes directes
 (`m_typeId` à -1).
 
@@ -728,7 +793,8 @@ lecture en disant ce qui a été essayé :
   document n'est pas une `Family` qui existe, rien n'est écarté et un avertissement compte les éléments concernés. Vérifié par huit fichiers d'essai de DynamoRevit d'avant 2015 et leur
   réenregistrement dans Revit 2016, qui range ces définitions à part : mêmes éléments, mêmes triangles des deux côtés ; et
   par `DynamoSample_2014.rvt` et `DynamoSample_2023.rvt`, le même modèle : les 257 mêmes éléments (114 définitions écartées).
-  Sur les fichiers de 2015 et après, la règle ne s'applique pas et n'écarterait rien de ce qui est dessiné.
+  Sur les fichiers de 2015 et après, la règle ne s'applique pas et n'écarterait rien de ce qui est dessiné. Ce que possède une famille *sur place* est dans le
+  modèle, à toute année : ses formes sont dessinées par l'instance de la famille, non à leur place d'origine (§ 3, « Familles sur place »).
 
 L'export IFC de rvt-rs rend un projet vide sur tous les fichiers d'avant 2015 essayés : la lecture native est la seule.
 
@@ -741,9 +807,9 @@ Couverture mesurée sur les fichiers d'essai de 2012 à 2014 (éléments dessin�
 | dynamo-nyc-site-2013.rvt | 2013 | 1 | 0 | 1 | 56 916 |
 | dynamo-tower-6-ds-2013.rfa | 2013 | 6 | 6 | 0 | 5 156 |
 | DynamoSample_2014.rvt | 2014 | 257 | 257 | 0 | 57 845 |
-| drone-hangar-building-2014.rvt | 2014 | 279 | 279 | 0 | 58 392 |
-| clockwork-wall-stuff-2014.rvt | 2014 | 65 | 64 | 1 | 7 056 |
-| clockwork-roof-floor-stuff-2014.rvt | 2014 | 9 | 8 | 1 | 153 918 |
+| drone-hangar-building-2014.rvt | 2014 | 265 | 265 | 0 | 57 460 |
+| clockwork-wall-stuff-2014.rvt | 2014 | 64 | 63 | 1 | 7 040 |
+| clockwork-roof-floor-stuff-2014.rvt | 2014 | 8 | 7 | 1 | 85 432 |
 
 Les trois formes partielles viennent de trous du mailleur qui existent à toutes les années : une face `Plane` au contour non raccordé (site de
 2013 ; ses instances à échelle uniforme se placent depuis, § 3), une face `OffsetSurf` (toit) et des faces `SharedSurface` (système de murs-rideaux). Plusieurs projets d'essai de
@@ -768,10 +834,10 @@ Couverture mesurée (éléments dessinés, `report.sources`) :
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | singleDirectShape | 2015 | 1 | 1 | 0 | 0 | 0 | 2 168 |
 | Vignette-04-BaseFile | 2016 | 953 | 953 | 0 | 0 | 0 | 2 747 486 |
-| SampleModel | 2017 | 475 | 475 | 0 | 0 | 0 | 1 048 501 |
+| SampleModel | 2017 | 472 | 472 | 0 | 0 | 0 | 1 048 445 |
 | RiR-Template-2018 (modèle de projet) | 2018 | 0 | 0 | 0 | 0 | 0 | 0 |
-| rac_advanced_sample_project | 2019 | 5 574 | 5 574 | 0 | 0 | 0 | 2 087 559 |
-| mega_advanced_sample_file | 2020 | 5 526 | 5 526 | 0 | 0 | 0 | 1 639 943 |
+| rac_advanced_sample_project | 2019 | 5 571 | 5 571 | 0 | 0 | 0 | 2 084 775 |
+| mega_advanced_sample_file | 2020 | 5 523 | 5 523 | 0 | 0 | 0 | 1 637 159 |
 | ConnectorTestR20 | 2020 | 3 | 3 | 0 | 0 | 0 | 6 808 |
 | RoomsAndExits | 2021 | 12 | 12 | 0 | 0 | 0 | 464 |
 | revit-curtainwall-byprofile_v21 | 2021 | 123 | 123 | 0 | 0 | 0 | 280 838 |
@@ -1138,9 +1204,9 @@ Limites actuelles.
 - Une DWG importée dans une famille se dessine en couleurs de calque (§ 3), avec ses blocs à échelle uniforme ; une instance à échelle non uniforme
   qui porte des surfaces reste un diagnostic (forme partielle), aucune n'existe dans les fichiers d'essai. Les textures des matériaux ne sont pas dans le
   fichier (§ 3).
-- Les imports CAD du projet lui-même (`ImportInstance`) placés avec une échelle restent non lus, comme avant, en attendant qu'on décide s'il faut
-  les dessiner : les 5 plans DWG de `wadduwa.rvt`, l'import de 1,5 km de `Vignette-04` (308836), le second import de `dynamo-nyc-site-2013` (230266) (§ 3). Ce que Revit
-  en montre dans une vue 3D (catégories d'import visibles ou non) n'est pas lu.
+- Les imports CAD du projet se dessinent tous, hors ceux propres à une vue (§ 3). Ce que Revit en montre dans une vue 3D donnée (catégories d'import visibles ou non, éléments
+  cachés d'une vue) n'est pas reconstitué hors des vues enregistrées. La priorité de profondeur départage des faces coplanaires de priorités différentes, jamais de même
+  priorité : murs contre murs (doublons), sols contre murs, et les pièces d'un escalier entre elles restent coplanaires (§ 3).
 - Ce que les fichiers d'essai ne tranchent pas reste un diagnostic, donc une forme partielle : les masques de cibles interdites autres que
   10 sur une instance visible dont le symbole porte des surfaces (aucun n'existe dans les fichiers d'essai), un symbole résolu dans la vue
   dont le graphique contient des conditions, une surface d'Hermite périodique. Les surfaces d'Hermite sont maillées à 3 mm (0,01 pied) au

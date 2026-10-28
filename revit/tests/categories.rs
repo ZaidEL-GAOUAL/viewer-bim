@@ -127,18 +127,19 @@ fn no_revit_class(lu: &Lu, stem: &str) {
 // Les classes de la spec, fichier par fichier
 // ---------------------------------------------------------------------------------------------
 
-/// Les 166 éléments qui gagnent une catégorie : (fichier, classe, catégorie, nombre). Mesuré : 166 éléments dessinés sans catégorie dans
-/// les 54 fichiers lisibles. Les 161 premiers sont rangés par leur classe, leur type ou leur propriétaire ; les 5 `DividedSurface` de
+/// Les 162 éléments qui gagnent une catégorie : (fichier, classe, catégorie, nombre). Mesuré : 166 éléments dessinés sans catégorie dans
+/// les 54 fichiers lisibles, 162 depuis que le contenu des familles sur place est dessiné par leur instance : les quatre balayages
+/// (`SweepElem`) de `SampleModel` (le caisson de hotte 697449), de `clockwork-roof-floor-stuff-2014` (181144), de `mega_advanced_sample_file` et de
+/// `rac_advanced_sample_project` (la poutre courbe 201286) ne sont plus dessinés : leurs instances le sont, avec leur catégorie (voir
+/// `FORMES_ECARTEES`). Les 157 premiers sont rangés par leur classe, leur type ou leur propriétaire ; les 5 `DividedSurface` de
 /// `dynamo-tower-6-ds-2013` le sont par la catégorie OST_DividedSurface (`FICHE_CLASS_CATEGORIES`). Un fichier absent de cette table n'a
 /// aucun élément de ces classes.
 const NOUVELLES: &[(&str, &str, Option<&str>, usize)] = &[
     ("FamilyDocumentTests", "BlendElem", Some("Modèles génériques"), 4),
     ("FamilyDocumentTests", "SweepElem", Some("Modèles génériques"), 2),
     ("SampleModel", "ProfileRoof", Some("Toitures"), 1),
-    ("SampleModel", "SweepElem", Some("Systèmes de mobilier"), 1),
     ("clockwork-roof-floor-stuff-2014", "FaceRoof", Some("Toitures"), 1),
     ("clockwork-roof-floor-stuff-2014", "ProfileRoof", Some("Toitures"), 2),
-    ("clockwork-roof-floor-stuff-2014", "SweepElem", Some("Toitures"), 1),
     ("clockwork-wall-stuff-2014", "CurtaSystem", Some("Systèmes de mur-rideau"), 1),
     ("clockwork-wall-stuff-2014", "FaceWall", Some("Murs"), 1),
     ("drone-hangar-building-2014", "ContFooting", Some("Fondations porteuses"), 16),
@@ -148,14 +149,12 @@ const NOUVELLES: &[(&str, &str, Option<&str>, usize)] = &[
     ("mega_advanced_sample_file", "FaceRoof", Some("Toitures"), 1),
     ("mega_advanced_sample_file", "MassLevelData", Some("Sols de masse"), 4),
     ("mega_advanced_sample_file", "ProfileRoof", Some("Toitures"), 6),
-    ("mega_advanced_sample_file", "SweepElem", Some("Ossature porteuse"), 1),
     ("mega_advanced_sample_file", "SweepHost", Some("Nez de dalle"), 2),
     ("mega_advanced_sample_file", "WallSweep", Some("Murs"), 8),
     ("rac_advanced_sample_project", "FaceRoof", Some("Toitures"), 1),
     ("rac_advanced_sample_project", "MassLevelData", Some("Sols de masse"), 4),
     ("rac_advanced_sample_project", "ProfileRoof", Some("Toitures"), 6),
     ("rac_advanced_sample_project", "Stairs", Some("Escaliers"), 5),
-    ("rac_advanced_sample_project", "SweepElem", Some("Ossature porteuse"), 1),
     ("rac_advanced_sample_project", "SweepHost", Some("Nez de dalle"), 2),
     ("rac_advanced_sample_project", "WallSweep", Some("Murs"), 8),
     ("revit-curtainwall-byprofile_v21", "DirectShape", Some("Modèles génériques"), 2),
@@ -169,7 +168,7 @@ const NOUVELLES: &[(&str, &str, Option<&str>, usize)] = &[
 const CLASSES_NOUVELLES: &[&str] = &["WallSweep", "ProfileRoof", "ContFooting", "MassLevelData", "SweepElem", "DividedSurface", "Stairs", "BlendElem", "SweepHost", "FaceRoof", "DirectShape", "FaceWall", "CurtaSystem", "ArcWall", "RevolutionElem"];
 
 #[test]
-fn les_166_elements_gagnent_leur_categorie() {
+fn les_162_elements_gagnent_leur_categorie() {
     let files: BTreeSet<&str> = NOUVELLES.iter().map(|(file, ..)| *file).collect();
     let (mut found, mut without) = (0, 0);
     for stem in files {
@@ -186,10 +185,10 @@ fn les_166_elements_gagnent_leur_categorie() {
         // Plus aucun élément ne garde « Classe Revit ».
         no_revit_class(&lu, stem);
     }
-    // Les 54 fichiers présents : 166 et 0. Sinon, ce que les fichiers présents en comptent.
+    // Les 54 fichiers présents : 162 et 0. Sinon, ce que les fichiers présents en comptent.
     let all = NOUVELLES.iter().all(|(file, ..)| sample(file).is_some());
     if all {
-        assert_eq!((found, without), (166, 0));
+        assert_eq!((found, without), (162, 0));
     }
 }
 
@@ -197,10 +196,15 @@ fn les_166_elements_gagnent_leur_categorie() {
 fn rac_range_ses_classes_et_n_ecrit_plus_de_classe_revit() {
     let Some(lu) = lire("rac_advanced_sample_project") else { return };
     // SweepHost : un nez de dalle (type « Slab Edge », classe `EdgeSlabAttr`), non plus « Dalle de bord » (rendu automatique).
-    for (class, category, n) in [("WallSweep", "Murs", 8), ("SweepHost", "Nez de dalle", 2), ("Stairs", "Escaliers", 5), ("MassLevelData", "Sols de masse", 4), ("ProfileRoof", "Toitures", 6), ("FaceRoof", "Toitures", 1), ("SweepElem", "Ossature porteuse", 1)] {
+    for (class, category, n) in [("WallSweep", "Murs", 8), ("SweepHost", "Nez de dalle", 2), ("Stairs", "Escaliers", 5), ("MassLevelData", "Sols de masse", 4), ("ProfileRoof", "Toitures", 6), ("FaceRoof", "Toitures", 1)] {
         assert_eq!(count(&lu, class, Some(category)), n, "{class}");
         assert_eq!(count(&lu, class, None), 0, "{class} sans catégorie");
     }
+    // La poutre courbe de la famille sur place « Curved Beam » (le balayage 201286) n'est plus dessinée : son instance (201308) la dessine, avec sa
+    // catégorie (« Ossature porteuse »), et aucun élément `SweepElem` ne reste.
+    assert_eq!(count(&lu, "SweepElem", Some("Ossature porteuse")) + count(&lu, "SweepElem", None), 0);
+    let beam = lu.fiche_of(201308);
+    assert_eq!((beam.class, beam.category()), ("FamilyInstance", Some("Ossature porteuse")));
     no_revit_class(&lu, "rac_advanced_sample_project");
     // Les noms des familles système que le fichier ne nomme pas (« Famille : Type »).
     let edge = lu.fiches().into_iter().find(|fiche| fiche.class == "SweepHost").expect("nez de dalle");
@@ -261,10 +265,15 @@ fn les_surfaces_divisees_ont_la_categorie_de_leurs_styles() {
 // ---------------------------------------------------------------------------------------------
 
 /// Les seules catégories déjà écrites qui changent : (fichier, élément, classe, avant, après). Mesuré sur les 54 fichiers lisibles
-/// contre les dumps d'avant (15 501 éléments avec catégorie) ; les 15 485 autres gardent la leur.
+/// contre les dumps d'avant (15 501 éléments avec catégorie, 15 480 depuis que 21 formes de familles sur place ne sont plus dessinées (dont 17
+/// avaient une catégorie, les quatre `SweepElem` de `NOUVELLES` n'en avaient pas : voir `FORMES_ECARTEES`) ni les quatre formes de masses masquées de
+/// `FORMES_DE_MASSES_MASQUEES`) ; les 15 471 autres gardent la leur.
 ///
 /// - Formes (`ExtrusionElem`, `FormElem`) : la famille qui les possède passe avant la classe. La table des classes se trompait pour
-///   11 formes sur 34, la catégorie de la famille est celle de leurs graphiques (`GInfo.m_categoryId`).
+///   11 formes sur 34, la catégorie de la famille est celle de leurs graphiques (`GInfo.m_categoryId`). Trois de ces onze formes (les deux
+///   armoires de `SampleModel`, 506161 et 523524, et le mur sur place 180076 de `clockwork-wall-stuff-2014`) sont des formes de familles sur place que
+///   leur instance dessine : elles ne sont plus dessinées, leur instance a la même catégorie (`FORMES_ECARTEES`). Les quatre autres (les formes de masse « Main Building » et « Pavillion » de `mega_advanced_sample_file` et de
+///   `rac_advanced_sample_project`, 139682 et 139763, « Modèles génériques » devenue « Masses ») sont des masses masquées par défaut (`FORMES_DE_MASSES_MASQUEES`) : plus dessinées non plus.
 /// - Sols : la dalle de fondation (`FloorAttributes.m_footingType` = 1, « 150mm Foundation Slab ») est dessinée avec le style
 ///   OST_StructuralFoundation, 5 sols sur 5 ; les 177 autres sols dessinés (`m_footingType` = 0) avec OST_Floors.
 const CHANGEMENTS: &[(&str, u64, &str, &str, &str)] = &[
@@ -272,13 +281,6 @@ const CHANGEMENTS: &[(&str, u64, &str, &str, &str)] = &[
     ("AdaptivePanel", 1591862, "FormElem", "Masses", "Modèles génériques"),
     ("AdaptivePanel", 1591876, "FormElem", "Masses", "Modèles génériques"),
     ("AdaptivePanel", 1592760, "FormElem", "Masses", "Modèles génériques"),
-    ("SampleModel", 506161, "ExtrusionElem", "Modèles génériques", "Systèmes de mobilier"),
-    ("SampleModel", 523524, "ExtrusionElem", "Modèles génériques", "Systèmes de mobilier"),
-    ("clockwork-wall-stuff-2014", 180076, "ExtrusionElem", "Modèles génériques", "Murs"),
-    ("mega_advanced_sample_file", 139682, "ExtrusionElem", "Modèles génériques", "Masses"),
-    ("mega_advanced_sample_file", 139763, "ExtrusionElem", "Modèles génériques", "Masses"),
-    ("rac_advanced_sample_project", 139682, "ExtrusionElem", "Modèles génériques", "Masses"),
-    ("rac_advanced_sample_project", 139763, "ExtrusionElem", "Modèles génériques", "Masses"),
     ("DynamoSample_2014", 766598, "Floor", "Sols", "Fondations porteuses"),
     ("DynamoSample_2023", 766598, "Floor", "Sols", "Fondations porteuses"),
     ("DynamoSample_2024", 766598, "Floor", "Sols", "Fondations porteuses"),
@@ -304,11 +306,68 @@ fn la_famille_d_une_forme_passe_avant_la_classe() {
     if let Some(lu) = lire("ShellFamily") {
         assert_eq!(count(&lu, "FormElem", Some("Masses")), 2);
     }
+    // Les 14 extrusions des douze familles « Generic Models » du hangar (des familles sur place) ne sont plus dessinées : leurs instances le sont.
     if let Some(lu) = lire("drone-hangar-building-2014") {
-        assert_eq!(count(&lu, "ExtrusionElem", Some("Modèles génériques")), 14);
+        assert_eq!(count(&lu, "ExtrusionElem", Some("Modèles génériques")), 0);
+        assert_eq!(count(&lu, "ExtrusionElem", None), 0);
     }
     if let Some(lu) = lire("FamilyDocumentTests") {
         assert_eq!(count(&lu, "ExtrusionElem", Some("Modèles génériques")), 4);
+    }
+}
+
+/// Les formes de familles sur place que la lecture ne dessine plus : (fichier, forme, instance, catégorie). Le projet écrit les formes que l'éditeur de
+/// modèle sur place a créées (extrusions, balayages) parmi ses éléments, dans son propre repère, et leur instance les dessine à son tour, là où elle
+/// est : quand l'instance est dessinée avec au moins autant de triangles, la forme ne l'est pas (`geometry::Rules::release_in_place`). C'étaient les
+/// 21 formes, de 6 fichiers, que `CHANGEMENTS` et les tests de noms épinglaient ; l'instance a le même libellé, la même catégorie, la même famille et le même
+/// type que la forme qu'elle remplace (vérifié sur les dumps d'avant et d'après, 24 paires sur 24 : la 25e est l'import de `dynamo-nyc-site-2013`, voir
+/// l'import `SiteModel.dwg` de `dynamo-nyc-site-2013`, absent des dumps d'avant). Les formes de masse de `rac_advanced_sample_project` et de `mega_advanced_sample_file`
+/// (139682 et 139763), dont l'instance est une masse que Revit masque par défaut, n'ont pas d'instance dessinée : voir `FORMES_DE_MASSES_MASQUEES`.
+const FORMES_ECARTEES: &[(&str, u64, u64, &str)] = &[
+    ("SampleModel", 506161, 506168, "Systèmes de mobilier"),
+    ("SampleModel", 523524, 523531, "Systèmes de mobilier"),
+    ("SampleModel", 697449, 697577, "Systèmes de mobilier"),
+    ("clockwork-roof-floor-stuff-2014", 181144, 181411, "Toitures"),
+    ("clockwork-wall-stuff-2014", 180076, 180330, "Murs"),
+    ("drone-hangar-building-2014", 197890, 198013, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198031, 198170, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198536, 198543, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198585, 198592, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198614, 198621, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198813, 198820, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198845, 198852, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198858, 198865, "Modèles génériques"),
+    ("drone-hangar-building-2014", 198887, 198894, "Modèles génériques"),
+    ("drone-hangar-building-2014", 199109, 198894, "Modèles génériques"),
+    ("drone-hangar-building-2014", 199257, 198894, "Modèles génériques"),
+    ("drone-hangar-building-2014", 199737, 199746, "Modèles génériques"),
+    ("drone-hangar-building-2014", 199770, 199779, "Modèles génériques"),
+    ("drone-hangar-building-2014", 199789, 199798, "Modèles génériques"),
+    ("mega_advanced_sample_file", 201286, 201308, "Ossature porteuse"),
+    ("rac_advanced_sample_project", 201286, 201308, "Ossature porteuse"),
+];
+
+#[test]
+fn les_formes_de_familles_sur_place_ont_leur_instance_pour_les_remplacer() {
+    for (stem, form, instance, category) in FORMES_ECARTEES {
+        let Some(lu) = lire(stem) else { continue };
+        assert!(lu.fiches().iter().all(|fiche| fiche.id != *form), "{stem} : la forme {form} est dessinée par son instance {instance}");
+        let fiche = lu.fiche_of(*instance);
+        assert_eq!((fiche.class, fiche.category()), ("FamilyInstance", Some(*category)), "{stem} {instance}");
+    }
+}
+
+/// Les formes de familles sur place dont l'instance est une masse, que Revit masque par défaut (la règle des masses, `RELATION_REASONS[5]`, écarte l'instance) :
+/// la forme l'est avec elle, avec la même raison, comptée dans l'avertissement des masses. (fichier, forme) ; l'import SAT 308836 de `Vignette-04-BaseFile` (famille
+/// « Mass 1 ») en est un aussi, mais absent des dumps d'avant. Les vues 3D enregistrées de `rac_advanced_sample_project` et de `mega_advanced_sample_file` cachent
+/// déjà la catégorie « Masses » (`hiddenCategories`) : ces formes, rangées dans cette catégorie (`tests/names.rs`), y étaient cachées du viewer, et ne sont plus dessinées.
+const FORMES_DE_MASSES_MASQUEES: &[(&str, u64)] = &[("mega_advanced_sample_file", 139_682), ("mega_advanced_sample_file", 139_763), ("rac_advanced_sample_project", 139_682), ("rac_advanced_sample_project", 139_763)];
+
+#[test]
+fn les_formes_de_masses_masquees_ne_sont_pas_dessinees() {
+    for (stem, id) in FORMES_DE_MASSES_MASQUEES.iter().chain(&[("Vignette-04-BaseFile", 308_836)]) {
+        let Some(lu) = lire(stem) else { continue };
+        assert!(lu.fiches().iter().all(|fiche| fiche.id != *id), "{stem} : {id} est une masse masquée par défaut, comme l'instance de sa famille");
     }
 }
 
@@ -423,6 +482,7 @@ fn before_metadata() -> Option<BTreeMap<String, Value>> {
     }
 }
 
+
 #[test]
 fn aucune_categorie_existante_ne_change_hors_des_changements_listes() {
     let before = before_metadata();
@@ -450,9 +510,12 @@ fn aucune_categorie_existante_ne_change_hors_des_changements_listes() {
             changed += 1;
         }
         let Some(before) = before.as_ref().and_then(|dumps| dumps.get(stem)) else { continue };
-        let keys_before: Vec<&String> = before["elements"].as_object().expect("elements").keys().collect();
+        // Les formes de familles sur place que leur instance dessine ne le sont plus (`FORMES_ECARTEES`) : absentes d'après, présentes d'avant.
+        let gone: BTreeSet<u64> = FORMES_ECARTEES.iter().filter(|(file, ..)| file == stem).map(|(_, form, ..)| *form).chain(FORMES_DE_MASSES_MASQUEES.iter().filter(|(file, _)| file == stem).map(|(_, form)| *form)).collect();
+        let keys_before: Vec<&String> = before["elements"].as_object().expect("elements").keys().filter(|key| !gone.contains(&id_of(before, key))).collect();
+        assert_eq!(before["elements"].as_object().expect("elements").len() - keys_before.len(), gone.len(), "{stem} : toutes les formes écartées étaient dessinées avant");
         let keys_after: Vec<&String> = after["elements"].as_object().expect("elements").keys().collect();
-        assert_eq!(keys_before, keys_after, "{stem} : mêmes éléments, dans le même ordre");
+        assert_eq!(keys_before, keys_after, "{stem} : mêmes éléments, dans le même ordre, hors les formes de familles sur place");
         for key in keys_before {
             let Some(old) = category_of(before, key) else { continue };
             compared += 1;
@@ -465,7 +528,9 @@ fn aucune_categorie_existante_ne_change_hors_des_changements_listes() {
         }
     }
     if before.is_some() && stems.iter().all(|stem| sample(stem).is_some()) {
-        // 15 501 éléments avec une catégorie avant, dont 16 changent.
-        assert_eq!((compared, changed), (15_501, CHANGEMENTS.len()));
+        // 15 501 éléments avec une catégorie avant, 21 de moins depuis que les formes de familles sur place ne sont plus dessinées (17 avaient une catégorie, plus
+        // 4 formes de masses masquées : 15 480), dont 9 changent.
+        assert_eq!((compared, changed), (15_480, CHANGEMENTS.len()));
+        assert_eq!(CHANGEMENTS.len(), 9);
     }
 }

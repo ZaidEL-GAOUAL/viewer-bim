@@ -34,7 +34,7 @@ import { buildBlocks } from './triangleBlocks.ts';
 /** Calque des lots transparents : exclus des passes de remplissage des coupes. */
 export const TRANSPARENT_LAYER = 1;
 
-/** Octets d'une ligne de la table des matériaux d'un modèle brut (lecteur Revit) : r, g, b, a, transparent, double face, surcouche. */
+/** Octets d'une ligne de la table des matériaux d'un modèle brut (lecteur Revit) : r, g, b, a, transparent, double face, priorité de profondeur. */
 export const MATERIAL_STRIDE = 7;
 
 interface NodeDef {
@@ -59,11 +59,11 @@ interface SourceMaterial {
   transparent: boolean;
   doubleSided: boolean;
   /**
-   * Surcouche : les triangles se dessinent par-dessus les surfaces coplanaires (l'image d'un contenu RPC posée sur le sol,
-   * que Revit montre pleine), par un décalage de profondeur négatif (`OVERLAY_POLYGON_OFFSET`). Une surcouche a son propre
-   * lot : elle n'est jamais fusionnée avec des triangles ordinaires de la même couleur.
+   * Priorité de profondeur (`DEPTH_ORDINARY`, `DEPTH_OVERLAY`, `DEPTH_HOST`) : qui l'emporte quand des faces de deux éléments sont exactement dans
+   * le même plan. Une priorité autre qu'ordinaire dessine ses triangles avec un décalage de profondeur négatif (`DEPTH_POLYGON_OFFSET`), plus fort
+   * pour la surcouche que pour l'hôte. Chaque priorité a son propre lot : jamais de fusion avec des triangles de même couleur d'une autre.
    */
-  overlay: boolean;
+  depth: number;
   vertexColors: boolean;
   map: Texture | null;
   /** Attribut de coordonnées de texture utilisé par `map` (uv, uv1, uv2…). */
@@ -71,11 +71,22 @@ interface SourceMaterial {
   alphaTest: number;
 }
 
+/** Les trois priorités de profondeur de l'octet 6 de la table des matériaux d'un modèle brut (`revit/src/geometry/pack.rs`, `Depth`). */
+export const DEPTH_ORDINARY = 0;
+/** L'image d'un contenu RPC et les imports CAD du projet : devant les hôtes. */
+export const DEPTH_OVERLAY = 1;
+/** Les hôtes système (murs, sols, toitures, plafonds, topographie, plateformes) : devant ce qui leur est coplanaire. */
+export const DEPTH_HOST = 2;
+
 /**
- * Décalage de profondeur (facteur, unités) d'un lot de surcouche : négatif, il rapproche les triangles de la caméra, qui
- * gagnent contre une face coplanaire (le sol de l'arbre) sans traverser ce qui est vraiment devant eux.
+ * Décalage de profondeur (facteur, unités) de chaque priorité : négatif, il rapproche les triangles de la caméra, qui gagnent contre une face
+ * coplanaire (le sol d'un arbre, le dessus d'une dalle sur celui d'un poteau) sans traverser ce qui est vraiment devant eux. La surcouche
+ * dépasse l'hôte : un plan importé posé sur une dalle, une silhouette posée sur le sol, se voient par-dessus.
  */
-export const OVERLAY_POLYGON_OFFSET = { factor: -1, units: -4 } as const;
+export const DEPTH_POLYGON_OFFSET = {
+  [DEPTH_OVERLAY]: { factor: -2, units: -6 },
+  [DEPTH_HOST]: { factor: -1, units: -2 },
+} as const;
 
 /**
  * Un morceau de géométrie à fusionner, quelle que soit son origine (maillage glTF ou USD, primitive
@@ -141,7 +152,7 @@ export interface RawModel {
   indices: Uint32Array;
   /** Six entiers par primitive : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. */
   primitives: Uint32Array;
-  /** Sept octets par matériau : r, g, b, a (sRGB), transparent (0/1), double face (0/1), surcouche (0/1). */
+  /** Sept octets par matériau : r, g, b, a (sRGB), transparent (0/1), double face (0/1), priorité de profondeur (0 ordinaire, 1 surcouche, 2 hôte). */
   materials: Uint8Array;
 }
 
@@ -328,7 +339,7 @@ function collectScene(source: ModelSource): Collected {
       const baseA = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
       info = {
         key: `${map ? material.uuid : 'uni'}|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}`,
-        overlay: false,
+        depth: DEPTH_ORDINARY,
         r,
         g,
         b,
@@ -493,10 +504,10 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
     if (source) return source;
     const transparent = materials[m + 4] !== 0;
     const doubleSided = materials[m + 5] !== 0;
-    const overlay = materials[m + 6] !== 0;
+    const depth = materials[m + 6] === DEPTH_OVERLAY || materials[m + 6] === DEPTH_HOST ? materials[m + 6] : DEPTH_ORDINARY;
     source = {
-      key: `uni|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}${overlay ? '|v' : ''}`,
-      overlay,
+      key: `uni|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}${depth === DEPTH_OVERLAY ? '|v' : depth === DEPTH_HOST ? '|h' : ''}`,
+      depth,
       r: srgbByteToLinear(materials[m]),
       g: srgbByteToLinear(materials[m + 1]),
       b: srgbByteToLinear(materials[m + 2]),
@@ -988,10 +999,10 @@ export class ModelBuilder {
           depthWrite: !source.transparent,
           map: source.map,
           alphaTest: source.alphaTest,
-          // Une surcouche gagne contre les faces coplanaires (voir `SourceMaterial.overlay`).
-          polygonOffset: source.overlay,
-          polygonOffsetFactor: source.overlay ? OVERLAY_POLYGON_OFFSET.factor : 0,
-          polygonOffsetUnits: source.overlay ? OVERLAY_POLYGON_OFFSET.units : 0,
+          // Une priorité de profondeur gagne contre les faces coplanaires de priorité moindre (voir `SourceMaterial.depth`).
+          polygonOffset: source.depth !== DEPTH_ORDINARY,
+          polygonOffsetFactor: source.depth === DEPTH_OVERLAY ? DEPTH_POLYGON_OFFSET[DEPTH_OVERLAY].factor : source.depth === DEPTH_HOST ? DEPTH_POLYGON_OFFSET[DEPTH_HOST].factor : 0,
+          polygonOffsetUnits: source.depth === DEPTH_OVERLAY ? DEPTH_POLYGON_OFFSET[DEPTH_OVERLAY].units : source.depth === DEPTH_HOST ? DEPTH_POLYGON_OFFSET[DEPTH_HOST].units : 0,
         });
         applyElementState(material, state, this.selectColor);
         this.materials.set(source.key, material);

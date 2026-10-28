@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use std::process::ExitCode;
 
 use revit::geometry::faces;
-use revit::geometry::pack::{ElementMesh, Face, Paint};
+use revit::geometry::pack::{Depth, ElementMesh, Face, Paint};
 use revit::geometry::{classes, pack, saved};
 use rvt::research::native_parameters::ObjectGraph;
 use serde_json::json;
@@ -81,7 +81,7 @@ fn main() -> ExitCode {
             .primitives
             .iter()
             .zip(&meshes.ours)
-            .map(|(primitive, own)| Face { vertices: &primitive.vertices, normals: Some(&primitive.normals), triangles: &primitive.triangles, paint: if *own { ours } else { others }, overlay: false })
+            .map(|(primitive, own)| Face { vertices: &primitive.vertices, normals: Some(&primitive.normals), triangles: &primitive.triangles, paint: if *own { ours } else { others }, depth: Depth::Ordinary })
             .collect();
         let own: usize = meshes.primitives.iter().zip(&meshes.ours).filter(|(_, own)| **own).map(|(primitive, _)| primitive.triangles.len()).sum();
         (ElementMesh::build(&list), meshes.unbounded_faces, meshes.diagnostics.len(), own)

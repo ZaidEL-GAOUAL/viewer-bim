@@ -106,6 +106,9 @@ pub struct Raw {
     pub layers: Vec<Layer>,
     /// Matériaux de la géométrie d'un type de famille (`m_geomTag2MaterialId`).
     pub geometry_materials: Vec<i64>,
+    /// La catégorie d'un symbole d'import (`MasterImportSymbol.m_categoryId`) : l'élément `CategoryElem` qui porte le nom du fichier importé
+    /// (positif), ou une catégorie de Revit (négatif : « Styles d'objet d'importation »). Voir `fiche::Resolver::import_naming`.
+    pub import_category: Option<i64>,
 }
 
 /// Tout ce qui a été lu, par identifiant d'élément.
@@ -212,6 +215,15 @@ fn decode(id: u64, graph: &ObjectGraph, definitions: &Definitions) -> Option<Raw
         raw.name = text(info.fields.get("m_name"));
     }
     match raw.class.as_str() {
+        // Un import CAD place son symbole par l'`InstanceInfo` de son graphique de propriétés, et non par un champ de sa racine : le lien est suivi
+        // comme le symbole d'une instance de famille, pour que la fiche nomme l'import d'après son symbole (le nom du fichier importé).
+        "ImportInstance" => {
+            let symbol = object("InstanceInfo").and_then(|info| info.fields.get("m_symbolId")).and_then(element_id).filter(|id| *id > 0 && *id != own_id);
+            raw.refs.extend(symbol.map(|id| ("m_symbolId".to_string(), id)));
+        }
+        "MasterImportSymbol" => raw.import_category = root.fields.get("m_categoryId").and_then(element_id).filter(|id| *id != -1 && *id != 0),
+        // La catégorie d'un import : un élément dont le nom est celui du fichier importé (« Imported Categories » de Revit).
+        "CategoryElem" => raw.name = object("Category").and_then(|o| text(o.fields.get("m_name"))),
         "Level" => raw.name = text(root.fields.get("m_text")),
         "ProjectPhase" => raw.name = text(root.fields.get("m_name")),
         "MaterialElem" => raw.name = object("Material").and_then(|o| text(o.fields.get("m_name"))),
@@ -302,7 +314,7 @@ fn referenced(raw: &Raw) -> impl Iterator<Item = u64> + '_ {
 /// Ce que désigne en plus un type : sa famille, les matériaux de ses couches et de sa géométrie, et les
 /// éléments de ses paramètres.
 fn type_links(raw: &Raw) -> impl Iterator<Item = u64> + '_ {
-    let family = raw.family.into_iter();
+    let family = raw.family.into_iter().chain(raw.import_category);
     let layers = raw.layers.iter().map(|layer| layer.material);
     let materials = raw.geometry_materials.iter().copied();
     let parameters = raw.params.iter().filter(|p| p.storage == Storage::ElementId).map(|p| p.value.as_i64().unwrap_or(-1));

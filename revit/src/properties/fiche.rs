@@ -149,9 +149,26 @@ impl<'a> Resolver<'a> {
         Some(label)
     }
 
+    /// Un import CAD (`ImportInstance`) : son nom est celui du fichier importé (le nom de son symbole d'import, « MAN-GF.dwg »), et sa catégorie celle
+    /// que le fichier donne à ce symbole : l'élément `CategoryElem` qui porte aussi le nom du fichier (Revit les range sous « Catégories
+    /// importées »), ou une catégorie de Revit (« Styles d'objet d'importation » pour `SiteModel.dwg` de `dynamo-nyc-site-2013`). `None` pour
+    /// tout autre élément, et pour un import dont le symbole ne se lit pas ou n'a pas de nom : il garde alors son libellé de catégorie et d'identifiant.
+    fn import_naming(&self, raw: &Raw, type_raw: Option<&Raw>) -> Option<(String, Option<String>)> {
+        if raw.class != crate::geometry::classes::IMPORT_CLASS {
+            return None;
+        }
+        let symbol = type_raw.filter(|symbol| symbol.class == "MasterImportSymbol")?;
+        let file = symbol.name.clone()?;
+        let category = symbol.import_category.and_then(|id| if id > 0 { self.record(id).and_then(|record| record.name.clone()) } else { catalog::category(id).map(|category| category.label.to_string()) });
+        Some((file, category))
+    }
+
     /// Le libellé d'un élément : « Famille : Type », à défaut la famille seule, la catégorie et le type, la catégorie et l'identifiant.
     fn label_of(&self, id: i64, raw: &Raw) -> String {
         let type_raw = self.type_of(raw);
+        if let Some((file, _)) = self.import_naming(raw, type_raw) {
+            return file;
+        }
         let family_raw = type_raw.and_then(|t| t.family).and_then(|id| self.record(id));
         let category = self.category_of(id, raw, type_raw, family_raw);
         let naming = self.naming(id, raw, type_raw, family_raw);
@@ -364,11 +381,15 @@ impl<'a> Resolver<'a> {
         let family_raw = type_raw.and_then(|t| t.family).and_then(|id| self.record(id));
         let category = self.category_of(id, raw, type_raw, family_raw);
         let Naming { family: family_name, type_name } = self.naming(id, raw, type_raw, family_raw);
+        let import = self.import_naming(raw, type_raw);
+        let import_category = import.as_ref().and_then(|(_, category)| category.clone());
 
         // -- propriétés de tête
         let mut head: Vec<(&'static str, Val)> = Vec::new();
         if let Some(category) = category {
             head.push((CATEGORY, Val::Text(category.label.to_string())));
+        } else if let Some(name) = &import_category {
+            head.push((CATEGORY, Val::Text(name.clone())));
         }
         if let Some(name) = &family_name {
             head.push((FAMILY, Val::Text(name.clone())));
@@ -389,7 +410,7 @@ impl<'a> Resolver<'a> {
         if let Some(name) = self.phase_of(raw, PHASE_DEMOLISHED_PARAM) {
             head.push((PHASE_DEMOLISHED, Val::Text(name)));
         }
-        if category.is_none() {
+        if category.is_none() && import_category.is_none() {
             head.push((REVIT_CLASS, Val::Text(raw.class.clone())));
         }
 
@@ -478,7 +499,10 @@ impl<'a> Resolver<'a> {
             }
         });
 
-        let label = self.label(raw, category, family_name.as_deref(), type_name.as_deref(), id);
+        let label = match &import {
+            Some((file, _)) => file.clone(),
+            None => self.label(raw, category, family_name.as_deref(), type_name.as_deref(), id),
+        };
         Fiche { label, head, groups }
     }
 
@@ -1283,5 +1307,32 @@ mod tests {
         assert_eq!(labelled(Some("Chaise"), Some("-")), "Chaise");
         assert_eq!(labelled(Some("Chaise"), Some("Bois")), "Chaise : Bois");
         assert_eq!(labelled(None, None), "Élément Revit 7");
+    }
+
+    /// Un import CAD (`ImportInstance`) : son libellé est le nom du fichier importé (le nom de son symbole d'import), sa catégorie celle que le
+    /// fichier donne au symbole : l'élément `CategoryElem` de ce nom (wadduwa : « MAN-GF.dwg »), ou une catégorie de Revit (`SiteModel.dwg` de
+    /// dynamo-nyc-site-2013 : « Styles d'objet d'importation », -2000196). Sans symbole lisible, l'import garde le libellé d'un élément sans type.
+    #[test]
+    fn un_import_cad_est_nomme_par_son_fichier_et_range_dans_sa_categorie() {
+        let symbol = |name: Option<&str>, category: Option<i64>| Raw { is_type: true, name: name.map(str::to_string), import_category: category, ..record("MasterImportSymbol") };
+        let import = || Raw { refs: vec![("m_symbolId".to_string(), 200), ("m_assocLevelId".to_string(), 300)], ..record("ImportInstance") };
+        let level = || Raw { name: Some("Niveau 1".to_string()), ..record("Level") };
+        // La catégorie est un élément (`CategoryElem`) qui porte le nom du fichier.
+        let named = |category_name: &str| vec![(100, import()), (200, symbol(Some("MAN-GF.dwg"), Some(500))), (300, level()), (500, Raw { name: Some(category_name.to_string()), ..record("CategoryElem") })];
+        let fiche = fiche_of(100, named("MAN-GF.dwg"), &[], None);
+        assert_eq!(fiche.label, "MAN-GF.dwg");
+        assert_eq!((head_text(&fiche, CATEGORY), head_text(&fiche, TYPE), head_text(&fiche, LEVEL)), (some("MAN-GF.dwg"), some("MAN-GF.dwg"), some("Niveau 1")));
+        assert!(head_text(&fiche, REVIT_CLASS).is_none(), "une catégorie d'import range l'élément : pas de « Classe Revit »");
+        // La catégorie est celle de Revit (identifiant négatif).
+        let builtin = fiche_of(100, vec![(100, import()), (200, symbol(Some("SiteModel.dwg"), Some(-2000196)))], &[], None);
+        assert_eq!((builtin.label.as_str(), head_text(&builtin, CATEGORY)), ("SiteModel.dwg", some("Styles d'objet d'importation")));
+        // Une catégorie dont l'élément ne se lit pas : l'import reste nommé par son fichier, sans catégorie (et « Classe Revit » s'écrit).
+        let unread = fiche_of(100, vec![(100, import()), (200, symbol(Some("MAN-GF.dwg"), Some(500)))], &[], None);
+        assert_eq!((unread.label.as_str(), head_text(&unread, CATEGORY), head_text(&unread, REVIT_CLASS)), ("MAN-GF.dwg", None, some("ImportInstance")));
+        // Un symbole sans nom, ou pas un symbole d'import : le libellé d'un élément sans type.
+        let nameless = fiche_of(100, vec![(100, import()), (200, symbol(None, Some(500)))], &[], None);
+        assert_eq!(nameless.label, "Élément Revit 100");
+        let other = fiche_of(100, vec![(100, import()), (200, Raw { is_type: true, name: Some("Autre".to_string()), ..record("FamilySymbol") })], &[], None);
+        assert_eq!(other.label, "Élément Revit : Autre");
     }
 }

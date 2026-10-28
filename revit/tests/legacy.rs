@@ -60,12 +60,21 @@ const FLOORS: [Floor; 12] = [
     // de triangles à la flèche de 0,001 pied, 0,99 million à celle de 0,003 pied (`faces::tess::CHORD_ERROR`), 0,91 million depuis
     // qu'un axe de grille ne grossit plus sans abaisser l'écart (`ruled_knots`, `hermite_knots`), pour un budget de 3 millions
     // (`geometry::MAX_TRIANGLES`).
+    // 953 éléments : l'import SAT `existingSite-meerkat.sat` (308836, 5 708 faces, 16 632 triangles), que la lecture a dessiné un temps (954 éléments), est le contenu de
+    // la famille sur place « Mass 1 », dont l'instance (308831) est une masse : Revit la masque par défaut avec les masses, et son contenu avec elle, comme la règle des masses
+    // écarte l'instance. L'autre import du fichier, `existingSite-elk.dwg` (724869, des polylignes seulement), n'a aucune surface : il est compté « sans géométrie ».
     Floor { file: "Vignette-04-BaseFile.rvt", year: 2016, elements: 953, triangles: 2_900_000 },
-    Floor { file: "SampleModel.rvt", year: 2017, elements: 475, triangles: 1_100_000 },
+    // 472 éléments depuis que le contenu des familles sur place est dessiné par leur instance : 475 avant, moins les trois formes (`wardrobe1` 506161,
+    // `wardrobe2` 523524, `hood enclosure` 697449) que leurs instances (506168, 523531, 697577) dessinent à leur tour, avec les mêmes triangles. La forme
+    // du placard 2 était dessinée à 0,5 m de son instance, celle du placard 1 à 2,22 m.
+    Floor { file: "SampleModel.rvt", year: 2017, elements: 472, triangles: 1_100_000 },
     // 60 chaises à cibles interdites, 8 murs de parapet à symbole « résolu dans la vue » (leurs 8 balayages restent des éléments), 3 éléments
     // à `GGTag`.
-    Floor { file: "rac_advanced_sample_project.rvt", year: 2019, elements: 5574, triangles: 2_200_000 },
-    Floor { file: "mega_advanced_sample_file.rvt", year: 2020, elements: 5526, triangles: 1_750_000 },
+    // Trois éléments de moins dans chacun (5574 et 5526 avant) : la poutre courbe 201286, un balayage de la famille sur place « Curved Beam », que son instance
+    // (201308) dessine à son tour, avec les mêmes 2 744 triangles ; et les deux formes de masse « Main Building » (139682) et « Pavillion » (139763), dont les
+    // instances sont des masses que Revit masque par défaut : leur contenu est une masse aussi, écarté comme elles.
+    Floor { file: "rac_advanced_sample_project.rvt", year: 2019, elements: 5571, triangles: 2_200_000 },
+    Floor { file: "mega_advanced_sample_file.rvt", year: 2020, elements: 5523, triangles: 1_750_000 },
     Floor { file: "ConnectorTestR20.rvt", year: 2020, elements: 3, triangles: 10_000 },
     Floor { file: "RoomsAndExits.rvt", year: 2021, elements: 12, triangles: 1_000 },
     // Les deux sculptures `DirectShape` à 84 faces d'Hermite chacune : 128 000 triangles chacune (environ 123 000 depuis que

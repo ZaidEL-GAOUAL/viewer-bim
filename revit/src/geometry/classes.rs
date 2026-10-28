@@ -11,6 +11,36 @@
 //! de Revit, plus la topographie. `examples/census.rs` imprime ce que chaque règle retire, et
 //! `examples/dupes.rs` explique d'où viennent les triangles confondus.
 
+use super::pack::Depth;
+
+/// La classe d'un import CAD (DWG, SAT… importé dans le modèle ou dans une famille) : `ImportInstance`. Un import propre à une vue (« vue
+/// actuelle seulement ») a une vue propriétaire et se range avec les annotations (`excluded_relation`) : Revit ne le montre jamais en 3D.
+pub const IMPORT_CLASS: &str = "ImportInstance";
+
+/// Les catégories des hôtes système, dont les surfaces gagnent contre celles qui leur sont coplanaires (`Depth::Host`) : murs, sols, toitures,
+/// plafonds, topographie et plateformes. Les classes sont celles de la table que lit la géométrie (`catalog::class_category`) :
+/// `SWall`, `FaceWall`, `ArcWall` (OST_Walls), `Floor` (OST_Floors : ni les nez de dalle `EdgeSlab`, ni les fondations filantes `ContFooting`),
+/// `Roof`, `ProfileRoof`, `FaceRoof` (OST_Roofs), `Ceiling` (OST_Ceilings), `SiteSurface` (OST_Topography) et `BuildingPad`
+/// (OST_BuildingPad). Aucun schéma des fichiers d'essai n'a de classe de toposolide : elle n'est pas dans la table.
+pub const HOST_CATEGORIES: [&str; 6] = ["OST_Walls", "OST_Floors", "OST_Roofs", "OST_Ceilings", "OST_Topography", "OST_BuildingPad"];
+
+/// Un hôte système : sa classe est de celles de [`HOST_CATEGORIES`].
+pub fn is_host_class(class: &str) -> bool {
+    crate::catalog::class_category(class).is_some_and(|category| HOST_CATEGORIES.contains(&category.ost))
+}
+
+/// La priorité de profondeur des faces d'un élément d'après sa classe : les hôtes système `Host`, les imports CAD `Overlay` (des plans posés sur le
+/// modèle, que Revit montre par-dessus), tout le reste `Ordinary`. Le `GPolyMesh` voisin d'un `GImposter` est en plus `Overlay` quel que soit son élément.
+pub fn depth_of(class: &str) -> Depth {
+    if class == IMPORT_CLASS {
+        Depth::Overlay
+    } else if is_host_class(class) {
+        Depth::Host
+    } else {
+        Depth::Ordinary
+    }
+}
+
 /// Type, symbole ou définition de famille : ce que les instances placent. Leurs graphiques sont
 /// lus d'office (les instances en reprennent la forme), mais ils ne se dessinent jamais seuls.
 pub fn is_definition(class: &str) -> bool {
@@ -91,6 +121,15 @@ pub struct Facts<'a> {
     pub family_chain: bool,
 }
 
+/// Un élément qu'une famille sur place possède (sa chaîne de propriétaires atteint une `Family` sur place) est-il un morceau de la
+/// définition de la famille, que l'instance dessine à son tour ? Les formes que l'éditeur de modèle sur place crée (`ExtrusionElem`,
+/// `SweepElem`, `FormElem`… : `catalog::is_family_form`) et les imports CAD de la famille (`IMPORT_CLASS`). Un mur, un toit ou un sol
+/// que la même famille possède est un élément du modèle, qu'aucune instance ne dessine (mesuré : l'instance de wadduwa et celle de
+/// drone-hangar portent les triangles de la forme, jamais ceux du mur ou du toit voisins) : il se dessine toujours.
+pub fn is_family_content(class: &str) -> bool {
+    crate::catalog::is_family_form(class) || class == IMPORT_CLASS
+}
+
 /// Les raisons d'exclusion par relation, dans l'ordre où on les teste.
 pub const RELATION_REASONS: &[&str] = &[
     "membre d'une définition de groupe (non placé)",
@@ -101,6 +140,9 @@ pub const RELATION_REASONS: &[&str] = &[
     "masse (masquée par défaut dans Revit)",
     "définition d'une famille chargée",
     "pièce d'une famille chargée, par des intermédiaires",
+    // Celle-ci n'est pas testée par `excluded_relation` : sa condition (l'instance de la famille est dessinée, et porte ce contenu)
+    // ne se connaît qu'à la fin de la lecture (`geometry::Rules::release_in_place`).
+    "contenu d'une famille sur place, dessiné par son instance",
 ];
 
 /// Raison de l'exclusion d'un élément pour ce qu'il est par rapport au reste du modèle (classe
@@ -171,6 +213,28 @@ mod tests {
         for class in ["SWall", "Floor", "Ceiling", "FamilyInstance", "StairsElement", "StairsRun", "BaseRailing", "TopRail", "SiteSurface", "BuildingPad", "RbsDuctCurve", "FormElem", "ExtrusionElem", "Text3dElem"] {
             assert_eq!(excluded(&facts(class)), None, "{class}");
         }
+    }
+
+    /// Les hôtes système, et eux seuls, ont la priorité `Host` ; un import CAD est en surcouche ; tout le reste est ordinaire.
+    #[test]
+    fn la_priorite_de_profondeur_d_une_classe() {
+        for class in ["SWall", "FaceWall", "ArcWall", "Floor", "Roof", "ProfileRoof", "FaceRoof", "Ceiling", "SiteSurface", "BuildingPad"] {
+            assert_eq!(depth_of(class), Depth::Host, "{class}");
+        }
+        assert_eq!(depth_of("ImportInstance"), Depth::Overlay);
+        for class in ["FamilyInstance", "StairsElement", "StairsRun", "StairsLanding", "BaseRailing", "TopRail", "HandRail", "ContFooting", "SweepHost", "WallSweep", "CurtaSystem", "DirectShape", "ExtrusionElem", "FormElem", "RbsDuctCurve", "Text3dElem", "MassLevelData", "Level", ""] {
+            assert_eq!(depth_of(class), Depth::Ordinary, "{class}");
+        }
+    }
+
+    /// Un import CAD du projet se dessine ; un import propre à une vue (« vue actuelle seulement », `m_ownerDBViewId` ≠ −1) n'est jamais montré
+    /// en 3D : écarté comme une annotation. Un import d'une définition de groupe non placée est écarté comme tout membre d'un groupe.
+    #[test]
+    fn un_import_cad_du_projet_se_dessine_et_celui_d_une_vue_non() {
+        assert_eq!(excluded(&facts(IMPORT_CLASS)), None);
+        assert_eq!(excluded(&Facts { view: 228_707, ..facts(IMPORT_CLASS) }), Some(RELATION_REASONS[3]));
+        assert_eq!(excluded(&Facts { unplaced: true, ..facts(IMPORT_CLASS) }), Some(RELATION_REASONS[0]));
+        assert_eq!(excluded(&Facts { hidden: true, ..facts(IMPORT_CLASS) }), Some(RELATION_REASONS[1]));
     }
 
     #[test]

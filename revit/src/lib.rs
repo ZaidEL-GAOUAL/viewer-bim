@@ -70,7 +70,8 @@ pub struct Output {
     /// matériau.
     pub primitives: Vec<u32>,
     /// Pas de 7 (`geometry::pack::MATERIAL_STRIDE`) : r, g, b, a (octets sRGB), transparent (0/1), double face (0/1),
-    /// surcouche (0/1 : les triangles se dessinent par-dessus les surfaces coplanaires, ceux de l'image d'un contenu RPC).
+    /// priorité de profondeur (`geometry::pack::Depth` : 0 ordinaire, 1 surcouche, 2 hôte), qui l'emporte quand des faces de deux éléments sont dans le même plan :
+    /// 1 pour l'image d'un contenu RPC et les imports CAD du projet, 2 pour les murs, sols, toitures, plafonds, topographie et plateformes.
     pub materials: Vec<u8>,
     /// JSON du contrat `docs/contrat-metadonnees.md` (version 1). Quand la lecture est émise par morceaux
     /// (`read_streaming`), le squelette rendu à la fin le porte en entier, avec `names` : les fiches ne sont lues

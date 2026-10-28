@@ -647,8 +647,10 @@ fn la_famille_du_document_se_lit_a_la_racine_de_global_latest() {
 /// pour `DynamoSample_2014.rvt` les mêmes 257 éléments que `DynamoSample_2023.rvt` (mêmes clés).
 #[test]
 fn les_definitions_de_familles_chargees_ne_sont_pas_dessinees() {
-    // Avant la règle : 371, 449, 40, 6 et 12 éléments dessinés (`after-A-measure.txt`).
-    for (name, expected) in [("DynamoSample_2014.rvt", 257), ("drone-hangar-building-2014.rvt", 279), ("dynamo-structural-framing-2014.rvt", 0), ("DividedCurve-Revit2014.rfa", 0), ("AdaptiveComponent-Revit2013.rfa", 5)] {
+    // Avant la règle : 371, 449, 40, 6 et 12 éléments dessinés (`after-A-measure.txt`). 265 éléments pour le hangar depuis que le contenu des
+    // familles sur place est dessiné par leur instance : 279 avant, moins 14 extrusions (les formes des douze familles « Generic Models » dont
+    // l'instance dessine les mêmes triangles ; sept de ces formes s'empilaient sur deux endroits, quatre à l'un et trois à l'autre, leurs instances étant ailleurs).
+    for (name, expected) in [("DynamoSample_2014.rvt", 257), ("drone-hangar-building-2014.rvt", 265), ("dynamo-structural-framing-2014.rvt", 0), ("DividedCurve-Revit2014.rfa", 0), ("AdaptiveComponent-Revit2013.rfa", 5)] {
         let Some(bytes) = sample(name) else { continue };
         let output = read(&bytes, &Options::default()).unwrap_or_else(|error| panic!("{name} : {error:#}"));
         assert_eq!(output.report.elements, expected, "{name}");
@@ -855,7 +857,8 @@ fn le_hangar_n_a_plus_les_phases_des_familles_chargees() {
     }
     // Une seule vue : la vue 3D du projet (les deux autres vues 3D du projet sont des gabarits).
     assert_eq!(meta["views"].as_array().map(Vec::len), Some(1));
-    assert_eq!(output.report.elements, 279);
+    // 279 avant que le contenu des familles sur place soit dessiné par leur instance : 14 extrusions de moins.
+    assert_eq!(output.report.elements, 265);
 }
 
 /// Les mêmes fichiers d'essai de DynamoRevit avant et après leur réenregistrement dans Revit 2016 (voir plus haut) : Revit 2016 range le
@@ -967,15 +970,24 @@ const METADATA_2015_PLUS: &[(&str, usize, u64)] = &[
     ("Revit_IFC5_Einhoven.rvt", 12898, 0x80af550e4c6e5419),
     ("RiR-Template-2018.rte", 1141, 0xbe768a52732e6f1e),
     ("RoomsAndExits.rvt", 11790, 0x31d6bcc2659cd4bd),
-    ("SampleModel.rvt", 333868, 0x591c5c9de23d39d3),
+    // 333 868 → 332 831 octets depuis que le contenu des familles sur place est dessiné par leur instance : les fiches de trois formes en moins
+    // (`wardrobe1` 506161, `wardrobe2` 523524, `hood enclosure` 697449), et le groupe « Graphismes » du `readOnly`, que seules ces formes portaient ;
+    // aucun des 472 autres éléments ne change.
+    ("SampleModel.rvt", 332831, 0xba9b7007d30781cf),
     ("ShellFamily.rfa", 1824, 0x613af44cb5706c2d),
+    // 427 818 octets : l'élément `existingSite-meerkat.sat` (308836), que les imports CAD du projet avaient ajouté (428 135 octets), est le contenu d'une famille sur place de masse
+    // (« Mass 1 », dont l'instance est une masse que Revit masque par défaut) : il n'est plus dessiné, comme sa famille. Le JSON est celui d'avant les imports CAD.
     ("Vignette-04-BaseFile.rvt", 427818, 0xd0346ad16625cbb0),
     ("dynamo-indexed-family-instances-2016.rfa", 2167, 0x1ebfde8889aacd9d),
     ("dynamo-inst-param-2016.rvt", 3278, 0xfa8da399270782cd),
     ("dynamo-topography-2016.rvt", 2247, 0x77fb6f4e9d02389a),
     ("dynamo-walls-floors-levels-2016.rvt", 5576, 0xc50ad1b0c02594d1),
-    ("mega_advanced_sample_file.rvt", 3010454, 0x5d3d45ca6342fe59),
-    ("rac_advanced_sample_project.rvt", 2944299, 0x7b6e6f4b02517445),
+    // 3 010 454 → 3 008 989 et 2 944 299 → 2 942 834 octets (1 465 chacun) depuis que le contenu des familles sur place est dessiné par leur instance : la fiche de la poutre
+    // courbe 201286 en moins, que son instance 201308 dessine à son tour, et celles des formes de masse « Main Building » 139682 et « Pavillion » 139763, dont les instances sont des
+    // masses que Revit masque par défaut ; et, dans les sept vues 3D enregistrées, l'entrée `hiddenCategories` « Masses » (elle ne liste que les catégories des éléments dessinés,
+    // et ces deux formes étaient les seuls éléments « Masses »). Aucun autre élément ne change.
+    ("mega_advanced_sample_file.rvt", 3008989, 0xc8fc938fecdd19c8),
+    ("rac_advanced_sample_project.rvt", 2942834, 0x9738de592c182cae),
     ("revit-curtainwall-byprofile_v21.rvt", 71220, 0xa00ae21fd7f5f3e3),
     ("revit-docs_v20_project_ws.rvt", 4373, 0x02eb907c018631d0),
     ("revit-openings_v22.rvt", 11418, 0x99c3bf1fbecef549),
@@ -1055,7 +1067,11 @@ const FLOORS: [Floor; 20] = [
     Floor { file: "dynamo-solar-radiation-vasari2012.rvt", year: 2012, elements: 0, revit: 0, partial: 0, triangles: 0 },
     Floor { file: "AdaptiveComponent-Revit2013.rfa", year: 2013, elements: 5, revit: 5, partial: 0, triangles: 30_000 },
     Floor { file: "setout-point-2013.rfa", year: 2013, elements: 1, revit: 1, partial: 0, triangles: 300 },
-    Floor { file: "dynamo-nyc-site-2013.rvt", year: 2013, elements: 1, revit: 0, partial: 1, triangles: 71_000 },
+    // 1 élément, 1 forme partielle : le site (« Site 1 », 56 916 triangles, une face `Plane` au contour non raccordé). Depuis que les imports CAD du
+    // projet se dessinent, l'import qu'il contient, `SiteModel.dwg` (230266), de la même forme et de la même face, l'était aussi (2 éléments, 113 832
+    // triangles) : ce contenu de la famille sur place « Site 1 » est dessiné par l'instance (230269), qui le place 460 m plus loin, et l'import, à
+    // l'endroit où la famille a été créée, n'est plus dessiné.
+    Floor { file: "dynamo-nyc-site-2013.rvt", year: 2013, elements: 1, revit: 0, partial: 1, triangles: 64_000 },
     Floor { file: "dynamo-tower-6-ds-2013.rfa", year: 2013, elements: 6, revit: 6, partial: 0, triangles: 7_000 },
     Floor { file: "dynamo-pentagon-profile-2013.rfa", year: 2013, elements: 0, revit: 0, partial: 0, triangles: 0 },
     Floor { file: "dynamo-inst-param-2013.rvt", year: 2013, elements: 4, revit: 4, partial: 0, triangles: 100 },
@@ -1067,7 +1083,9 @@ const FLOORS: [Floor; 20] = [
     Floor { file: "dynamo-topography-2014.rvt", year: 2014, elements: 1, revit: 1, partial: 0, triangles: 2_800 },
     Floor { file: "drone-hangar-building-2014.rvt", year: 2014, elements: 265, revit: 265, partial: 0, triangles: 73_000 },
     Floor { file: "clockwork-wall-stuff-2014.rvt", year: 2014, elements: 62, revit: 61, partial: 1, triangles: 8_900 },
-    Floor { file: "clockwork-roof-floor-stuff-2014.rvt", year: 2014, elements: 9, revit: 8, partial: 1, triangles: 193_000 },
+    // 8 éléments depuis que le contenu des familles sur place est dessiné par leur instance : 9 avant, moins le balayage 181144 (68 486 triangles) de la famille
+    // « Roofs 1 », que son instance 181411 dessine à son tour, avec les mêmes triangles (153 918 triangles avant, 85 432 après).
+    Floor { file: "clockwork-roof-floor-stuff-2014.rvt", year: 2014, elements: 8, revit: 7, partial: 1, triangles: 107_000 },
     Floor { file: "dynamo-adaptive-component-2014.rfa", year: 2014, elements: 5, revit: 5, partial: 0, triangles: 30_000 },
     Floor { file: "DynamoSample_2014.rvt", year: 2014, elements: 245, revit: 245, partial: 0, triangles: 73_000 },
     Floor { file: "dynamo-reference-plane-vasari2013.rfa", year: 2014, elements: 0, revit: 0, partial: 0, triangles: 0 },

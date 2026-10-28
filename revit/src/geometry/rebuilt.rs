@@ -23,7 +23,7 @@ use rvt::ifc::entities::{IfcEntity, PropertyValue};
 use rvt::ifc::export_content::RECORD_BBOX_BODY_SOURCE;
 use rvt::ifc::gltf::{GltfDocument, build_gltf};
 
-use super::pack::{ElementMesh, Face, Paint};
+use super::pack::{Depth, ElementMesh, Face, Paint};
 use crate::Context;
 
 /// Ce que l'export reconstruit.
@@ -115,7 +115,7 @@ pub fn build(file: &mut rvt::RevitFile, context: &mut Context) -> Result<Output>
     let elements: Vec<Rebuilt> = elements
         .into_iter()
         .filter_map(|(id, element)| {
-            let faces: Vec<Face<'_>> = element.faces.iter().map(|face| Face { vertices: &face.vertices, normals: None, triangles: &face.triangles, paint: face.paint, overlay: false }).collect();
+            let faces: Vec<Face<'_>> = element.faces.iter().map(|face| Face { vertices: &face.vertices, normals: None, triangles: &face.triangles, paint: face.paint, depth: Depth::Ordinary }).collect();
             let mut mesh = ElementMesh::build(&faces);
             if mesh.is_empty() {
                 return None;

@@ -86,6 +86,17 @@ impl FamilyRule {
         Self::before_2015(is_family(file), document)
     }
 
+    /// La famille du document d'un fichier, de toute année (`ADocument.m_ownerFamilyId`, validée comme le fait
+    /// [`before_2015`](Self::before_2015)) : `Some(-1)` pour un projet, `Some(id)` pour la famille qu'un `.rfa` édite, `None` si
+    /// on ne sait pas laquelle est la sienne. Les familles sur place ([`in_place_family`]) en ont besoin quelle que soit l'année.
+    pub fn document_of(file: &mut RevitFile) -> Option<i64> {
+        let document = preamble(file).ok().and_then(|preamble| preamble.owner_family.as_ref().ok().copied());
+        match Self::before_2015(is_family(file), document) {
+            Self::On { document } => document,
+            Self::Off => None,
+        }
+    }
+
     /// La règle d'un fichier d'avant 2015 d'après ce qu'on sait de son document : `is_family` (flux `PartAtom`, voir
     /// `native::is_family`) et `ADocument.m_ownerFamilyId` (`None` si la racine ne se lit pas).
     ///
@@ -155,6 +166,33 @@ impl Owners {
     pub fn get(&self, id: u64) -> Option<i64> {
         self.0.as_ref()?.index.identities.get(&id).map(|identity| identity.owning_element_id)
     }
+}
+
+/// La famille sur place dont un enregistrement est une pièce, de toute année : celle que la chaîne de ses propriétaires d'ElemTable
+/// atteint en premier, quand c'est une `Family` sur place (`m_inPlace` vrai) qui n'est pas celle du document. Une famille sur place
+/// est créée dans l'éditeur de modèle sur place : ses formes sont dans le repère du projet, mais le projet les place aussi par son
+/// instance (`FamilyInstance`), qui les dessine à son tour ; l'instance se déplace avec ses copies, la forme reste à sa place
+/// d'origine. La chaîne se remonte comme celle des familles chargées (`FamilyRule::owner`, bornée par [`MAX_OWNER_CHAIN`]).
+///
+/// `document` est la famille du document ([`FamilyRule::document_of`]) : les formes d'un `.rfa` sont la famille elle-même, et se
+/// dessinent. `None` si on ne sait pas laquelle c'est (rien n'est alors reconnu). `family(id)` et `owner_of(id)` comme pour
+/// `FamilyRule::owner` ; `None` aussi pour une chaîne qui s'achève sans `Family`, qui bute sur un enregistrement inconnu, dépasse
+/// la borne, ou atteint une `Family` dont on ne sait pas si elle est sur place : l'élément reste dessiné comme avant.
+pub fn in_place_family(document: Option<i64>, owner: i64, family: impl Fn(u64) -> Option<Option<bool>>, owner_of: impl Fn(u64) -> Option<i64>) -> Option<u64> {
+    let document = document?;
+    // La famille du document d'un `.rfa` doit être un enregistrement `Family` qui existe ; sinon on ne sait pas laquelle est la sienne.
+    if document != -1 && !u64::try_from(document).ok().is_some_and(|id| family(id).is_some()) {
+        return None;
+    }
+    let mut current = owner;
+    for _ in 0..MAX_OWNER_CHAIN {
+        let id = u64::try_from(current).ok()?;
+        if let Some(in_place) = family(id) {
+            return (current != document && in_place == Some(true)).then_some(id);
+        }
+        current = owner_of(id)?;
+    }
+    None
 }
 
 /// `m_inPlace` d'un enregistrement de classe `class` dont `root` est le premier objet du graphe décodé : `Some` pour une `Family` qui
@@ -251,6 +289,41 @@ mod tests {
         // Désigner un enregistrement qui est bien une `Family` suffit, et ce qu'elle possède est la famille.
         assert_eq!(FamilyRule::before_2015(true, Some(11)).owner(11, lookup, owners), FamilyOwner::Elsewhere);
         assert_eq!(FamilyRule::before_2015(true, Some(11)).owner(12, lookup, owners), FamilyOwner::Unread);
+    }
+
+    #[test]
+    fn la_famille_sur_place_d_un_element_se_trouve_en_remontant_la_chaine() {
+        let project = Some(-1);
+        // La sur place 10 : propriétaire direct de l'élément, ou atteinte par un intermédiaire (22).
+        assert_eq!(in_place_family(project, 10, lookup, owners), Some(10));
+        assert_eq!(in_place_family(project, 22, lookup, owners), Some(10));
+        // Les familles chargées (11) et illisibles (12, 25) ne sont pas sur place : l'élément reste dessiné.
+        assert_eq!(in_place_family(project, 11, lookup, owners), None);
+        assert_eq!(in_place_family(project, 12, lookup, owners), None);
+        assert_eq!(in_place_family(project, 25, lookup, owners), None);
+        // Par des intermédiaires : 20 est possédé par la chargée 11, 21 par 20 ; une chaîne qui s'achève sans `Family`, un maillon
+        // inconnu, une boucle : rien.
+        assert_eq!(in_place_family(project, 21, lookup, owners), None);
+        assert_eq!(in_place_family(project, 23, lookup, owners), None);
+        assert_eq!(in_place_family(project, 24, lookup, owners), None);
+        assert_eq!(in_place_family(project, 26, lookup, owners), None);
+        assert_eq!(in_place_family(project, -1, lookup, owners), None);
+        // La borne de la chaîne : `MAX_OWNER_CHAIN - 1` maillons avant la `Family` passent, un de plus non.
+        let long = |id: u64| (id >= 1000).then_some(id as i64 + 1).filter(|next| *next <= 1000 + 64);
+        let chain = |length: u64| in_place_family(project, (1000 + 64 - length) as i64, |id| (id == 1000 + 64).then_some(Some(true)), long);
+        assert_eq!(chain(MAX_OWNER_CHAIN as u64 - 1), Some(1064));
+        assert_eq!(chain(MAX_OWNER_CHAIN as u64), None);
+    }
+
+    #[test]
+    fn la_famille_du_document_n_est_jamais_une_famille_sur_place() {
+        // Un `.rfa` dont la famille éditée est la sur place 10 : ses formes sont la famille, elles se dessinent. Le même fichier avec
+        // un document inconnu, ou qui n'est pas une `Family` : rien n'est reconnu.
+        assert_eq!(in_place_family(Some(10), 10, lookup, owners), None);
+        assert_eq!(in_place_family(Some(10), 22, lookup, owners), None);
+        assert_eq!(in_place_family(Some(11), 10, lookup, owners), Some(10));
+        assert_eq!(in_place_family(None, 10, lookup, owners), None);
+        assert_eq!(in_place_family(Some(77), 10, lookup, owners), None);
     }
 
     #[test]

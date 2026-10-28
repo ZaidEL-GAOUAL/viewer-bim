@@ -162,6 +162,52 @@ pub struct Stats {
     /// Éléments dessinés que possède une `Family` dont on ne sait pas si elle est chargée (avant Revit 2015, voir
     /// `saved::FamilyOwner::Unread`) : gardés, et comptés par un avertissement. Jamais vu sur les fichiers d'essai.
     pub family_unread: BTreeSet<u64>,
+    /// Les familles sur place dont le contenu est une forme dessinée, et ce qu'on en a fait (voir `InPlaceFamily`).
+    pub in_place: Vec<InPlaceFamily>,
+    /// Les éléments dessinés dont la chaîne des propriétaires atteint une famille sur place sans être une forme de sa définition (un mur, un
+    /// toit, un sol : des éléments du modèle que la famille possède) : (famille, élément, classe). Dessinés, comme avant.
+    pub in_place_standalone: Vec<(u64, u64, String)>,
+}
+
+/// Un élément du contenu d'une famille sur place (un élément dont la chaîne des propriétaires d'ElemTable atteint une `Family` sur
+/// place), dont la forme est maillée.
+#[derive(Debug, Clone)]
+pub struct InPlaceContent {
+    pub id: u64,
+    pub class: String,
+    pub triangles: usize,
+    /// Boîte du maillage, en mètres, Y vers le haut (`ElementMesh::extent`).
+    pub extent: Option<[[f64; 3]; 2]>,
+}
+
+/// Une instance d'une famille sur place remise à la sortie.
+#[derive(Debug, Clone)]
+pub struct InPlaceInstance {
+    pub id: u64,
+    /// Source de sa forme remise (0 enregistrée, 1 partielle, 2 reconstruite, 3 boîte).
+    pub source: u8,
+    pub triangles: usize,
+    pub extent: Option<[[f64; 3]; 2]>,
+}
+
+/// Une famille sur place dont le contenu est dessiné : une famille créée dans l'éditeur de modèle sur place. Le projet écrit ses
+/// formes dans son repère (à l'endroit où elles ont été créées) et son instance, qui les dessine à son tour, là où elle est
+/// aujourd'hui : une copie déplacée de l'instance laisse la forme d'origine en place, un fantôme ; quand l'instance n'a pas bougé,
+/// la forme est dessinée deux fois. Quand une instance de la famille est dessinée et porte autant de triangles que son contenu,
+/// celui-ci n'est pas dessiné (`classes::RELATION_REASONS`, dernière raison) ; sinon il l'est, comme avant, et un avertissement le
+/// compte (`in_place_warning`). Quand l'instance est une masse que Revit masque par défaut, le contenu en est une aussi : il n'est pas
+/// dessiné et la règle des masses le compte (`mass`).
+#[derive(Debug, Clone)]
+pub struct InPlaceFamily {
+    pub family: u64,
+    pub content: Vec<InPlaceContent>,
+    /// Les instances de la famille que la lecture a dessinées (de n'importe quelle source).
+    pub instances: Vec<InPlaceInstance>,
+    /// Le contenu est écarté : une instance dessine sa forme, avec au moins autant de triangles.
+    pub excluded: bool,
+    /// Le contenu est écarté comme une masse : l'instance de la famille en est une, que Revit masque par défaut (raison
+    /// `classes::RELATION_REASONS[5]`, comptée dans `masses_hidden` : l'avertissement des masses la compte). Ni dessiné, ni compté par `in_place_warning`.
+    pub mass: bool,
 }
 
 /// Triangles qu'un fichier peut afficher : au-delà, les éléments les plus denses sont montrés par leur boîte englobante
@@ -376,6 +422,10 @@ pub fn prepare_streaming(file: &mut rvt::RevitFile, context: &mut Context, sink:
     // Les éléments d'une famille dont la définition ne se lit pas ne sont comptés que s'ils sont dessinés.
     stats.family_unread.retain(|id| outlet.drawn(*id));
     context.warnings.extend(family_warning(stats.family_unread.len()));
+    // Le contenu des familles sur place que son instance ne dessine pas (masquée, vide, illisible, ou plus petite) : dessiné à sa place
+    // d'origine, comptant seulement ce que la sortie a remis.
+    let kept = stats.in_place.iter().filter(|family| !family.excluded && !family.mass).flat_map(|family| &family.content).filter(|content| outlet.drawn(content.id)).count();
+    context.warnings.extend(in_place_warning(kept));
 
     // 4. Les clés d'identité (le GlobalId IFC de Revit, à défaut `rvt-<ElementId>`) ont été données à l'émission.
     let Outlet { mut prepared, shapes, mesh_stats, .. } = outlet;
@@ -482,6 +532,18 @@ fn family_warning(n: usize) -> Option<String> {
         0 => None,
         1 => Some("1 élément appartient à une famille dont la définition ne se lit pas : il peut être une pièce de famille dessinée à l'origine du projet.".to_string()),
         n => Some(format!("{n} éléments appartiennent à une famille dont la définition ne se lit pas : ils peuvent être des pièces de famille dessinées à l'origine du projet.")),
+    }
+}
+
+/// L'avertissement des `n` éléments du contenu d'une famille sur place dessinés tels quels (`Stats::in_place`) : aucune instance de leur
+/// famille n'est dessinée avec tout ce contenu (instance masquée, vide, illisible ou absente ; ni une masse que Revit masque par défaut :
+/// le contenu l'est alors aussi, l'avertissement des masses le compte), et rien ne dit où l'instance est : le contenu est à l'endroit où la
+/// famille a été créée, peut-être pas où elle est aujourd'hui. Rien pour 0.
+fn in_place_warning(n: usize) -> Option<String> {
+    match n {
+        0 => None,
+        1 => Some("1 élément du contenu d'une famille sur place est dessiné à l'endroit où la famille a été créée : aucune instance de sa famille n'est dessinée avec tout ce contenu, il peut être à une autre place que dans Revit.".to_string()),
+        n => Some(format!("{n} éléments du contenu de familles sur place sont dessinés à l'endroit où les familles ont été créées : aucune instance de leur famille n'est dessinée avec tout ce contenu, ils peuvent être à une autre place que dans Revit.")),
     }
 }
 
@@ -625,7 +687,7 @@ fn from_saved(file: &mut rvt::RevitFile, exhaustive: bool, prudent: bool, hard_l
         Some(limit) => plan.hard_limit(limit),
         None => plan,
     };
-    let mut rules = Rules { outlet, stats, unreadable, without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new() };
+    let mut rules = Rules { outlet, stats, unreadable, without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
     let mut emit = |scene: &saved::Scene, id: u64, read: Read| rules.offer(scene, id, read);
     let mut failure = None;
     let scan = match saved::scan_salvaging(file, &wanted, threads, &work, Some(&finish), &pending, Some(&mut emit), plan, &mut failure) {
@@ -671,6 +733,14 @@ type OwnerRecord = Option<(BTreeSet<u64>, [[f64; 3]; 2])>;
 ///   par lui. Hypothèse : placer les mêmes symboles, et tenir dans la boîte que le propriétaire dessine (à 1 cm près),
 ///   c'est être la même forme. Il attend donc que son propriétaire soit achevé (s'il doit l'être) ; un sous-élément qui
 ///   poserait un symbole du propriétaire ailleurs que lui, hors de sa boîte, est gardé.
+/// - Le contenu d'une famille sur place (ses formes et ses imports CAD, `classes::is_family_content`, dont la chaîne des propriétaires atteint
+///   une `Family` sur place, `saved::Info::in_place_family`) est dessiné par l'instance de la famille, que Revit montre seule : quand une
+///   instance est dessinée par sa forme enregistrée avec au moins autant de triangles que tout ce contenu, il n'est pas dessiné ; sinon il l'est,
+///   comme avant, et un avertissement le compte (`in_place_warning`). La décision se prend à la fin de la lecture (`release_in_place`) : le
+///   contenu attend hors de la sortie, sauf celui d'une famille dont aucune instance ne peut être dessinée, qui part tout de suite. Le contenu
+///   suit la règle de visibilité de son instance : quand l'instance de la famille est écartée comme une masse (`RELATION_REASONS[5]`, Revit
+///   masque les masses par défaut), son contenu l'est aussi, avec la même raison, compté dans `masses_hidden` (l'avertissement des masses le
+///   compte, `in_place_warning` non) ; une instance écartée pour une autre raison (masquée), illisible ou absente laisse le contenu dessiné.
 /// - Le même objet posé deux fois (mêmes triangles, au même endroit) est compté, dans l'ordre des remises.
 /// - Ce qui porte de la géométrie de modèle, sans qu'il faille connaître chaque classe (gaines et tuyaux flexibles,
 ///   chemins de câbles, toits rideaux…) : un enregistrement dont la racine est un `SerializedDummy` n'a pas de
@@ -703,6 +773,34 @@ struct Rules<'a, 's> {
     referenced: BTreeSet<u64>,
     /// Éléments sans surface, décidés à la fin : forme (sans maillage ; `None` : graphe non décodé) et boîte enregistrée.
     later: Vec<(u64, Option<saved::Shape>, Option<bounds::Bounds>)>,
+    /// Le contenu des familles sur place, et leurs instances (voir `InPlace`).
+    in_place: InPlace,
+}
+
+/// Le contenu des familles sur place (`saved::Info::in_place_family`) attend, hors de la sortie, que la lecture soit finie : c'est
+/// alors seulement qu'on sait si l'instance de sa famille est dessinée, et ce qu'elle porte (`Rules::release_in_place`).
+#[derive(Default)]
+struct InPlace {
+    /// Par famille sur place, les formes de son contenu que les règles de dessin auraient dessinées, tenues hors de la sortie.
+    content: BTreeMap<u64, Vec<(u64, saved::Shape)>>,
+    /// Par famille sur place, ses instances remises à la sortie.
+    instances: BTreeMap<u64, Vec<InPlaceInstance>>,
+    /// Ce que les règles de dessin disent d'avance des instances des familles sur place (calculé à la première forme de contenu) : les
+    /// familles dont une instance au moins n'est pas écartée (`drawable` : leur contenu attend la fin de la lecture), et celles qui n'en
+    /// ont aucune de dessinable dont une est une masse que Revit masque par défaut (`masses` : leur contenu est une masse aussi). Les
+    /// autres (instances masquées pour une autre raison, absentes) dessinent leur contenu tout de suite, comme avant.
+    visibility: Option<(BTreeSet<u64>, BTreeSet<u64>)>,
+    /// Le contenu des familles qui n'attendent rien, dessiné tout de suite (voir `visibility`) : pour le recensement et l'avertissement.
+    drawn_now: BTreeMap<u64, Vec<InPlaceContent>>,
+    /// Le contenu des familles dont l'instance est une masse masquée : écarté avec la même raison que l'instance.
+    masses: BTreeMap<u64, Vec<InPlaceContent>>,
+}
+
+/// La famille sur place dont l'élément `id` est une instance (le symbole qu'il place est de cette famille), s'il en est une.
+fn in_place_instance_of(scene: &saved::Scene, id: u64) -> Option<u64> {
+    let symbol = scene.infos.get(&id).and_then(|info| u64::try_from(info.master).ok()).and_then(|master| scene.infos.get(&master))?;
+    let family = u64::try_from(symbol.family).ok()?;
+    scene.infos.get(&family).filter(|info| info.in_place == Some(true)).map(|_| family)
 }
 
 impl Rules<'_, '_> {
@@ -798,8 +896,56 @@ impl Rules<'_, '_> {
         Ok(())
     }
 
-    /// Dessine une forme : doublons comptés, forme partielle notée, remise à la sortie, puis ses sous-éléments décidés.
+    /// Dessine une forme : doublons comptés, forme partielle notée, remise à la sortie, puis ses sous-éléments décidés. Le contenu d'une
+    /// famille sur place attend la fin de la lecture (`release_in_place`), mais ses sous-éléments n'attendent pas.
     fn draw(&mut self, scene: &saved::Scene, id: u64, shape: saved::Shape) -> anyhow::Result<()> {
+        if let Some(family) = scene.infos.get(&id).and_then(|info| info.in_place_family) {
+            if classes::is_family_content(Self::class_of(scene, id)) {
+                let wanted = self.wanted;
+                let (drawable, masses) = self.in_place.visibility.get_or_insert_with(|| {
+                    let (mut drawable, mut masses) = (BTreeSet::new(), BTreeSet::new());
+                    for (instance, info) in scene.infos.iter().filter(|(_, info)| info.master != -1) {
+                        let Some(family) = in_place_instance_of(scene, *instance) else { continue };
+                        if wanted(scene, *instance, info) {
+                            drawable.insert(family);
+                        } else if classes::excluded(&scene.facts(info)) == Some(classes::RELATION_REASONS[5]) {
+                            masses.insert(family);
+                        }
+                    }
+                    (drawable, masses)
+                });
+                let (waits, mass) = (drawable.contains(&family), !drawable.contains(&family) && masses.contains(&family));
+                if mass {
+                    // L'instance de la famille est une masse, que Revit masque par défaut : son contenu en est une aussi, écarté pour la même raison
+                    // (l'avertissement des masses le compte, pas un autre).
+                    let content = InPlaceContent { id, class: Self::class_of(scene, id).to_string(), triangles: shape.mesh.triangles(), extent: shape.mesh.extent() };
+                    self.in_place.masses.entry(family).or_default().push(content);
+                    self.stats.classes.entry(Self::class_of(scene, id).to_string()).or_default().excluded_by_relation += 1;
+                    *self.stats.rules.entry(classes::RELATION_REASONS[5]).or_default() += 1;
+                    self.stats.masses_hidden += 1;
+                    let record = Self::record(&shape);
+                    return self.settle_owner(scene, id, record);
+                }
+                if !waits {
+                    // Aucune instance ne peut dessiner ce contenu (masquée, masse que Revit masque par défaut, absente) : dessiné tout de suite.
+                    let content = InPlaceContent { id, class: Self::class_of(scene, id).to_string(), triangles: shape.mesh.triangles(), extent: shape.mesh.extent() };
+                    self.in_place.drawn_now.entry(family).or_default().push(content);
+                    let record = self.draw_now(scene, id, shape)?;
+                    return self.settle_owner(scene, id, record);
+                }
+                let record = Self::record(&shape);
+                self.in_place.content.entry(family).or_default().push((id, shape));
+                return self.settle_owner(scene, id, record);
+            }
+            // Un mur, un toit, un sol que la famille possède sans qu'une instance les dessine : des éléments du modèle, dessinés.
+            self.stats.in_place_standalone.push((family, id, Self::class_of(scene, id).to_string()));
+        }
+        let record = self.draw_now(scene, id, shape)?;
+        self.settle_owner(scene, id, record)
+    }
+
+    /// Remet une forme à la sortie (voir `draw`), sans décider de ses sous-éléments : ce qu'on retient d'elle pour eux.
+    fn draw_now(&mut self, scene: &saved::Scene, id: u64, shape: saved::Shape) -> anyhow::Result<OwnerRecord> {
         let class = Self::class_of(scene, id).to_string();
         if !self.seen.insert(shape.mesh.fingerprint()) {
             self.identical.push(id);
@@ -812,8 +958,49 @@ impl Rules<'_, '_> {
             self.stats.incomplete.insert(id, Incomplete { class: class.clone(), diagnostics: shape.diagnostics.clone(), failures: shape.failures.clone(), unreadable_graph: false });
         }
         let record = Self::record(&shape);
+        // Une instance d'une famille sur place : ce qu'elle dessine, pour décider du contenu de sa famille.
+        let instance = in_place_instance_of(scene, id).map(|family| (family, shape.mesh.triangles(), record.as_ref().map(|(_, extent)| *extent)));
         self.outlet.emit(id, class, source, shape.mesh)?;
-        self.settle_owner(scene, id, record)
+        if let Some((family, triangles, extent)) = instance {
+            // La source remise, que le budget de triangles du fichier a pu changer en boîte.
+            let source = self.outlet.prepared.sources.last().copied().unwrap_or(source);
+            self.in_place.instances.entry(family).or_default().push(InPlaceInstance { id, source, triangles, extent });
+        }
+        Ok(record)
+    }
+
+    /// Tout est lu : le contenu de chaque famille sur place est écarté quand une instance de la famille est dessinée par sa forme
+    /// (source 0 ou 1, pas par sa boîte) avec au moins autant de triangles que tout le contenu ; sinon il est dessiné comme les autres
+    /// formes, jamais perdu : l'instance est masquée, vide, illisible, ou ne porte pas tout ce que la famille a écrit.
+    fn release_in_place(&mut self, scene: &saved::Scene) -> anyhow::Result<()> {
+        for (family, content) in std::mem::take(&mut self.in_place.content) {
+            let instances = self.in_place.instances.remove(&family).unwrap_or_default();
+            let triangles: usize = content.iter().map(|(_, shape)| shape.mesh.triangles()).sum();
+            let excluded = instances.iter().any(|instance| instance.source <= 1 && instance.triangles >= triangles);
+            let described: Vec<InPlaceContent> = content.iter().map(|(id, shape)| InPlaceContent { id: *id, class: Self::class_of(scene, *id).to_string(), triangles: shape.mesh.triangles(), extent: shape.mesh.extent() }).collect();
+            if excluded {
+                for (id, _) in &content {
+                    let row = self.stats.classes.entry(Self::class_of(scene, *id).to_string()).or_default();
+                    row.excluded_by_relation += 1;
+                    *self.stats.rules.entry(classes::RELATION_REASONS[8]).or_default() += 1;
+                }
+            } else {
+                for (id, shape) in content {
+                    self.draw_now(scene, id, shape)?;
+                }
+            }
+            self.stats.in_place.push(InPlaceFamily { family, content: described, instances, excluded, mass: false });
+        }
+        // Le contenu que rien ne pouvait remplacer, dessiné dès sa remise.
+        for (family, content) in std::mem::take(&mut self.in_place.drawn_now) {
+            let instances = self.in_place.instances.remove(&family).unwrap_or_default();
+            self.stats.in_place.push(InPlaceFamily { family, content, instances, excluded: false, mass: false });
+        }
+        // Le contenu des masses masquées : jamais dessiné, comme leur instance.
+        for (family, content) in std::mem::take(&mut self.in_place.masses) {
+            self.stats.in_place.push(InPlaceFamily { family, content, instances: Vec::new(), excluded: false, mass: true });
+        }
+        Ok(())
     }
 
     /// Tout est lu : les sous-éléments dont le propriétaire n'est jamais venu, les éléments sans surface, les comptes.
@@ -831,6 +1018,8 @@ impl Rules<'_, '_> {
                 None => self.later.push((id, None, None)),
             }
         }
+        // Toutes les instances sont remises : le contenu des familles sur place se décide.
+        self.release_in_place(scene)?;
         let geometric = &self.geometric;
         let is_model_class = |id: u64| geometric.contains(Self::class_of(scene, id)) || crate::catalog::class_category(Self::class_of(scene, id)).is_some_and(|category| category.kind == 'M');
         // Le recensement par classe : tous les enregistrements d'éléments du fichier.
@@ -853,7 +1042,10 @@ impl Rules<'_, '_> {
                 self.stats.family_unread.insert(id);
             }
         }
-        let is_model_element = |id: u64| is_model_class(id) || scene.infos.get(&id).and_then(|info| scene.category(info)).and_then(crate::catalog::category).is_some_and(|category| category.kind == 'M');
+        // Un import CAD du projet (`ImportInstance`) est un élément du modèle : Revit le montre en 3D (sauf s'il est propre à une vue, ce que la règle de
+        // relation écarte avant). Un import dont la forme ne se lit qu'en partie se dessine « partielle », un import illisible par sa boîte, et un
+        // import sans surface (des lignes) est compté sans géométrie : rien n'est écarté en silence comme un élément qui n'en est pas un.
+        let is_model_element = |id: u64| is_model_class(id) || Self::class_of(scene, id) == classes::IMPORT_CLASS || scene.infos.get(&id).and_then(|info| scene.category(info)).and_then(crate::catalog::category).is_some_and(|category| category.kind == 'M');
         for (id, shape, bounds) in std::mem::take(&mut self.later) {
             let class = Self::class_of(scene, id).to_string();
             let row = self.stats.classes.entry(class.clone()).or_default();
@@ -1032,7 +1224,7 @@ mod tests {
             triangles.push([k, k + 2, k + 1]);
             triangles.push([k + 1, k + 2, k + 3]);
         }
-        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &triangles, paint: Paint::NEUTRAL, overlay: false }])
+        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &triangles, paint: Paint::NEUTRAL, depth: pack::Depth::Ordinary }])
     }
 
     /// Remet `cells` (identifiant, longueur de bande) à un `Outlet` au budget `budget` : (sources, triangles) remis, et le
@@ -1120,7 +1312,7 @@ mod tests {
     }
 
     fn element(class: &str) -> saved::Info {
-        saved::Info { class: class.to_string(), view: -1, owner: -1, unplaced: -1, hidden: false, master: -1, family: -1, category: -1, in_place: None, family_owner: saved::FamilyOwner::Elsewhere }
+        saved::Info { class: class.to_string(), view: -1, owner: -1, unplaced: -1, hidden: false, master: -1, family: -1, category: -1, in_place: None, family_owner: saved::FamilyOwner::Elsewhere, in_place_family: None }
     }
 
     /// Une forme sans maillage : refusée parce que trop dense (`too_dense`), parce que le plafond est atteint (`capped`),
@@ -1146,7 +1338,7 @@ mod tests {
         let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
         let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
         let wanted = |_: &saved::Scene, _: u64, _: &saved::Info| true;
-        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new() };
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
         for (id, shape, bounds) in [
             (1, refused(false, true), boxed_at(0.0)),
             (2, refused(false, true), None),
@@ -1181,6 +1373,30 @@ mod tests {
         assert!(warnings[4].starts_with("Le fichier dépasse 1234 triangles maillés") && warnings[4].contains("1 élément n'a pas été maillé") && warnings[4].ends_with("il n'est pas dessiné."), "{text}");
     }
 
+    /// Un import CAD du projet (`ImportInstance`) est un élément du modèle : sa forme illisible se montre par la boîte que Revit a enregistrée (source 3,
+    /// « Inconnue ») au lieu d'être écartée en silence, comme l'était un élément d'une classe qui n'en est pas un (ici une classe qu'aucune table ne connaît).
+    /// Un import qui n'a aucune surface (des lignes) est compté sans géométrie, comme tout élément du modèle.
+    #[test]
+    fn un_import_cad_dont_la_forme_est_illisible_est_montre_par_sa_boite() {
+        let scene = saved::Scene::for_tests([(1, element("ImportInstance")), (2, element("ImportInstance")), (3, element("ClasseInconnue"))].into_iter().collect(), 1000);
+        let mut sink = |_: Emitted| Ok(());
+        let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
+        let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
+        let wanted = |_: &saved::Scene, _: u64, _: &saved::Info| true;
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
+        // 1 : un import illisible avec boîte ; 2 : un import de lignes seulement (graphique, aucun diagnostic, aucune surface) ; 3 : une classe inconnue
+        // à la forme illisible, avec boîte.
+        for (id, shape, bounds) in [(1, refused(false, false), boxed_at(0.0)), (2, shape(true, false), None), (3, refused(false, false), boxed_at(20.0))] {
+            rules.offer(&scene, id, Read { shape, bounds }).expect("remise");
+        }
+        rules.settle(&scene, BTreeMap::new(), BTreeSet::new()).expect("décisions");
+        assert!(unreadable.get(&1).is_some_and(|element| element.mesh.is_some() && element.why == Refusal::Unread), "l'import illisible est montré par sa boîte");
+        assert_eq!(stats.classes["ImportInstance"].unreadable, 1);
+        assert!(without.contains(&2), "l'import sans surface est compté sans géométrie");
+        assert!(!unreadable.contains_key(&3) && !without.contains(&3), "la classe inconnue reste écartée comme avant");
+        assert_eq!(stats.classes["ClasseInconnue"].not_geometric, 1);
+    }
+
     #[test]
     fn un_brouillon_que_la_lecture_n_a_pas_acheve_est_montre_par_sa_boite() {
         // Une instance qui attendait ses symboles quand la lecture s'est arrêtée : jamais prise pour un élément vide.
@@ -1189,7 +1405,7 @@ mod tests {
         let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
         let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
         let wanted = |_: &saved::Scene, _: u64, _: &saved::Info| true;
-        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new() };
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
         let draft = |bounds| Read { shape: saved::Shape { draft: Some(faces::Meshes::default()), ..shape(true, false) }, bounds };
         let results: BTreeMap<u64, Option<Read>> = BTreeMap::from([(1, Some(draft(boxed_at(0.0)))), (2, Some(draft(None)))]);
         rules.settle(&scene, results, BTreeSet::new()).expect("décisions");
@@ -1215,11 +1431,152 @@ mod tests {
         let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
         let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
         let wanted = |_: &saved::Scene, _: u64, _: &saved::Info| true;
-        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new() };
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
         rules.settle(&scene, BTreeMap::new(), BTreeSet::new()).expect("décisions");
         // Le recensement garde tous les enregistrements écartés par la règle ; l'avertissement n'en compte que deux.
         assert_eq!(stats.rules[classes::RELATION_REASONS[5]], 5);
         assert_eq!(stats.masses_hidden, 2);
+    }
+
+    /// Une scène avec une famille sur place (10), son symbole (11), son instance (12) et ce que la famille possède : deux formes (13 et
+    /// 15 : une extrusion et un balayage) et un mur (14).
+    fn scene_in_place(hidden: bool, mass: bool) -> saved::Scene {
+        let owned = |class: &str| saved::Info { owner: 10, in_place_family: Some(10), ..element(class) };
+        let infos = BTreeMap::from([
+            (10, saved::Info { in_place: Some(true), ..element("Family") }),
+            (11, saved::Info { family: 10, ..element("FamilySymbol") }),
+            (12, saved::Info { master: 11, hidden, category: if mass { crate::catalog::category_by_ost("OST_Mass").expect("catégorie Masses").id } else { -1 }, ..element("FamilyInstance") }),
+            (13, owned("ExtrusionElem")),
+            (14, owned("SWall")),
+            (15, owned("SweepElem")),
+        ]);
+        saved::Scene::for_tests(infos, 1000)
+    }
+
+    /// Lit `scene_in_place` en remettant ces formes (identifiant, cases d'une bande : 2 triangles chacune), dans cet ordre, puis en
+    /// décidant : ce que la sortie a reçu (identifiant, source) et le recensement.
+    fn lire_en_place(offers: &[(u64, u32)]) -> (Vec<(u64, u8)>, Stats) {
+        lire_en_place_avec(offers, false, false)
+    }
+
+    /// [`lire_en_place`], l'instance 12 étant masquée (`hidden`), une masse (`mass`, que Revit masque par défaut) ou ni l'un ni l'autre : une
+    /// instance masquée ou masse est écartée d'avance par les règles de dessin.
+    fn lire_en_place_avec(offers: &[(u64, u32)], hidden: bool, mass: bool) -> (Vec<(u64, u8)>, Stats) {
+        let scene = scene_in_place(hidden, mass);
+        let mut taken = Vec::new();
+        let mut sink = |emitted: Emitted| {
+            taken.push((emitted.id, emitted.source));
+            Ok(())
+        };
+        let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
+        let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
+        let wanted = |scene: &saved::Scene, _: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
+        for (id, cells) in offers {
+            // Une forme dessinée a de la surface : la bande, décalée pour que deux formes ne soient pas les mêmes triangles.
+            let shape = saved::Shape { mesh: strip(*cells), graphics: true, ..shape(true, false) };
+            rules.offer(&scene, *id, Read { shape, bounds: None }).expect("remise");
+        }
+        rules.settle(&scene, BTreeMap::new(), BTreeSet::new()).expect("décisions");
+        drop(outlet);
+        (taken, stats)
+    }
+
+    #[test]
+    fn le_contenu_d_une_famille_sur_place_est_dessine_par_son_instance() {
+        // La forme 13 (6 triangles) et le mur 14 (2) sont remis avant l'instance 12 (6 triangles) : la forme attend, le mur est un
+        // élément du modèle et part tout de suite ; l'instance porte autant de triangles que la forme, la forme est écartée.
+        let (taken, stats) = lire_en_place(&[(13, 3), (14, 1), (12, 3)]);
+        assert_eq!(taken, vec![(14, 0), (12, 0)], "ni la forme, ni rien d'autre n'est perdu");
+        assert_eq!(stats.rules[classes::RELATION_REASONS[8]], 1);
+        assert_eq!(stats.classes["ExtrusionElem"].excluded_by_relation, 1);
+        assert_eq!(stats.classes["ExtrusionElem"].drawn, 0);
+        assert_eq!(stats.in_place.len(), 1);
+        let family = &stats.in_place[0];
+        assert!(family.excluded && family.family == 10);
+        assert_eq!(family.content.iter().map(|content| (content.id, content.triangles)).collect::<Vec<_>>(), vec![(13, 6)]);
+        assert_eq!(family.instances.iter().map(|instance| (instance.id, instance.source, instance.triangles)).collect::<Vec<_>>(), vec![(12, 0, 6)]);
+        // Le mur que la famille possède est dessiné, et compté à part : ce n'est pas une forme de sa définition.
+        assert_eq!(stats.in_place_standalone, vec![(10, 14, "SWall".to_string())]);
+        // L'ordre des remises ne change rien : l'instance d'abord, la forme ensuite.
+        let (taken, stats) = lire_en_place(&[(12, 3), (14, 1), (13, 3)]);
+        assert_eq!(taken, vec![(12, 0), (14, 0)]);
+        assert_eq!(stats.rules[classes::RELATION_REASONS[8]], 1);
+        // Plusieurs formes : toutes écartées quand l'instance porte la somme de leurs triangles (6 + 4 = 10).
+        let (taken, stats) = lire_en_place(&[(13, 3), (15, 2), (12, 5)]);
+        assert_eq!(taken, vec![(12, 0)]);
+        assert_eq!(stats.rules[classes::RELATION_REASONS[8]], 2);
+    }
+
+    #[test]
+    fn le_contenu_d_une_famille_sur_place_sans_instance_dessinee_reste_dessine() {
+        // Aucune instance remise (masquée, vide, illisible ou absente) : la forme est dessinée comme avant, à la fin de la lecture, et
+        // l'avertissement la compte ; jamais perdue.
+        let (taken, stats) = lire_en_place(&[(13, 3), (14, 1)]);
+        assert_eq!(taken, vec![(14, 0), (13, 0)]);
+        assert!(!stats.rules.contains_key(classes::RELATION_REASONS[8]));
+        assert_eq!(stats.classes["ExtrusionElem"].drawn, 1);
+        assert!(!stats.in_place[0].excluded && stats.in_place[0].instances.is_empty());
+        // Une instance qui porte moins de triangles que les formes (6 + 4 contre 8) ne les contient pas toutes : toutes restent.
+        let (taken, stats) = lire_en_place(&[(13, 3), (15, 2), (12, 4)]);
+        assert_eq!(taken, vec![(12, 0), (13, 0), (15, 0)]);
+        assert!(!stats.in_place[0].excluded);
+        assert!(!stats.rules.contains_key(classes::RELATION_REASONS[8]));
+        // Une instance que la lecture n'a pas dessinée par sa forme (ici : une boîte, source 3) ne compte pas. Ce cas ne se produit que
+        // par le budget de triangles du fichier (`Outlet::emit`) : l'instance est alors remplacée par sa boîte.
+        let scene = scene_in_place(false, false);
+        let mut taken = Vec::new();
+        let mut sink = |emitted: Emitted| {
+            taken.push((emitted.id, emitted.source));
+            Ok(())
+        };
+        let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 4, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
+        let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
+        let wanted = |scene: &saved::Scene, _: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
+        for (id, cells) in [(12, 3), (13, 3)] {
+            rules.offer(&scene, id, Read { shape: saved::Shape { mesh: strip(cells), graphics: true, ..shape(true, false) }, bounds: None }).expect("remise");
+        }
+        rules.settle(&scene, BTreeMap::new(), BTreeSet::new()).expect("décisions");
+        drop(outlet);
+        assert_eq!(taken.iter().map(|(id, _)| *id).collect::<Vec<_>>(), vec![12, 13], "l'instance est une boîte, la forme reste dessinée");
+        assert_eq!(taken[0].1, 3);
+        assert!(!stats.in_place[0].excluded);
+    }
+
+    #[test]
+    fn le_contenu_d_une_famille_sans_instance_voulue_se_dessine_tout_de_suite() {
+        // L'instance est masquée (ou c'est une masse que Revit masque par défaut) : aucune ne peut dessiner la forme, qui garde sa place
+        // dans l'ordre des remises (13 avant le mur 14), comme avant, et que l'avertissement compte.
+        let (taken, stats) = lire_en_place_avec(&[(13, 3), (14, 1)], true, false);
+        assert_eq!(taken, vec![(13, 0), (14, 0)]);
+        assert!(!stats.in_place[0].excluded && stats.in_place[0].content.len() == 1);
+        assert!(!stats.rules.contains_key(classes::RELATION_REASONS[8]));
+    }
+
+    #[test]
+    fn le_contenu_d_une_famille_dont_l_instance_est_une_masse_est_une_masse() {
+        // L'instance 12 est une masse (catégorie Masses) que Revit masque par défaut : la règle des masses l'écarte, et le contenu de sa
+        // famille (la forme 13) l'est avec la même raison, comptée dans `masses_hidden` ; le mur 14, un élément du modèle, reste dessiné.
+        let (taken, stats) = lire_en_place_avec(&[(13, 3), (14, 1)], false, true);
+        assert_eq!(taken, vec![(14, 0)], "la forme de la masse n'est pas dessinée");
+        assert_eq!(stats.rules[classes::RELATION_REASONS[5]], 2, "l'instance et sa forme");
+        assert_eq!(stats.masses_hidden, 2);
+        assert_eq!(stats.classes["ExtrusionElem"].excluded_by_relation, 1);
+        assert!(stats.in_place[0].mass && !stats.in_place[0].excluded && stats.in_place[0].content.len() == 1);
+        // Pas de raison propre au contenu de famille sur place, ni d'avertissement qui le compte.
+        assert!(!stats.rules.contains_key(classes::RELATION_REASONS[8]));
+        // Une instance masquée pour une autre raison (invisible) ne rend pas le contenu à une masse : dessiné comme avant.
+        let (taken, stats) = lire_en_place_avec(&[(13, 3), (14, 1)], true, false);
+        assert_eq!(taken, vec![(13, 0), (14, 0)]);
+        assert_eq!(stats.masses_hidden, 0);
+    }
+
+    #[test]
+    fn l_avertissement_du_contenu_de_famille_sur_place_compte_ce_qui_reste_dessine() {
+        assert_eq!(in_place_warning(0), None);
+        assert!(in_place_warning(1).is_some_and(|text| text.starts_with("1 élément du contenu d'une famille sur place est dessiné à l'endroit où la famille a été créée")));
+        assert!(in_place_warning(3).is_some_and(|text| text.starts_with("3 éléments du contenu de familles sur place sont dessinés")));
     }
 
     /// Une scène d'avant 2015 : les `Family` 10 (chargée), 11 (sur place), 12 (celle du document d'une famille éditée) et 13 (dont
@@ -1344,7 +1701,7 @@ mod tests {
         let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
         let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
         let wanted = |scene: &saved::Scene, _: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
-        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new() };
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: GEOMETRIC_CLASSES.iter().map(|class| (*class).to_string()).collect(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
         // Les éléments voulus : ni les deux définitions directes (110, 112), ni les deux pièces (117, 118) qui les atteignent par des
         // intermédiaires, ni les `Family` et les groupes (écartés par leur classe).
         let kept: Vec<u64> = scene.infos.iter().filter(|(id, info)| wanted(&scene, **id, info)).map(|(id, _)| *id).collect();
@@ -1376,7 +1733,7 @@ mod tests {
         let mut outlet = Outlet { prepared: Prepared::default(), emitted: BTreeSet::new(), used: HashSet::new(), global_ids: BTreeMap::new(), triangles: 0, budget: 1_000_000, trimmed: 0, fingerprints: false, shapes: BTreeMap::new(), mesh_stats: MeshStats::default(), sink: &mut sink, sink_error: None };
         let (mut stats, mut unreadable, mut without) = (Stats::default(), BTreeMap::new(), BTreeSet::new());
         let wanted = |_: &saved::Scene, _: u64, _: &saved::Info| true;
-        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new() };
+        let mut rules = Rules { outlet: &mut outlet, stats: &mut stats, unreadable: &mut unreadable, without: &mut without, wanted: &wanted, with_children: None, owners: BTreeMap::new(), held: BTreeMap::new(), seen: HashSet::new(), identical: Vec::new(), geometric: BTreeSet::new(), referenced: BTreeSet::new(), later: Vec::new(), in_place: InPlace::default() };
         rules.settle(&scene, BTreeMap::from([(1, None), (2, None)]), BTreeSet::new()).expect("décisions");
         assert_eq!(unreadable.keys().copied().collect::<Vec<_>>(), vec![1], "seul l'élément de catégorie de modèle est à montrer");
         assert!(unreadable[&1].mesh.is_none() && unreadable[&1].why == Refusal::Unread);

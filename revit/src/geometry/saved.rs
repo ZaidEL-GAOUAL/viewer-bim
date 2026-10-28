@@ -31,7 +31,7 @@ use serde_json::Value;
 use super::faces::{self, FaceCache};
 use super::materials::Resolver;
 use super::{Stopwatch, classes};
-use super::pack::{ElementMesh, Face, Paint};
+use super::pack::{Depth, ElementMesh, Face, Paint};
 use crate::native::{self, Options, Record};
 pub use crate::native::families::{self, FamilyOwner, FamilyRule, LOADED_DEFINITIONS_FROM};
 use crate::properties::{Retained, definition_classes, is_support_class};
@@ -50,10 +50,6 @@ pub const GRAPH_LIMIT: usize = 1_000_000;
 /// une marge d'un tiers et un enregistrement de moins de 8 Mo en tient dès qu'il pèse 2,7 octets par valeur ou moins (ces
 /// deux-là : 1,9 ; le plus dense des autres fichiers : 3,2).
 pub const GEOMETRY_GRAPH_LIMIT: usize = 3_000_000;
-
-/// La classe d'un import CAD du projet (DWG ou autre importé dans le modèle, pas dans une famille) : ses blocs à échelle ne sont pas placés
-/// (`faces::Settings::uniform_scales`).
-pub const PROJECT_IMPORT_CLASS: &str = "ImportInstance";
 
 /// Niveau de détail « fin » (celui du viewport 3D par défaut).
 pub const DETAIL_LEVEL: i64 = 3;
@@ -123,6 +119,24 @@ pub struct Info {
     /// passe A, quand toutes les `Family` sont connues (`settle_families`). `Elsewhere` quand la règle est éteinte (Revit 2015 et
     /// après) ou que rien ne mène à une `Family`.
     pub family_owner: FamilyOwner,
+    /// La famille sur place dont l'élément est une pièce, de toute année (`families::in_place_family`) : décidée après la passe A, comme
+    /// `family_owner`. Son contenu est dessiné par l'instance de la famille (`geometry::Rules`).
+    pub in_place_family: Option<u64>,
+}
+
+/// Décide, pour chaque élément lu, de quelle famille sur place il est une pièce (`Info::in_place_family`), de toute année :
+/// `document` est la famille du document (`FamilyRule::document_of`), `owner_of` le propriétaire de tout enregistrement de l'index.
+pub fn settle_in_place(document: Option<i64>, infos: &mut BTreeMap<u64, Info>, owner_of: &dyn Fn(u64) -> Option<i64>) {
+    let families: BTreeMap<u64, Option<bool>> = infos.iter().filter(|(_, info)| info.class == "Family").map(|(id, info)| (*id, info.in_place)).collect();
+    if document.is_none() || !families.values().any(|in_place| *in_place == Some(true)) {
+        return;
+    }
+    let decided: Vec<(u64, u64)> = infos.iter().filter_map(|(id, info)| families::in_place_family(document, info.owner, |family| families.get(&family).copied(), owner_of).map(|family| (*id, family))).collect();
+    for (id, family) in decided {
+        if let Some(info) = infos.get_mut(&id) {
+            info.in_place_family = Some(family);
+        }
+    }
 }
 
 /// Décide, pour chaque élément lu, ce que la chaîne de ses propriétaires d'ElemTable dit des familles chargées (`Info::family_owner`) :
@@ -241,11 +255,9 @@ impl Scene {
         u64::try_from(info.owner).ok().and_then(|owner| self.infos.get(&owner))
     }
 
-    /// Les réglages du maillage des graphiques de l'élément `id`. Un import CAD du projet (`ImportInstance`) ne place pas ses blocs à échelle,
-    /// comme avant l'échelle uniforme : voir l'en-tête de `faces::select`.
-    pub fn settings(&self, id: u64) -> faces::Settings<'_> {
-        let project_import = self.infos.get(&id).is_some_and(|info| info.class == PROJECT_IMPORT_CLASS);
-        faces::Settings { detail_level: DETAIL_LEVEL, prudent: self.prudent, cache: Some(&self.cache), defer: self.defer, uniform_scales: !project_import }
+    /// Les réglages du maillage des graphiques de cette scène.
+    pub fn settings(&self) -> faces::Settings<'_> {
+        faces::Settings { detail_level: DETAIL_LEVEL, prudent: self.prudent, cache: Some(&self.cache), defer: self.defer }
     }
 
     /// Une scène sans fichier, pour les essais des règles de dessin (`geometry::tests`) : `infos` donne les éléments.
@@ -460,6 +472,8 @@ pub fn scan_salvaging<T: Send>(
     let family_rule = FamilyRule::of(file);
     let owners = families::Owners::of(file);
     settle_families(family_rule, &mut infos, &|id| owners.get(id));
+    // Et de quelle famille sur place ils sont des pièces, de toute année : l'instance de la famille les dessine (`geometry::Rules`).
+    settle_in_place(FamilyRule::document_of(file), &mut infos, &|id| owners.get(id));
     let mut scene = Scene { infos, symbols: BTreeMap::new(), resolver, cache: FaceCache::default(), prudent: plan.prudent, symbol_shapes: plan.symbol_shapes && !plan.prudent, defer: !symbols_first, hard_limit: plan.hard_limit.unwrap_or_else(|| HARD_TRIANGLE_LIMIT.max(plan.triangle_budget.saturating_mul(2))), meshed: AtomicUsize::new(0), family_document: native::is_family(file), family_rule };
 
     // Une erreur à partir d'ici rend la scène et les résultats non remis à `failure` (voir `scan_salvaging`).
@@ -604,6 +618,7 @@ fn ingest_record(record: Record, infos: &mut BTreeMap<u64, Info>, resolver: &mut
         in_place: families::in_place(record.class_name.as_deref().unwrap_or(""), root),
         // Décidé après la passe A (`settle_families`).
         family_owner: FamilyOwner::Elsewhere,
+        in_place_family: None,
     };
     let keep = may_be_drawn(&info);
     resolver.ingest(&record)?;
@@ -1028,7 +1043,7 @@ pub fn shape(scene: &Scene, id: u64, graph: &ObjectGraph) -> Shape {
     if scene.meshed.load(Ordering::Relaxed) > scene.hard_limit {
         return Shape::capped(graphics, format!("forme non maillée : le plafond de {} triangles maillés pour le fichier est atteint", scene.hard_limit));
     }
-    let meshes = faces::graphics_with(graph, &|owner| scene.symbol(owner), &scene.settings(id));
+    let meshes = faces::graphics_with(graph, &|owner| scene.symbol(owner), &scene.settings());
     if !meshes.pending.is_empty() {
         return Shape { mesh: ElementMesh::default(), sources: BTreeSet::new(), diagnostics: Vec::new(), unbounded_faces: 0, failures: Vec::new(), graphics, too_dense: false, capped: false, draft: Some(meshes) };
     }
@@ -1045,7 +1060,7 @@ pub fn complete(scene: &Scene, id: u64, shape: &mut Shape) {
         *shape = Shape::capped(shape.graphics, format!("instance dont les symboles n'étaient pas lus, non maillée : le plafond de {} triangles maillés pour le fichier est atteint", scene.hard_limit));
         return;
     }
-    faces::complete(&mut meshes, &|owner| scene.symbol(owner), &scene.settings(id));
+    faces::complete(&mut meshes, &|owner| scene.symbol(owner), &scene.settings());
     *shape = finish_shape(scene, id, shape.graphics, meshes);
 }
 
@@ -1068,6 +1083,9 @@ fn finish_shape(scene: &Scene, id: u64, graphics: bool, meshes: faces::Meshes) -
         let material = scene.resolver.resolve_in_layer(id, primitive.source_owner_id, primitive.face_tag, primitive.render_style_id, primitive.material_id, layer);
         paints.push(paint(material.as_ref()));
     }
+    // La priorité de profondeur : celle de la classe de l'élément (hôte système, import CAD, ou ordinaire), et la surcouche pour le `GPolyMesh`
+    // voisin d'un `GImposter` (l'image d'un contenu RPC), quel que soit son élément. Voir `pack::Depth`.
+    let element_depth = classes::depth_of(scene.infos.get(&id).map_or("", |info| info.class.as_str()));
     let faces: Vec<Face<'_>> = meshes
         .primitives
         .iter()
@@ -1077,7 +1095,7 @@ fn finish_shape(scene: &Scene, id: u64, graphics: bool, meshes: faces::Meshes) -
             normals: Some(&primitive.normals),
             triangles: &primitive.triangles,
             paint: paints[position],
-            overlay: meshes.overlay.get(position).copied().unwrap_or(false),
+            depth: if meshes.overlay.get(position).copied().unwrap_or(false) { Depth::Overlay } else { element_depth },
         })
         .collect();
     let mesh = ElementMesh::build(&faces);

@@ -260,14 +260,11 @@ pub struct Settings<'c> {
     /// Laisser pour plus tard les instances d'un symbole pas encore lu (`Meshes::pending`), au lieu d'un
     /// diagnostic : la lecture les achève après avoir lu les symboles (`complete`).
     pub defer: bool,
-    /// Placer les instances à échelle uniforme (`m_bHasScale` vrai : voir `select`). Faux pour un import CAD du projet
-    /// (`ImportInstance`), dont les blocs à échelle restent non lus en attendant qu'on décide de dessiner ces imports.
-    pub uniform_scales: bool,
 }
 
 /// Mailler les graphiques d'un élément, sans cache, au niveau de détail `detail_level`.
 pub fn graphics<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, detail_level: i64) -> Meshes {
-    graphics_with(root, resolver, &Settings { detail_level, prudent: false, cache: None, defer: false, uniform_scales: true })
+    graphics_with(root, resolver, &Settings { detail_level, prudent: false, cache: None, defer: false })
 }
 
 /// Mailler les graphiques d'un élément : mêmes transformations et mêmes primitives que
@@ -282,7 +279,7 @@ pub fn graphics_with<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option
         None => Arc::new(select::edge_index(graph)),
     };
     let shapes_of = |owner: u64| settings.cache.and_then(|cache| cache.shape(owner));
-    let selection = select::select_deferring(root, resolver, &edges_of, &shapes_of, settings.detail_level, settings.defer, settings.uniform_scales);
+    let selection = select::select_deferring(root, resolver, &edges_of, &shapes_of, settings.detail_level, settings.defer);
     mesh_selection(selection, root, resolver, settings)
 }
 

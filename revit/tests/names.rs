@@ -192,34 +192,34 @@ fn un_profile_integre_a_la_famille_et_le_type_de_son_mur() {
     }
 }
 
+/// Une forme de famille sur place est nommée comme son instance (le nom de la `Family` qui la possède, le type de son symbole) : c'est ce que dit la fiche de
+/// l'instance, qui la remplace. Aucune forme de famille sur place n'est plus dessinée dans les fichiers d'essai : celles dont l'instance est dessinée (la poutre
+/// courbe 201286, les armoires et la hotte de `SampleModel`) le sont par elle, avec les mêmes triangles et le même libellé, la même catégorie, la même famille et
+/// le même type ; celles dont l'instance est une masse que Revit masque par défaut (« Main Building » 139682 et « Pavillion » 139763, de rac et de mega) ne le
+/// sont pas non plus, comme leur instance. Le nom que prendrait une forme encore dessinée (la `Family` qui la possède, le type du `FamilySymbol` qui possède cette
+/// `Family`) et l'absence des paramètres de type d'un autre élément sont épinglés par les essais unitaires de `properties::fiche`
+/// (`une_forme_sur_place_prend_la_famille_et_le_symbole_qui_la_possedent`).
 #[test]
 fn une_forme_sur_place_est_nommee_comme_son_instance() {
     if let Some(lu) = lire("rac_advanced_sample_project") {
-        let form = lu.fiche_of(139682);
-        assert_eq!(form.class, "ExtrusionElem");
-        assert_eq!(form.names(), (Some("Masses"), Some("Main Building"), Some("Main Building")));
-        assert_eq!(form.label, "Main Building : Main Building");
-        let pavilion = lu.fiche_of(139763);
-        assert_eq!((pavilion.text("Catégorie"), pavilion.label), (Some("Masses"), "Pavillion : Pavillion"));
-        // La poutre courbe : une forme balayée d'une famille d'ossature porteuse sur place.
-        assert_eq!(lu.fiche_of(201286).label, "Curved Beam : Curved Beam");
+        // Les formes de masse, masquées avec leur instance.
+        for form in [139682, 139763] {
+            assert!(lu.fiches().iter().all(|fiche| fiche.id != form), "la forme de masse {form} n'est pas dessinée : son instance est une masse masquée par défaut");
+        }
+        // La poutre courbe : une forme balayée d'une famille d'ossature porteuse sur place, dessinée par son instance (201308), qui porte son nom.
+        assert!(lu.fiches().iter().all(|fiche| fiche.id != 201286), "la forme 201286 est dessinée par son instance");
+        let beam = lu.fiche_of(201308);
+        assert_eq!((beam.class, beam.label, beam.names()), ("FamilyInstance", "Curved Beam : Curved Beam", (Some("Ossature porteuse"), Some("Curved Beam"), Some("Curved Beam"))));
     }
     if let Some(lu) = lire("SampleModel") {
-        for (id, family, kind) in [(506161, "wardrobe1", "wardrobe"), (523524, "wardrobe2", "wardrobe"), (697449, "hood enclosure", "hood enclosure")] {
-            let form = lu.fiche_of(id);
-            assert_eq!(form.names(), (Some("Systèmes de mobilier"), Some(family), Some(kind)), "{id}");
-            assert_eq!(form.label, format!("{family} : {kind}"), "{id}");
+        // Les formes (506161, 523524, 697449) ne sont plus dessinées ; leurs instances (506168, 523531, 697577) portent leur nom.
+        for (form, id, family, kind) in [(506161, 506168, "wardrobe1", "wardrobe"), (523524, 523531, "wardrobe2", "wardrobe"), (697449, 697577, "hood enclosure", "hood enclosure")] {
+            assert!(lu.fiches().iter().all(|fiche| fiche.id != form), "la forme {form} est dessinée par son instance {id}");
+            let instance = lu.fiche_of(id);
+            assert_eq!(instance.names(), (Some("Systèmes de mobilier"), Some(family), Some(kind)), "{id}");
+            assert_eq!(instance.label, format!("{family} : {kind}"), "{id}");
         }
     }
-}
-
-#[test]
-fn une_forme_sur_place_n_a_pas_les_parametres_de_type_de_son_symbole() {
-    // Pas de jointure des paramètres du type : la fiche de la forme n'a que ses propres paramètres.
-    let Some(lu) = lire("rac_advanced_sample_project") else { return };
-    let form = lu.fiche_of(139682);
-    let typed = form.properties.values().filter_map(Value::as_object).flat_map(|group| group.keys()).filter(|name| name.ends_with("(type)")).count();
-    assert_eq!(typed, 0);
 }
 
 #[test]

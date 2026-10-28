@@ -68,7 +68,7 @@ fn check(geometry: &Geometry) -> f64 {
     assert_eq!(geometry.materials.len() % MATERIAL_STRIDE, 0);
     let vertices = geometry.positions.len() / 3;
     let materials = geometry.materials.len() / MATERIAL_STRIDE;
-    assert!(geometry.materials.chunks_exact(MATERIAL_STRIDE).all(|row| row[4] <= 1 && row[5] <= 1 && row[6] <= 1 && (row[4] == 1) == (row[3] < 255)));
+    assert!(geometry.materials.chunks_exact(MATERIAL_STRIDE).all(|row| row[4] <= 1 && row[5] <= 1 && row[6] <= 2 && (row[4] == 1) == (row[3] < 255)));
     let mut drawn = vec![false; elements];
     let (mut agreeing, mut total) = (0usize, 0usize);
     for primitive in geometry.primitives.chunks_exact(6) {

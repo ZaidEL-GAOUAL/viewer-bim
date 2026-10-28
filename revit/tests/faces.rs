@@ -1563,11 +1563,6 @@ fn le_style_d_un_calque_ne_traverse_pas_les_symboles() {
 /// la matrice 3 × 3 donnée (la translation est nulle). `known` : le symbole est lu avant l'élément ; sinon, avec `defer`, l'instance attend
 /// son symbole et se rejoue ensuite.
 fn place_with_scale(symbol: &ObjectGraph, scale: Option<bool>, matrix: [[f64; 3]; 3], known: bool, defer: bool) -> faces::Meshes {
-    place_with_scale_in(symbol, scale, matrix, known, defer, true)
-}
-
-/// [`place_with_scale`], avec le choix de `Settings::uniform_scales` (faux : un import CAD du projet).
-fn place_with_scale_in(symbol: &ObjectGraph, scale: Option<bool>, matrix: [[f64; 3]; 3], known: bool, defer: bool, uniform_scales: bool) -> faces::Meshes {
     let mut builder = Builder::new();
     let root = element_node(&mut builder);
     let mut fields = json!({ "m_GInfo": { "m_flags": VISIBLE, "m_tag": 0 }, "m_resolveSymInView": false, "m_forbiddenTarget": { "m_targets": 0 }, "m_oEmbeddedSymbolGRep": { "class_tag": null, "offset": 1, "pointer_token": 0 } });
@@ -1584,7 +1579,7 @@ fn place_with_scale_in(symbol: &ObjectGraph, scale: Option<bool>, matrix: [[f64;
     builder.set(instance, "m_instanceInfo", info_pointer);
     link_children(&mut builder, root, &[instance]);
     let graph = builder.graph();
-    let settings = faces::Settings { detail_level: 3, prudent: false, cache: None, defer, uniform_scales };
+    let settings = faces::Settings { detail_level: 3, prudent: false, cache: None, defer };
     let mut meshes = faces::graphics_with(&graph, &|owner| (owner == 777 && known).then_some(symbol), &settings);
     if !meshes.pending.is_empty() {
         faces::complete(&mut meshes, &|owner| (owner == 777).then_some(symbol), &faces::Settings { defer: false, ..settings });
@@ -1695,30 +1690,6 @@ fn une_instance_a_echelle_non_uniforme_garde_son_diagnostic() {
     assert!(empty.primitives.is_empty() && empty.diagnostics.is_empty(), "{:?}", empty.diagnostics);
     let missing = place_with_scale(&empty_symbol(), None, NO_SCALE, true, false);
     assert!(missing.diagnostics.iter().any(|message| message.contains("échelle")), "{:?}", missing.diagnostics);
-}
-
-/// Un import CAD du projet (`ImportInstance`) ne place aucune échelle, même uniforme : ses blocs à échelle gardent leur ancien traitement
-/// (diagnostic « échelle non prise en charge » quand leur symbole porte des surfaces, instance sautée sinon), que le symbole soit lu avant
-/// l'élément ou après. Sans l'indicateur d'échelle, rien ne change pour lui.
-#[test]
-fn un_import_cad_du_projet_ne_place_aucune_echelle() {
-    let double = [[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]];
-    for (known, defer) in [(true, false), (false, true)] {
-        for matrix in [NO_SCALE, double] {
-            let refused = place_with_scale_in(&tetrahedron_symbol(), Some(true), matrix, known, defer, false);
-            assert!(refused.primitives.is_empty(), "symbole lu avant l'élément : {known}");
-            assert!(refused.diagnostics.iter().any(|message| message.contains("échelle non prise en charge")), "{:?}", refused.diagnostics);
-            // Le même élément, hors import : l'échelle uniforme se place.
-            let placed = place_with_scale_in(&tetrahedron_symbol(), Some(true), matrix, known, defer, true);
-            assert!(placed.diagnostics.is_empty() && placed.primitives.len() == 1, "{:?}", placed.diagnostics);
-            // Symbole vide : rien à perdre, instance sautée.
-            let skipped = place_with_scale_in(&empty_symbol(), Some(true), matrix, known, defer, false);
-            assert!(skipped.primitives.is_empty() && skipped.diagnostics.is_empty(), "{:?}", skipped.diagnostics);
-        }
-        // Sans l'indicateur d'échelle, l'instance d'un import se dessine comme toute autre.
-        let plain = place_with_scale_in(&tetrahedron_symbol(), Some(false), NO_SCALE, known, defer, false);
-        assert!(plain.diagnostics.is_empty() && plain.primitives.len() == 1, "{:?}", plain.diagnostics);
-    }
 }
 
 /// Le même choix quand le symbole n'est pas encore lu (l'instance attend, `Settings::defer`, puis se rejoue dans `complete`).
@@ -2017,8 +1988,8 @@ fn le_cache_ne_change_pas_les_primitives() {
         let wanted = |scene: &saved::Scene, _id: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
         let work = |scene: &saved::Scene, _id: u64, graph: &ObjectGraph| {
             let plain = faces::graphics(graph, &|owner| scene.symbol(owner), saved::DETAIL_LEVEL);
-            let cached = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false, uniform_scales: true });
-            let again = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false, uniform_scales: true });
+            let cached = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false });
+            let again = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false });
             let same = |a: &faces::Meshes, b: &faces::Meshes| {
                 a.primitives.len() == b.primitives.len()
                     && a.ours == b.ours
@@ -2044,7 +2015,7 @@ fn le_mode_prudent_est_rvt_rs_seul() {
     let mut file = open(&path);
     let wanted = |scene: &saved::Scene, _id: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
     let work = |scene: &saved::Scene, _id: u64, graph: &ObjectGraph| {
-        let prudent = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: true, cache: None, defer: false, uniform_scales: true });
+        let prudent = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: true, cache: None, defer: false });
         let old = native_saved_mesh::graphics_with_resolver_at_detail(graph, &|owner| scene.symbol(owner), saved::DETAIL_LEVEL);
         let same = prudent.primitives.len() == old.primitives.len() && prudent.primitives.iter().zip(&old.primitives).all(|(a, b)| key(a) == key(b));
         (same, prudent.ours.iter().any(|own| *own), prudent.diagnostics == old.diagnostics, prudent.unbounded_faces == old.unbounded_faces)

@@ -21,7 +21,7 @@
 use rvt::research::native_parameters::ObjectGraph;
 use serde_json::Value;
 
-use super::pack::{ElementMesh, Face, Paint};
+use super::pack::{Depth, ElementMesh, Face, Paint};
 
 /// Au-delà, une coordonnée n'est pas une étendue mais un reste de mémoire (même seuil que `pack`).
 const LIMIT: f64 = 1e9;
@@ -72,7 +72,7 @@ impl Bounds {
     pub fn mesh(&self, paint: Paint) -> ElementMesh {
         let ([x0, y0, z0], [x1, y1, z1]) = (self.low, self.high);
         let vertices = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
-        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &TRIANGLES, paint, overlay: false }])
+        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &TRIANGLES, paint, depth: Depth::Ordinary }])
     }
 }
 

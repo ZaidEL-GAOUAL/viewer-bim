@@ -30,12 +30,8 @@
 //!   n'est pas une échelle uniforme (étirement, cisaillement) n'a pas de lecture établie : un symbole sans surface n'a rien à perdre et
 //!   l'instance se saute, comme une instance à cibles interdites (voir ci-dessous) ; un symbole qui porte des surfaces reste un diagnostic
 //!   (« instance à échelle non uniforme non prise en charge »). Un drapeau absent reste refusé.
-//!   **Exception : les imports CAD du projet (`ImportInstance`).** Leurs blocs à échelle ne sont pas placés, comme avant : `Settings::uniform_scales`
-//!   est faux pour eux, et un tel bloc reste refusé (« instance à échelle non prise en charge ») quand son symbole porte des surfaces. La
-//!   décision de dessiner ou non un import CAD du projet (Revit les montre en 3D selon la visibilité de leur catégorie d'import, que le
-//!   lecteur ne lit pas) est à prendre à part ; y placer les échelles ferait apparaître, sans que personne l'ait décidé, 7 éléments qui
-//!   ne l'étaient pas : les 5 plans DWG de `wadduwa.rvt` (plats, coplanaires avec le dessus des dalles), l'import de 1,5 km de
-//!   `Vignette-04-BaseFile` (308836, qui déplace de 230 m le centre du modèle) et le second import de `dynamo-nyc-site-2013` (230266).
+//!   Les imports CAD du projet (`ImportInstance`) n'ont aucune exception : leurs blocs à échelle (les plans DWG de `wadduwa.rvt` à 25,4, 75 ou 2 413,27) se
+//!   placent comme les autres, et c'est le dessin de ces éléments qui est réglé à part (priorité de profondeur, `pack::Depth`).
 //! * Le style d'une surface sans matériau : un `GPolyMesh` d'une DWG importée a `m_materialID` et `m_interiorGStyleID` à −1,
 //!   et c'est le `GGroup` du calque (`GInfo.m_categoryId` : un `GStyleElem`) qui porte le style, dont le matériau donne la
 //!   couleur (`Selected::layer`). Voir `geometry::materials`.
@@ -118,7 +114,7 @@ const DRAWN_TARGETS: u64 = 0b1010;
 
 /// Les refus d'une instance à cibles interdites ou à échelle dont le symbole porte des surfaces.
 const RESTRICTED_REFUSAL: &str = "instance à cibles interdites dont le symbole porte des surfaces";
-/// Le drapeau `m_bHasScale` est absent, ou la matrice de l'instance n'est pas une échelle uniforme et son symbole porte des surfaces.
+/// Le drapeau `m_bHasScale` est absent.
 const SCALE_REFUSAL: &str = "instance à échelle non prise en charge";
 const NON_UNIFORM_REFUSAL: &str = "instance à échelle non uniforme non prise en charge";
 
@@ -183,8 +179,8 @@ pub struct Pending {
     pub depth: usize,
     pub detail_family: usize,
     pub restricted: bool,
-    /// `m_bHasScale` vrai et instance non placée (matrice qui n'est pas une échelle uniforme, ou échelles non placées par ce parcours) : le
-    /// diagnostic qu'elle donne si son symbole porte des surfaces ; l'instance se saute sinon.
+    /// `m_bHasScale` vrai et matrice qui n'est pas une échelle uniforme : le diagnostic qu'elle donne si son symbole porte des surfaces ;
+    /// l'instance se saute sinon.
     pub scaled: Option<&'static str>,
     pub view_resolved: bool,
     pub visits: usize,
@@ -227,14 +223,13 @@ pub struct SymbolShape {
 /// que l'appelant peut garder d'une instance à l'autre ; `shapes(symbole)` rend la forme déjà parcourue d'un
 /// symbole ([`SymbolShape`]), qui dispense de son graphe.
 pub fn select<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64) -> Selection {
-    select_deferring(root, resolver, edges, shapes, detail_level, false, true)
+    select_deferring(root, resolver, edges, shapes, detail_level, false)
 }
 
 /// [`select`], et, si `defer` est vrai, une instance d'un symbole qu'on n'a pas encore (ni forme, ni graphe) est
 /// notée dans `Selection::pending` au lieu d'un diagnostic « graphique du symbole absent » : elle se rejouera par
-/// [`place_pending`] quand le symbole sera lu. Si `uniform_scales` est faux, une instance à échelle (`m_bHasScale` vrai) n'est jamais
-/// placée, même d'échelle uniforme : voir l'en-tête du module (les imports CAD du projet).
-pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64, defer: bool, uniform_scales: bool) -> Selection {
+/// [`place_pending`] quand le symbole sera lu.
+pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64, defer: bool) -> Selection {
     let mut walk = Walker {
         view: View { graph: root, edges: Arc::new(edge_index(root)) },
         resolver,
@@ -250,7 +245,6 @@ pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Opt
         log: None,
         matrix_sensitive: false,
         defer,
-        uniform_scales,
         overlay_child: None,
         layer: -1,
     };
@@ -285,7 +279,6 @@ pub fn place_pending<'a>(pending: &Pending, resolver: &dyn Fn(u64) -> Option<&'a
         log: None,
         matrix_sensitive: false,
         defer: false,
-        uniform_scales: true,
         overlay_child: None,
         layer: -1,
     };
@@ -329,7 +322,6 @@ pub fn symbol_shape<'a>(graph: &'a ObjectGraph, symbol: u64, resolver: &dyn Fn(u
         log: Some(Vec::new()),
         matrix_sensitive: false,
         defer: false,
-        uniform_scales: true,
         overlay_child: None,
         layer: -1,
     };
@@ -390,8 +382,6 @@ struct Walker<'a, 'r> {
     matrix_sensitive: bool,
     /// Laisser pour plus tard les instances d'un symbole qu'on n'a pas encore (voir `select_deferring`).
     defer: bool,
-    /// Placer les instances à échelle uniforme (voir `select_deferring`).
-    uniform_scales: bool,
     /// Le `GPolyMesh` que le parcours va visiter est le voisin d'un `GImposter` (voir `Selected::overlay`).
     overlay_child: Option<usize>,
     /// `GInfo.m_categoryId` du conteneur le plus proche qui en a un, dans le graphe visité (`-1` : aucun ; voir `Selected::layer`).
@@ -580,16 +570,7 @@ impl<'a> Walker<'a, '_> {
                     return Err("classe d'informations d'instance inattendue".into());
                 }
                 let transform = read_transform(&info.fields["m_Trf"])?;
-                // Une échelle uniforme se place, sauf quand ce parcours ne place aucune échelle (`uniform_scales` faux : un import CAD du projet).
-                let scaled = if !flagged {
-                    None
-                } else if uniform_scale(&transform).is_none() {
-                    Some(NON_UNIFORM_REFUSAL)
-                } else if !self.uniform_scales {
-                    Some(SCALE_REFUSAL)
-                } else {
-                    None
-                };
+                let scaled = (flagged && uniform_scale(&transform).is_none()).then_some(NON_UNIFORM_REFUSAL);
                 let embedded = &object.fields["m_oEmbeddedSymbolGRep"];
                 if embedded["pointer_token"].as_u64() == Some(0) {
                     if !plain_context(&info.fields) {
