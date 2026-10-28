@@ -1,0 +1,170 @@
+# Grandeur des paramètres intégrés de Revit dont l'unité interne est certaine, écrite à la main pour ce projet.
+#
+# Revit n'enregistre de spec (ForgeTypeId de la nature de la valeur) que pour les paramètres de famille, partagés et
+# de projet ; un paramètre intégré n'en a pas dans le fichier, et Rhino.Inside.Revit ne la publie pas. Sans cette
+# table, la nature d'un intégré se devine à son nom (longueur, surface, volume, angle : scripts/gen-revit-catalog.mjs),
+# et tout le reste reste « inconnu » : le nombre est montré tel quel, sans unité dans le nom.
+#
+# Colonnes : clé, nature.
+#   clé      nom d'énumération (RBS_PIPE_FLOW_PARAM)
+#   nature   nature de la spec, au sens de revit/src/catalog/units.rs (« airFlow » pour autodesk.spec.aec.hvac:airFlow) :
+#            la conversion y est écrite et testée. « number » : un nombre sans dimension, connu pour tel.
+# N'entrent ici que des noms qui disent la grandeur sans ambiguïté ; un paramètre douteux n'y est pas.
+# Cette table prime sur la nature devinée (SPACE_OUTDOOR_AIRFLOW_PER_AREA se devine « surface » à cause de « AREA »).
+
+# -- débit d'air (pi³/s → L/s)
+ROOM_ACTUAL_EXHAUST_AIRFLOW_PARAM	airFlow
+ROOM_ACTUAL_RETURN_AIRFLOW_PARAM	airFlow
+ROOM_ACTUAL_SUPPLY_AIRFLOW_PARAM	airFlow
+ROOM_CALCULATED_SUPPLY_AIRFLOW_PARAM	airFlow
+ROOM_DESIGN_EXHAUST_AIRFLOW_PARAM	airFlow
+ROOM_DESIGN_RETURN_AIRFLOW_PARAM	airFlow
+ROOM_DESIGN_SUPPLY_AIRFLOW_PARAM	airFlow
+ROOM_OUTDOOR_AIRFLOW_PARAM	airFlow
+SPACE_OUTDOOR_AIRFLOW	airFlow
+SPACE_OUTDOOR_AIRFLOW_PER_PERSON	airFlow
+SPACE_INFILTRATION_AIRFLOW	airFlow
+PEAK_AIRFLOW_PARAM	airFlow
+ZONE_CALCULATED_SUPPLY_AIRFLOW_PARAM	airFlow
+ZONE_OUTSIDE_AIR_FLOW_PER_PERSON	airFlow
+RBS_DUCT_FLOW_PARAM	airFlow
+RBS_MAX_FLOW	airFlow
+RBS_MIN_FLOW	airFlow
+RBS_ADDITIONAL_FLOW	airFlow
+
+# -- débit d'air par surface (pi/s → L/(s·m²)) : le nom dit « par surface », la valeur n'est pas une surface
+ROOM_CALCULATED_SUPPLY_AIRFLOW_PER_AREA_PARAM	airFlowDensity
+ROOM_OUTDOOR_AIR_PER_AREA_PARAM	airFlowDensity
+SPACE_AIRFLOW_PER_AREA_PARAM	airFlowDensity
+SPACE_INFILTRATION_AIRFLOW_PER_AREA	airFlowDensity
+SPACE_OUTDOOR_AIRFLOW_PER_AREA	airFlowDensity
+ZONE_CALCULATED_SUPPLY_AIRFLOW_PER_AREA_PARAM	airFlowDensity
+ZONE_OUTSIDE_AIR_FLOW_PER_AREA	airFlowDensity
+ZONE_OUTSIDE_AIR_PER_AREA_PARAM	airFlowDensity
+
+# -- débit d'eau (pi³/s → L/s)
+RBS_PIPE_FLOW_PARAM	flow
+RBS_PIPE_ADDITIONAL_FLOW_PARAM	flow
+MEP_ANALYTICAL_PIPE_DESIGNFLOW	flow
+MEP_EQUIPMENT_CALC_PIPINGFLOW_PARAM	flow
+ZONE_CALCULATED_HYDRONIC_COOLINGFLOW_PARAM	flow
+ZONE_CALCULATED_HYDRONIC_HEATINGFLOW_PARAM	flow
+
+# -- vitesse (pi/s → m/s)
+RBS_VELOCITY	velocity
+RBS_PIPE_VELOCITY_PARAM	velocity
+
+# -- pression (kg/(pi·s²) → Pa) et perte de charge linéique (→ Pa/m)
+RBS_PRESSURE_DROP	pressure
+RBS_DUCT_PRESSURE_DROP	pressure
+RBS_DUCT_STATIC_PRESSURE	pressure
+RBS_VELOCITY_PRESSURE	pressure
+RBS_PIPE_PRESSUREDROP_PARAM	pressure
+RBS_PIPE_STATIC_PRESSURE	pressure
+PIPE_VELOCITY_PRESSURE	pressure
+MEP_EQUIPMENT_CALC_PIPINGPRESSUREDROP_PARAM	pressure
+RBS_FRICTION	friction
+RBS_PIPE_FRICTION_PARAM	friction
+
+# -- fluide et rugosité
+RBS_PIPE_FLUID_VISCOSITY_PARAM	viscosity
+RBS_PIPE_FLUID_DENSITY_PARAM	density
+DUCT_ROUGHNESS	roughness
+PIPE_ROUGHNESS	roughness
+
+# -- températures (K → °C)
+RBS_PIPE_FLUID_TEMPERATURE_PARAM	temperature
+RBS_ELEC_AMBIENT_TEMPERATURE	temperature
+ZONE_DESIGN_COOL_TEMPERATURE	temperature
+ZONE_DESIGN_HEAT_TEMPERATURE	temperature
+ZONE_COOLING_AIR_TEMPERATURE_PARAM	temperature
+ZONE_HEATING_AIR_TEMPERATURE_PARAM	temperature
+SPACE_COOLING_SET_POINT	temperature
+SPACE_HEATING_SET_POINT	temperature
+ZONE_COOLING_SET_POINT_PARAM	temperature
+ZONE_HEATING_SET_POINT_PARAM	temperature
+
+# -- pente (rapport montée / course → %)
+RBS_PIPE_SLOPE	slope
+RBS_DUCT_SLOPE	slope
+RBS_PIPE_SLOPE_DEF_PARAM	slope
+
+# -- puissances et charges thermiques (kg·pi²/s³ → W)
+ROOM_DESIGN_POWER_LOAD_PARAM	power
+ROOM_DESIGN_LIGHTING_LOAD_PARAM	power
+ROOM_ACTUAL_POWER_LOAD_PARAM	power
+ROOM_ACTUAL_LIGHTING_LOAD_PARAM	power
+SPACE_POWER_LOAD_PARAM	power
+SPACE_LIGHTING_LOAD_PARAM	power
+ROOM_DESIGN_COOLING_LOAD_PARAM	coolingLoad
+ROOM_CALCULATED_COOLING_LOAD_PARAM	coolingLoad
+ROOM_DESIGN_HEATING_LOAD_PARAM	heatingLoad
+ROOM_CALCULATED_HEATING_LOAD_PARAM	heatingLoad
+ZONE_CALCULATED_COOLING_LOAD_PARAM	coolingLoad
+ZONE_CALCULATED_HEATING_LOAD_PARAM	heatingLoad
+PEAK_COOLING_LOAD_PARAM	coolingLoad
+PEAK_HEATING_LOAD_PARAM	heatingLoad
+PEAK_LATENT_COOLING_LOAD	coolingLoad
+ROOM_PEOPLE_SENSIBLE_HEAT_GAIN_PER_PERSON_PARAM	heatGain
+ROOM_PEOPLE_LATENT_HEAT_GAIN_PER_PERSON_PARAM	heatGain
+ROOM_PEOPLE_TOTAL_HEAT_GAIN_PER_PERSON_PARAM	heatGain
+SPACE_PEOPLE_SENSIBLE_HEAT_GAIN_PER_PERSON_PARAM	heatGain
+SPACE_PEOPLE_LATENT_HEAT_GAIN_PER_PERSON_PARAM	heatGain
+
+# -- puissances par surface (kg·pi²/s³ par pi² → W/m²)
+ROOM_ACTUAL_POWER_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_ACTUAL_LIGHTING_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_DESIGN_POWER_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_DESIGN_LIGHTING_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_DESIGN_MECHANICAL_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_DESIGN_OTHER_LOAD_PER_AREA_PARAM	powerDensity
+SPACE_POWER_LOAD_PER_AREA_PARAM	powerDensity
+SPACE_LIGHTING_LOAD_PER_AREA_PARAM	powerDensity
+ROOM_CALCULATED_COOLING_LOAD_PER_AREA_PARAM	coolingLoadDividedByArea
+ROOM_CALCULATED_HEATING_LOAD_PER_AREA_PARAM	heatingLoadDividedByArea
+ZONE_CALCULATED_COOLING_LOAD_PER_AREA_PARAM	coolingLoadDividedByArea
+ZONE_CALCULATED_HEATING_LOAD_PER_AREA_PARAM	heatingLoadDividedByArea
+
+# -- surface par charge (pi² par kg·pi²/s³, soit s³/kg : des m²/W sans facteur). Le mot AREA du nom ne fait pas de ces
+# paramètres des surfaces.
+ZONE_CALCULATED_AREA_PER_COOLING_LOAD_PARAM	areaDividedByCoolingLoad
+ZONE_CALCULATED_AREA_PER_HEATING_LOAD_PARAM	areaDividedByHeatingLoad
+
+# -- électricité : tension (V), courant (A), puissance apparente (VA), puissance active (W)
+RBS_ELEC_VOLTAGE	potential
+RBS_ELEC_VOLTAGE_DROP_PARAM	potential
+RBS_VOLTAGETYPE_VOLTAGE_PARAM	potential
+RBS_VOLTAGETYPE_MINVOLTAGE_PARAM	potential
+RBS_VOLTAGETYPE_MAXVOLTAGE_PARAM	potential
+ELECTICAL_EQUIP_VOLTAGE	potential
+MEP_ANALYTICAL_ELEC_VOLTAGE	potential
+MEP_ANALYTICAL_ELEC_CURRENT	current
+MEP_ANALYTICAL_ELEC_CURRENT_RATING	current
+MEP_ANALYTICAL_ELEC_APPARENT_POWER_RATING	apparentPower
+RBS_ELEC_APPARENT_LOAD	apparentPower
+RBS_ELEC_APPARENT_LOAD_PHASE1	apparentPower
+RBS_ELEC_APPARENT_LOAD_PHASE2	apparentPower
+RBS_ELEC_APPARENT_LOAD_PHASE3	apparentPower
+RBS_ELEC_BALANCED_LOAD	apparentPower
+RBS_ELEC_TRUE_LOAD	power
+RBS_ELEC_TRUE_LOAD_PHASE1	power
+RBS_ELEC_TRUE_LOAD_PHASE2	power
+RBS_ELEC_TRUE_LOAD_PHASE3	power
+RBS_ELEC_TRUE_CURRENT_PARAM	current
+RBS_ELEC_TRUE_CURRENT_PHASEA_PARAM	current
+RBS_ELEC_TRUE_CURRENT_PHASEB_PARAM	current
+RBS_ELEC_TRUE_CURRENT_PHASEC_PARAM	current
+RBS_ELEC_APPARENT_CURRENT_PARAM	current
+RBS_ELEC_APPARENT_CURRENT_PHASEA_PARAM	current
+RBS_ELEC_APPARENT_CURRENT_PHASEB_PARAM	current
+RBS_ELEC_APPARENT_CURRENT_PHASEC_PARAM	current
+RBS_ELEC_ROOM_AVERAGE_ILLUMINATION	illuminance
+
+# -- sans dimension : le nombre est celui du fichier
+ROOM_NUMBER_OF_PEOPLE_PARAM	number
+RBS_ELEC_POWER_FACTOR	number
+RBS_FLOW_FACTOR_PARAM	number
+FRICTION_FACTOR	number
+RELATIVE_ROUGHNESS	number
+ANALYTICAL_SOLAR_HEAT_GAIN_COEFFICIENT	number
+ANALYTICAL_VISUAL_LIGHT_TRANSMITTANCE	number

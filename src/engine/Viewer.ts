@@ -14,6 +14,8 @@ import {
   OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
+  Ray,
+  LineSegments,
   Raycaster,
   Scene,
   Sphere,
@@ -22,16 +24,18 @@ import {
   WebGLRenderer,
   type IUniform,
   type Plane,
-  type Ray,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AdaptiveResolution } from './AdaptiveResolution.ts';
+import { cameraUp, clonePose, easeInOut, interpolatePose, samePose, type PoseState } from './cameraPose.ts';
+import type { CameraPose } from '../data/savedViews.ts';
 import { clipRange } from './clipRange.ts';
 import { TRANSPARENT_LAYER } from './buildModel.ts';
 import type { Model, PickHit, RaycastOptions } from './Model.ts';
 import { AXES, Sections } from './Sections.ts';
 import { SectionHandles } from './SectionHandles.ts';
 import { STANDARD_VIEWS, type StandardView } from './views.ts';
+import { WalkControls } from './WalkControls.ts';
 
 const NO_PLANES: Plane[] = [];
 const UNIT = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)];
@@ -43,6 +47,9 @@ export interface FrameStats {
   calls: number;
   triangles: number;
 }
+
+/** Durée du déplacement de la caméra vers une vue enregistrée, en millisecondes. */
+const TRANSITION_MS = 650;
 
 /** Délai sans mouvement après lequel la vue est recalculée en pleine résolution. */
 const SHARPEN_DELAY = 160;
@@ -60,6 +67,8 @@ export class Viewer {
   readonly controls: OrbitControls;
   readonly sections = new Sections();
   readonly sectionHandles: SectionHandles;
+  /** Mode visite : la caméra marche dans la maquette à hauteur d'yeux, à la place des contrôles d'orbite. */
+  readonly walk: WalkControls;
   readonly onSectionsChange = new Set<() => void>();
   readonly selectColor: IUniform<Color> = { value: new Color(0x1d8bff) };
   /** Appelé après chaque image : sert à replacer les étiquettes HTML sur la vue 3D. */
@@ -73,6 +82,7 @@ export class Viewer {
 
   private readonly container: HTMLElement;
   private readonly raycaster = new Raycaster();
+  private readonly freeRay = new Ray();
   private readonly pointer = new Vector2();
   private readonly sphere = new Sphere(new Vector3(), 10);
   private readonly capScene = new Scene();
@@ -80,6 +90,11 @@ export class Viewer {
   private readonly outlines: LineLoop[] = [];
   /** Le plan de coupe lui-même, translucide, pour le voir et le saisir dans la vue. */
   private readonly planeFills: Mesh[] = [];
+  /** Arêtes de la boîte de coupe d'une vue enregistrée. */
+  private readonly boxOutline: LineSegments;
+  /** Déplacement de caméra en cours vers une vue enregistrée. */
+  private tween: { from: PoseState; to: PoseState; start: number; duration: number } | null = null;
+  private readonly tweenPose: PoseState = { position: new Vector3(), target: new Vector3(), up: new Vector3(0, 1, 0), fov: 45, halfHeight: 1 };
   private readonly onePlane: Plane[] = [];
   private readonly otherPlanes: Plane[] = [];
   private readonly scratch = new Vector3();
@@ -90,6 +105,13 @@ export class Viewer {
   private resolutionScale = 1;
   private sharpenTimer = 0;
   private externalCamera = false;
+  /** Vrai tant que la caméra attend un modèle avec de la géométrie pour se cadrer (voir modelGrown). */
+  private pendingFit = false;
+  /**
+   * Vrai si l'utilisateur a pris la caméra en main (orbite, déplacement, molette, visite, vue enregistrée) depuis le
+   * dernier cadrage automatique (`fit`) : le cadrage final d'un modèle lu par morceaux la laisse alors où il l'a mise.
+   */
+  private cameraMoved = false;
   private readonly background = new Color(0xe9ebef);
   private width = 1;
   private height = 1;
@@ -113,6 +135,9 @@ export class Viewer {
     this.controls.zoomToCursor = true;
     this.controls.zoomSpeed = 1.3;
     this.controls.addEventListener('change', this.invalidateMotion);
+    // Saisir la vue (glisser, molette) interrompt le déplacement vers une vue enregistrée, et la compte comme déplacée
+    // par l'utilisateur (« start » part dès le début du geste, même un simple clic : au pire, le cadrage final s'abstient).
+    this.controls.addEventListener('start', () => { this.tween = null; this.cameraMoved = true; });
 
     // Éclairage fixe et peu coûteux : une lumière d'ambiance et deux directions opposées,
     // pour qu'aucune face ne soit complètement noire.
@@ -155,7 +180,15 @@ export class Viewer {
       this.planeFills[axis] = fill;
       this.overlay.add(fill);
     }
+    const boxGeometry = new BufferGeometry();
+    boxGeometry.setAttribute('position', new BufferAttribute(new Float32Array(24 * 3), 3));
+    this.boxOutline = new LineSegments(boxGeometry, new LineBasicMaterial({ color: 0xf08c00 }));
+    this.boxOutline.visible = false;
+    this.boxOutline.frustumCulled = false;
+    this.overlay.add(this.boxOutline);
     this.sectionHandles = new SectionHandles(this);
+    this.walk = new WalkControls(this);
+    this.walk.onChange.add(() => { if (this.walk.active) this.cameraMoved = true; });
 
     new ResizeObserver(() => this.resize()).observe(container);
     this.resize();
@@ -191,6 +224,7 @@ export class Viewer {
    */
   setExternalCamera(active: boolean): void {
     if (this.externalCamera === active) return;
+    if (active) this.walk.exit();
     // Le globe pilote une caméra en perspective : la vue 2D s'interrompt le temps de la carte.
     if (active) this.setProjection('perspective');
     this.externalCamera = active;
@@ -234,17 +268,57 @@ export class Viewer {
   }
 
   setModel(model: Model | null): void {
+    if (model && model === this.model) {
+      // Le modèle lu par morceaux, maintenant complet : les plans de coupe réglés pendant la lecture restent, et la
+      // caméra se cadre une dernière fois sur le modèle entier, dans la direction de vue du moment, sauf si
+      // l'utilisateur l'a déplacée depuis le dernier cadrage ou est en visite (le cadrage le ferait sortir).
+      this.modelGrown();
+      if (!this.cameraMoved && !this.walk.active) this.fit(model.box);
+      return;
+    }
+    this.walk.exit();
     this.sectionHandles.select(null);
     if (this.model) this.scene.remove(this.model.group);
     this.model = model;
     if (model) {
       this.scene.add(model.group);
-      (model.box.isEmpty() ? new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5)) : model.box).getBoundingSphere(this.sphere);
-      this.sections.setBounds(model.box.isEmpty() ? new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5)) : model.box);
+      const box = this.boundsOf(model);
+      box.getBoundingSphere(this.sphere);
+      this.sections.setBounds(box);
       this.sectionsChanged();
+      // Un modèle lu par morceaux peut commencer sans géométrie : la caméra sera cadrée au premier morceau qui en a.
+      this.pendingFit = model.box.isEmpty();
       this.fit(model.box, DEFAULT_DIRECTION);
     }
     this.invalidate();
+  }
+
+  /**
+   * Le modèle affiché vient de grandir d'un morceau (lecture Revit) : la sphère englobante, les plans proche et
+   * lointain et les limites des coupes suivent sa nouvelle boîte, sans toucher aux plans de coupe réglés. La caméra
+   * ne bouge pas, sauf si elle n'a encore jamais été cadrée sur lui.
+   */
+  modelGrown(): void {
+    const model = this.model;
+    if (!model) return;
+    const box = this.boundsOf(model);
+    box.getBoundingSphere(this.sphere);
+    this.sections.growBounds(box);
+    this.sectionsChanged();
+    if (this.pendingFit && !model.box.isEmpty()) {
+      this.pendingFit = false;
+      this.fit(model.box, DEFAULT_DIRECTION);
+    }
+    this.invalidate();
+  }
+
+  /** La boîte d'un modèle, ou celle d'une petite pièce s'il n'a pas (encore) de géométrie. */
+  private boundsOf(model: Model): Box3 {
+    return model.box.isEmpty() ? new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5)) : model.box;
+  }
+
+  get hasExternalCamera(): boolean {
+    return this.externalCamera;
   }
 
   get projection(): Projection {
@@ -255,8 +329,12 @@ export class Viewer {
    * Vue 2D : caméra orthographique, sans rotation (déplacement et zoom seulement), qui garde le
    * cadrage de la perspective ; retour en perspective à la distance qui montre la même hauteur.
    */
-  setProjection(kind: Projection): void {
-    if (this.projection === kind || (this.externalCamera && kind === 'orthographic')) return;
+  setProjection(kind: Projection, rotate = kind === 'perspective'): void {
+    if (this.projection === kind || (this.externalCamera && kind === 'orthographic')) {
+      if (this.projection === kind && !this.externalCamera) this.controls.enableRotate = rotate;
+      return;
+    }
+    if (kind === 'orthographic') this.walk.exit(); // la visite ne se fait qu'en perspective
     const from = this.camera;
     const to = kind === 'perspective' ? this.perspective : this.orthographic;
     const distance = Math.max(from.position.distanceTo(this.controls.target), 1e-3);
@@ -274,10 +352,98 @@ export class Viewer {
     }
     this.camera = to;
     this.controls.object = to;
-    this.controls.enableRotate = kind === 'perspective';
+    this.controls.enableRotate = rotate;
     this.sectionHandles.setCamera(to);
     this.controls.update();
     this.invalidate();
+  }
+
+  /** La caméra active, telle qu'elle est maintenant : de quoi la retrouver (`restorePose`). */
+  capturePose(): { projection: Projection; pose: PoseState } {
+    const camera = this.camera;
+    const halfHeight = this.camera === this.orthographic ? (this.orthographic.top - this.orthographic.bottom) / 2 / this.orthographic.zoom : this.defaultHalfHeight();
+    return {
+      projection: this.projection,
+      pose: { position: camera.position.clone(), target: this.controls.target.clone(), up: camera.up.clone(), fov: this.perspective.fov, halfHeight },
+    };
+  }
+
+  /** Demi-hauteur que la perspective montre à la distance du pivot : de quoi passer en parallèle sans changer le cadrage. */
+  private defaultHalfHeight(): number {
+    const distance = Math.max(this.perspective.position.distanceTo(this.controls.target), 1e-3);
+    return Math.tan((this.perspective.fov * Math.PI) / 360) * distance;
+  }
+
+  /** Remet une caméra capturée par `capturePose`. */
+  restorePose(snapshot: { projection: Projection; pose: PoseState }, animate = true): void {
+    if (this.externalCamera) return;
+    this.moveTo(snapshot.projection, snapshot.pose, animate, snapshot.projection === 'perspective');
+  }
+
+  /**
+   * Place la caméra d'une vue enregistrée (le repère est celui du modèle recentré). Une projection parallèle garde la
+   * rotation de l'orbite : c'est une vue 3D en isométrique, pas la vue 2D. La caméra glisse vers la nouvelle pose, sauf
+   * si `animate` est faux ou si l'utilisateur préfère les animations réduites. Renvoie faux si la caméra n'est pas à
+   * nous (mode carte).
+   */
+  setCameraPose(pose: CameraPose, animate = true): boolean {
+    if (this.externalCamera) return false;
+    const target = new Vector3(...pose.target);
+    const position = new Vector3(...pose.position);
+    const direction = target.clone().sub(position).normalize();
+    const up = cameraUp(new Vector3(...pose.up), direction);
+    const current = this.capturePose().pose;
+    const end: PoseState = { position, target, up, fov: pose.fov ?? current.fov, halfHeight: pose.halfHeight ?? current.halfHeight };
+    this.moveTo(pose.projection, end, animate, true);
+    return true;
+  }
+
+  private moveTo(projection: Projection, end: PoseState, animate: boolean, rotate: boolean): void {
+    this.walk.exit();
+    this.tween = null;
+    this.cameraMoved = true;
+    // Le changement de projection garde le cadrage ; la pose de départ est celle de la nouvelle caméra.
+    this.setProjection(projection, rotate);
+    const from = this.capturePose().pose;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scale = Math.max(this.sphere.radius, 1);
+    if (!animate || reduced || samePose(from, end, scale)) {
+      this.applyPose(end);
+      return;
+    }
+    this.tween = { from, to: clonePose(end), start: performance.now(), duration: TRANSITION_MS };
+    this.invalidateMotion();
+  }
+
+  /** Écrit une pose dans la caméra active et ses contrôles. */
+  private applyPose(pose: PoseState): void {
+    const camera = this.camera;
+    camera.position.copy(pose.position);
+    camera.up.copy(pose.up);
+    this.controls.target.copy(pose.target);
+    if (camera === this.perspective) {
+      if (Math.abs(this.perspective.fov - pose.fov) > 1e-6) {
+        this.perspective.fov = pose.fov;
+        this.perspective.updateProjectionMatrix();
+      }
+    } else {
+      this.setOrthoHalfHeight(pose.halfHeight);
+    }
+    camera.lookAt(pose.target);
+    this.controls.update();
+    this.invalidateMotion();
+  }
+
+  private stepTween(now: number): void {
+    const tween = this.tween;
+    if (!tween) return;
+    const t = (now - tween.start) / tween.duration;
+    if (t >= 1) {
+      this.tween = null;
+      this.applyPose(tween.to);
+      return;
+    }
+    this.applyPose(interpolatePose(tween.from, tween.to, easeInOut(t), this.tweenPose));
   }
 
   /** Vue standard (face, dessus…) : la maquette entière, regardée depuis cette direction. */
@@ -305,6 +471,8 @@ export class Viewer {
 
   fit(box: Box3, direction?: Vector3): void {
     if (box.isEmpty()) return;
+    this.cameraMoved = false; // un cadrage, du viewer ou demandé par l'utilisateur, repart de zéro
+    this.walk.exit(); // cadrer, c'est reprendre la vue d'ensemble
     if (this.externalCamera && this.onExternalFit?.(box)) return;
     const sphere = box.getBoundingSphere(new Sphere());
     const radius = Math.max(sphere.radius, 1e-4);
@@ -345,9 +513,34 @@ export class Viewer {
       });
       attribute.needsUpdate = true;
     }
+    this.updateBoxOutline();
     this.sectionHandles.sync();
     for (const callback of this.onSectionsChange) callback();
     this.invalidate();
+  }
+
+  /** Les douze arêtes de la boîte de coupe d'une vue, quand elle est active. */
+  private updateBoxOutline(): void {
+    const cut = this.sections.boxCut;
+    const visible = this.sections.boxEnabled && cut !== null;
+    this.boxOutline.visible = visible;
+    if (!visible) return;
+    const centre = new Vector3((cut.min[0] + cut.max[0]) / 2, (cut.min[1] + cut.max[1]) / 2, (cut.min[2] + cut.max[2]) / 2);
+    const half = [(cut.max[0] - cut.min[0]) / 2, (cut.max[1] - cut.min[1]) / 2, (cut.max[2] - cut.min[2]) / 2];
+    const angle = (cut.rotation * Math.PI) / 180, c = Math.cos(angle), s = Math.sin(angle);
+    const corner = (sx: number, sy: number, sz: number) => {
+      const x = sx * half[0], z = sz * half[2];
+      // Rotation autour de Y : x → (cos, 0, −sin), z → (sin, 0, cos).
+      return new Vector3(centre.x + x * c + z * s, centre.y + sy * half[1], centre.z - x * s + z * c);
+    };
+    const attribute = this.boxOutline.geometry.getAttribute('position') as BufferAttribute;
+    let at = 0;
+    const edge = (a: Vector3, b: Vector3) => { attribute.setXYZ(at++, a.x, a.y, a.z); attribute.setXYZ(at++, b.x, b.y, b.z); };
+    const corners: Vector3[] = [];
+    for (const sy of [-1, 1]) for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push(corner(sx, sy, sz));
+    // Indices : bit 2 = y, bit 1 = x, bit 0 = z ; une arête relie deux coins qui ne diffèrent que d'un bit.
+    for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) edge(corners[a], corners[b]);
+    attribute.needsUpdate = true;
   }
 
   /** Élément et point 3D sous le pointeur, en tenant compte des éléments masqués et des coupes. */
@@ -384,13 +577,14 @@ export class Viewer {
    * le point touché sur ce plan, pour que les mesures prises sur une section soient exactes.
    */
   private moveToCap(hit: PickHit, ray: Ray): boolean {
-    const { planes, enabled } = this.sections;
+    const sections = this.sections;
+    const planes = sections.clipPlanes;
     const box = this.model!.elementBox(hit.element, this.scratchBox);
     const margin = Math.max(1e-6, this.sphere.radius * 1e-5);
     let best = -1;
     let bestT = 0;
-    for (const axis of AXES) {
-      if (!enabled[axis]) continue;
+    for (let axis = 0; axis < planes.length; axis++) {
+      if (!sections.planeEnabled(axis)) continue;
       const plane = planes[axis];
       const toward = plane.normal.dot(ray.direction);
       if (toward <= 1e-12) continue; // le rayon doit passer du côté retiré au côté conservé
@@ -399,8 +593,8 @@ export class Viewer {
       const point = this.scratch.copy(ray.direction).multiplyScalar(t).add(ray.origin);
       if (box.distanceToPoint(point) > margin) continue;
       let kept = true;
-      for (const other of AXES) {
-        if (other !== axis && enabled[other] && planes[other].distanceToPoint(point) < 0) kept = false;
+      for (let other = 0; other < planes.length; other++) {
+        if (other !== axis && sections.planeEnabled(other) && planes[other].distanceToPoint(point) < 0) kept = false;
       }
       if (!kept) continue;
       best = axis;
@@ -412,6 +606,17 @@ export class Viewer {
     hit.distance = bestT;
     hit.cap = true;
     return true;
+  }
+
+  /**
+   * Rayon libre contre le modèle (sol et murs du mode visite), avec les règles du picking : éléments
+   * masqués ignorés, parties retirées par un plan de coupe traversées. `maxDistance` borne la recherche.
+   */
+  castRay(origin: Vector3, direction: Vector3, maxDistance = Infinity): PickHit | null {
+    const model = this.model;
+    if (!model) return null;
+    this.freeRay.set(origin, direction);
+    return model.raycast(this.freeRay, { clipped: this.sections.active ? this.sections.isClipped : undefined, maxDistance });
   }
 
   /** Projette un point 3D en pixels dans la vue. Renvoie faux s'il est derrière la caméra. */
@@ -458,7 +663,9 @@ export class Viewer {
   }
 
   private readonly tick = (): void => {
-    if (!this.externalCamera) this.controls.update();
+    if (this.tween) this.stepTween(performance.now());
+    if (this.walk.active) this.walk.update(performance.now());
+    else if (!this.externalCamera) this.controls.update();
     if (!this.dirty) return;
     this.dirty = false;
     const motion = this.moving;
@@ -517,18 +724,19 @@ export class Viewer {
       renderer.clippingPlanes = NO_PLANES;
       renderer.render(scene, camera);
     } else {
-      // 1. Géométrie opaque, coupée par les trois plans.
-      renderer.clippingPlanes = sections.planes;
+      // 1. Géométrie opaque, coupée par les plans (les trois plans libres, et ceux de la boîte d'une vue).
+      const planes = sections.clipPlanes;
+      renderer.clippingPlanes = planes;
       camera.layers.set(0);
       renderer.render(scene, camera);
 
       // 2. Remplissage : pour chaque plan actif, le pochoir compte les faces arrière et avant
       //    des solides fermés ; là où le compte n'est pas nul, le plan traverse de la matière.
       if (sections.fill) {
-        for (const axis of AXES) {
-          if (!sections.enabled[axis]) continue;
+        for (let k = 0; k < planes.length; k++) {
+          if (!sections.planeEnabled(k)) continue;
           renderer.clearStencil();
-          this.onePlane[0] = sections.planes[axis];
+          this.onePlane[0] = planes[k];
           renderer.clippingPlanes = this.onePlane;
           scene.overrideMaterial = this.model.stencilBack;
           renderer.render(scene, camera);
@@ -536,18 +744,19 @@ export class Viewer {
           renderer.render(scene, camera);
           scene.overrideMaterial = null;
 
-          this.otherPlanes[0] = sections.planes[(axis + 1) % 3];
-          this.otherPlanes[1] = sections.planes[(axis + 2) % 3];
+          // Le remplissage est découpé par tous les autres plans : il ne déborde pas de la boîte.
+          this.otherPlanes.length = 0;
+          for (let j = 0; j < planes.length; j++) if (j !== k) this.otherPlanes.push(planes[j]);
           renderer.clippingPlanes = this.otherPlanes;
-          sections.planes[axis].projectPoint(this.sphere.center, this.cap.position);
-          this.cap.quaternion.setFromUnitVectors(UNIT[2], sections.planes[axis].normal);
+          planes[k].projectPoint(this.sphere.center, this.cap.position);
+          this.cap.quaternion.setFromUnitVectors(UNIT[2], planes[k].normal);
           this.cap.scale.setScalar(this.sphere.radius * 4);
           renderer.render(this.capScene, camera);
         }
       }
 
       // 3. Géométrie transparente, par-dessus les remplissages.
-      renderer.clippingPlanes = sections.planes;
+      renderer.clippingPlanes = planes;
       camera.layers.set(TRANSPARENT_LAYER);
       renderer.render(scene, camera);
       camera.layers.set(0);

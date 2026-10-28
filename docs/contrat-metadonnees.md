@@ -177,6 +177,132 @@ recopiée telle quelle sous `projected`, à titre indicatif. Sans ce bloc, la po
 dans la carte (ou d'un clic), et « JSON ↓ » l'enregistre. En USD, le même bloc est dans le
 `customLayerData` du calque (`dictionary georeference`).
 
+## 2 quinquies. Phases (`phases`)
+
+Un bloc optionnel à la racine décrit les phases d'un projet (construction, démolition, rénovation) et ce que chaque
+filtre de phase fait des éléments. Le viewer en tire un sélecteur « Phase » et un sélecteur « Filtre de phase » (panneau
+« Couleurs et filtres »). Il ne connaît aucun nom de propriété ni de phase : tout est dans le bloc.
+
+```json
+"phases": {
+  "order": ["Existing", "Demolition", "New Construction"],
+  "created": "Phase de création",
+  "demolished": "Phase de démolition",
+  "filters": [
+    {
+      "name": "Show All", "default": true,
+      "statuses": { "past": "hidden", "existing": "overridden", "demolished": "overridden", "new": "normal", "temporary": "overridden", "future": "hidden" }
+    },
+    { "name": "Show New", "statuses": { "past": "hidden", "existing": "hidden", "demolished": "hidden", "new": "normal", "temporary": "hidden", "future": "hidden" } }
+  ],
+  "overrides": {
+    "existing": { "color": "#7f7f7f" },
+    "demolished": { "color": "#ff0000", "opacity": 0.6 }
+  }
+}
+```
+
+| Champ | Obligatoire | Rôle |
+| --- | --- | --- |
+| `order` | oui | Les noms des phases, de la plus ancienne à la plus récente. |
+| `created` | oui | Nom de la propriété qui porte, pour chaque élément, la **phase de création** : une valeur de `order`. |
+| `demolished` | non | Nom de la propriété qui porte la **phase de démolition** (une valeur de `order`). Absente : aucun élément n'est démoli. |
+| `filters` | non | Les filtres de phase : `name`, `default` (le filtre des vues neuves) et `statuses`. |
+| `overrides` | non | L'apparence d'un état « remplacé » : `color` (`#rrggbb`) et `opacity` (0 à 1), par état. |
+
+**États.** Dans la phase choisie, un élément est dans l'un de six états, déduits de la position de sa phase de création et
+de sa phase de démolition dans `order` :
+
+| État | Définition |
+| --- | --- |
+| `future` | créé après la phase ; |
+| `new` | créé dans la phase, non démoli dans la phase ; |
+| `existing` | créé avant la phase, et pas démoli avant la fin de la phase ; |
+| `demolished` | créé avant la phase, démoli dans la phase ; |
+| `temporary` | créé et démoli dans la phase ; |
+| `past` | démoli avant la phase. |
+
+Un élément sans phase de création (propriété absente, ou valeur qui n'est pas dans `order`) n'est pas lié aux phases : il
+reste affiché tel quel, comme un niveau ou une trame dans Revit.
+
+**Filtres.** `statuses` associe à chaque état `hidden` (masqué), `normal` (dessiné tel quel) ou `overridden` (dessiné avec le
+remplacement de l'état). Un état absent est dessiné tel quel. Sans `default`, le premier filtre sert aux vues neuves ;
+sans filtre du tout, rien n'est masqué ni teinté.
+
+**Remplacements.** Un état `overridden` prend `overrides[état]` : la couleur de l'élément est remplacée (les règles
+d'apparence de l'utilisateur restent prioritaires) et l'opacité imposée si elle est inférieure à 1. Sans remplacement pour
+l'état, le viewer teinte l'existant en gris, le démoli en rouge translucide et le temporaire en bleu translucide ; un état
+`new` n'est jamais teinté sans que le fichier le demande.
+
+Le viewer applique la phase en masquant les éléments (c'est la visibilité des éléments, comme l'arbre et les filtres : un
+choix manuel ultérieur reste possible) et par la couleur et l'opacité des éléments remplacés ; le calcul est le même pour
+tout fichier qui donne ce bloc. Revit y met, depuis un `.rvt` : la liste ordonnée des phases du projet, les filtres de phase
+du projet (sept états par filtre, 0 masqué, 1 selon la catégorie, 2 remplacé) et, pour le remplacement de chaque état,
+couleur et transparence du matériau de remplacement de phase (« Phase - Exist », « Phase - Demo »…). Les remplacements
+graphiques de lignes (couleur de trait, motif, demi-teinte) ne sont pas repris.
+
+## 2 sexies. Vues enregistrées (`views`)
+
+Un tableau optionnel à la racine liste des vues enregistrées du modèle : un clic dans le menu « Vues » place la caméra et
+règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du projet.
+
+```json
+"views": [
+  {
+    "name": "Cuisine",
+    "camera": { "position": [-4.61, 1.5, 2.74], "direction": [0.991, -0.051, 0.124], "up": [0.05, 0.999, 0.006], "projection": "perspective", "fov": 57.5 },
+    "sectionBox": { "min": [-29.65, -8.32, -20.61], "max": [12.46, 18.42, 55.04], "rotation": 0 },
+    "hiddenCategories": { "property": "Catégorie", "values": ["Murs"] },
+    "hiddenElements": ["2O2Fr$t4X7Zf8NOew3FLOH"],
+    "phase": "New Construction", "phaseFilter": "Show All"
+  },
+  {
+    "name": "{3D}",
+    "camera": { "position": [-22.9, 39.3, 46.2], "direction": [0.399, -0.680, -0.616], "up": [0.369, 0.733, -0.571], "projection": "orthographic", "size": [99.9, 48.2] }
+  }
+]
+```
+
+| Champ | Obligatoire | Rôle |
+| --- | --- | --- |
+| `name` | oui | Nom affiché dans le menu. |
+| `camera` | oui | Voir ci-dessous. |
+| `sectionBox` | non | Boîte de coupe active de la vue (voir ci-dessous). |
+| `hiddenCategories` | non | `property` : nom de la propriété des éléments qui porte leur catégorie ; `values` : les valeurs masquées. La vue désigne elle-même sa propriété : le viewer n'en connaît aucune. |
+| `hiddenElements` | non | Clés (celles de `elements`) des éléments masqués. |
+| `phase`, `phaseFilter` | non | Phase et filtre de phase de la vue : des noms de `phases.order` et `phases.filters`. |
+
+**Repère.** Toutes les coordonnées sont celles du modèle tel que le GLB les donne : mètres, axe Y vers le haut (pour un
+`.rvt` : `(x, y, z)` pieds → `(x, z, −y) × 0,3048`, coordonnées du projet). Le viewer les recentre avec le décalage qu'il
+retire à la géométrie (`Model.offset`) : une vue reste juste quel que soit ce décalage.
+
+**Caméra.** `position` (l'œil), `direction` (sens du regard, unitaire) ou `target` (un point regardé, à la place de
+`direction`), `up` (haut ; par défaut la verticale, corrigé pour être perpendiculaire au regard), `projection`
+(`perspective`, par défaut, ou `orthographic`). En perspective, `fov` est le champ vertical en degrés (sans lui, celui du
+viewer reste). En projection parallèle, `size` est la largeur et la hauteur, en mètres, de ce que la vue montre (sans elle,
+seule la direction compte : la maquette est cadrée). Le viewer glisse la caméra vers la vue, sauf si les animations sont
+réduites dans le système ; saisir la vue interrompt le mouvement. Une vue parallèle garde l'orbite : c'est une vue 3D en
+isométrique, pas la vue 2D.
+
+**Boîte de coupe.** `min` et `max` sont les coins de la boîte **avant rotation** ; `rotation` (degrés, 0 par défaut) la
+tourne autour de la verticale (Y), dans le sens anti-horaire vu d'en haut, autour de son centre. Le viewer garde l'intérieur de
+la boîte : six plans, en plus des trois plans de coupe libres (la carte « Coupes » a une case « Boîte de coupe de la vue »
+pour la couper ou la remettre). Une boîte qui n'est pas active n'est pas écrite.
+
+**Ce que fait « Vue par défaut ».** Elle retire la boîte, les masquages de la vue, la phase et le filtre, et replace la caméra
+d'avant l'ouverture de la première vue.
+
+**Ce qui n'est pas repris** (un `.rvt` le contient, mais le viewer ne le dessine pas) : les remplacements graphiques par
+catégorie ou par élément, les filtres de vue, le niveau de détail, le style visuel, le rendu (ombres, arrière-plan), les
+gabarits de vue (la vue enregistre déjà les valeurs qu'un gabarit lui a appliquées) et la profondeur de découpe. Une
+vue dont la caméra est illisible est ignorée sans empêcher les autres.
+
+## 2 septies. Compatibilité
+
+Les sections `phases` et `views` sont facultatives et ajoutées sans changer la version du format : un fichier d'avant
+continue de s'ouvrir tel quel, un viewer qui ne les connaît pas les ignore, et une section illisible est ignorée (elle n'empêche
+pas d'ouvrir le modèle). « JSON ↓ » les réécrit telles qu'elles ont été lues.
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
@@ -194,8 +320,8 @@ structure spatiale d'un IFC devient :
 ## 4. Évolutions prévues par le format
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
-(vues enregistrées, regroupements prédéfinis, unités) sans casser les fichiers existants : un
-viewer en version 1 ignore les sections qu'il ne connaît pas.
+(regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
+ignore les sections qu'il ne connaît pas. `georeference`, `phases` et `views` sont déjà de celles-là.
 
 ## 5. Variante USD
 

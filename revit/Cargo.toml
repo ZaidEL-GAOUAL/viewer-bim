@@ -1,0 +1,43 @@
+[package]
+name = "viewer-bim-revit"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+license = "Apache-2.0"
+description = "Lecture native des fichiers Revit (.rvt) pour Viewer BIM : enveloppe de rvt-rs, native ou compilée en WebAssembly."
+publish = false
+
+[lib]
+name = "revit"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Lecteur Revit (Apache-2.0), épinglé sur un commit : la table des formats de Revit bouge à chaque
+# version. `unstable-research` donne accès aux graphiques enregistrés, aux graphes d'objets et aux
+# paramètres (rvt::research).
+rvt = { git = "https://github.com/DrunkOnJava/rvt-rs", rev = "0304c038c6d90fdf2b14e5ed47aea1d0e65e4997", features = ["unstable-research"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+# Triangulation de Delaunay contrainte des régions (u, v) des faces courbes (geometry::faces),
+# Rust pur, MIT ou Apache-2.0 : environ 170 Ko de WebAssembly (2,7 %).
+spade = "2"
+# Rien dans notre code : ce n'est que le moteur d'inflate. rvt-rs inflate toutes les partitions du
+# fichier (190 Mo pour Core Interior) avec flate2, dont le moteur par défaut est miniz_oxide ; Cargo
+# réunit les fonctions demandées par toutes les caisses, et « zlib-rs » (Rust pur, licence Zlib) le
+# remplace.
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+# Le conteneur CFB (OLE2) du fichier lui-même, lu par tranches (`native::document`) : la même caisse que rvt-rs, qui
+# ne lit que des tampons entiers. MIT.
+cfb = "0.15"
+# Empreinte du pied de chaque partition, comme le marcheur de rvt-rs (`native::index`). MIT ou Apache-2.0.
+sha2 = "0.11"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

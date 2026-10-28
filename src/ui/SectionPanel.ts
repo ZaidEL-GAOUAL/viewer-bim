@@ -21,6 +21,9 @@ export class SectionPanel {
   private readonly activePlane: HTMLSelectElement;
   private readonly reset: HTMLButtonElement;
   private readonly place: HTMLButtonElement;
+  /** La boîte de coupe de la vue enregistrée ouverte : visible seulement quand une vue en a posé une. */
+  private readonly boxRow: HTMLElement;
+  private readonly boxToggle: HTMLInputElement;
 
   constructor(app: App) {
     this.app = app;
@@ -76,9 +79,17 @@ export class SectionPanel {
       attrs: { 'aria-pressed': 'false' },
     });
 
+    this.boxToggle = h('input', { attrs: { type: 'checkbox', id: 'section-box' } });
+    this.boxToggle.addEventListener('change', () => {
+      sections.setBoxEnabled(this.boxToggle.checked);
+      app.viewer.sectionsChanged();
+    });
+    this.boxRow = h('label', { class: 'section-fill section-box', attrs: { for: 'section-box', hidden: '' }, title: 'La boîte de coupe enregistrée dans la vue ouverte : elle coupe en plus des trois plans' }, this.boxToggle, 'Boîte de coupe de la vue');
+
     this.el = h('section', { class: 'card section-card', attrs: { hidden: '' } },
       h('h2', { class: 'card-title', text: 'Coupes' }),
       h('div', { class: 'section-place' }, this.place),
+      this.boxRow,
       body,
       handles,
       h('p', { class: 'hint', text: 'Dans la vue : flèche bleue pour déplacer le plan, flèches rouge et verte pour déplacer ses poignées, cercles pour l’incliner. Échap annule le geste.' }),
@@ -108,6 +119,8 @@ export class SectionPanel {
     const sections = this.app.viewer.sections;
     const hasModel = this.app.model !== null;
     const handles = this.app.viewer.sectionHandles;
+    this.boxRow.hidden = sections.boxCut === null;
+    this.boxToggle.checked = sections.boxEnabled;
     this.place.disabled = !hasModel;
     this.activePlane.disabled = !hasModel;
     this.activePlane.value = handles.axis === null ? '' : String(handles.axis);

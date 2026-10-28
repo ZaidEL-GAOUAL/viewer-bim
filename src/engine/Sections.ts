@@ -1,6 +1,13 @@
 import { Box3, Plane, Vector3 } from 'three';
 
 export type Axis = 0 | 1 | 2;
+
+/** Une boîte de coupe : coins avant rotation, et rotation autour de la verticale (degrés). */
+export interface BoxCut {
+  min: [number, number, number];
+  max: [number, number, number];
+  rotation: number;
+}
 export const AXES: readonly Axis[] = [0, 1, 2];
 const UNIT = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)];
 const FAR_AWAY = 1e9;
@@ -21,11 +28,80 @@ export class Sections {
   readonly max = [1, 1, 1];
   readonly bounds = new Box3(new Vector3(0, 0, 0), new Vector3(1, 1, 1));
   fill = true;
+  /**
+   * Boîte de coupe (celle d'une vue enregistrée) : six plans, une tranche par axe, autour d'un centre et tournée autour de
+   * la verticale. Elle s'ajoute aux trois plans : on peut couper davantage par-dessus. Les plans de la boîte ne se
+   * saisissent pas dans la vue.
+   */
+  readonly boxPlanes: Plane[] = Array.from({ length: 6 }, () => new Plane());
+  /** La boîte est posée et active ; sinon elle ne coupe rien (et ses plans ne sont pas rendus). */
+  boxEnabled = false;
+  private box: BoxCut | null = null;
+  private readonly allPlanes: Plane[] = [...this.planes, ...this.boxPlanes];
 
   constructor() { for (const axis of AXES) this.update(axis); }
-  get active(): boolean { return this.enabled.some(Boolean); }
+  get active(): boolean { return this.enabled.some(Boolean) || this.boxEnabled; }
+
+  /** La boîte posée (active ou non), dans le repère du modèle recentré ; null s'il n'y en a pas. */
+  get boxCut(): BoxCut | null { return this.box; }
+
+  /**
+   * Pose la boîte de coupe d'une vue (null la retire). `rotation` : degrés autour de Y, positive dans le sens
+   * anti-horaire vu d'en haut. Le côté conservé est l'intérieur de la boîte.
+   */
+  setBox(box: BoxCut | null): void {
+    if (box === null) {
+      this.box = null;
+      this.boxEnabled = false;
+      return;
+    }
+    const values = [...box.min, ...box.max, box.rotation];
+    if (!values.every(Number.isFinite) || box.min.some((x, axis) => x > box.max[axis])) throw new Error('Boîte de coupe invalide.');
+    this.box = { min: [...box.min], max: [...box.max], rotation: box.rotation };
+    this.boxEnabled = true;
+    this.updateBox();
+  }
+
+  /** Active ou désactive la boîte posée sans la retirer. */
+  setBoxEnabled(enabled: boolean): void {
+    this.boxEnabled = enabled && this.box !== null;
+  }
+
+  /**
+   * Les plans qui coupent : les trois plans libres, puis ceux de la boîte quand elle est active. Le tableau est réutilisé :
+   * un plan désactivé reste dedans, repoussé au loin (voir `planeEnabled`).
+   */
+  get clipPlanes(): Plane[] {
+    return this.boxEnabled ? this.allPlanes : this.planes;
+  }
+
+  /** Le plan d'indice `index` de `clipPlanes` coupe-t-il quelque chose ? */
+  planeEnabled(index: number): boolean {
+    return index < 3 ? this.enabled[index] : this.boxEnabled;
+  }
+
+  /** Les six plans de la boîte : normales vers l'intérieur, comme tout plan conservant son côté positif. */
+  private updateBox(): void {
+    const box = this.box;
+    if (!box) return;
+    const centre = new Vector3((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2);
+    const half = [(box.max[0] - box.min[0]) / 2, (box.max[1] - box.min[1]) / 2, (box.max[2] - box.min[2]) / 2];
+    const angle = (box.rotation * Math.PI) / 180, c = Math.cos(angle), s = Math.sin(angle);
+    // Rotation autour de Y d'un angle φ : x → (cos, 0, −sin), z → (sin, 0, cos).
+    const axes = [new Vector3(c, 0, -s), new Vector3(0, 1, 0), new Vector3(s, 0, c)];
+    axes.forEach((axis, i) => {
+      const along = axis.dot(centre);
+      // Garder (p − c)·axe ≤ demi-côté, puis ≥ −demi-côté.
+      this.boxPlanes[2 * i].normal.copy(axis).negate();
+      this.boxPlanes[2 * i].constant = half[i] + along;
+      this.boxPlanes[2 * i + 1].normal.copy(axis);
+      this.boxPlanes[2 * i + 1].constant = half[i] - along;
+    });
+  }
 
   setBounds(box: Box3): void {
+    this.box = null;
+    this.boxEnabled = false;
     this.bounds.copy(box);
     if (this.bounds.isEmpty()) this.bounds.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
     for (const axis of AXES) {
@@ -35,6 +111,22 @@ export class Sections {
       this.bounds.getCenter(this.pivots[axis]);
       this.enabled[axis] = false;
       this.flipped[axis] = false;
+      this.update(axis);
+    }
+  }
+
+  /**
+   * Le modèle a grandi (lecture par morceaux) : les bornes suivent sa nouvelle boîte, sans toucher à un plan que
+   * l'utilisateur a réglé. Un plan au repos reste au milieu du modèle ; la boîte de coupe d'une vue n'existe pas encore.
+   */
+  growBounds(box: Box3): void {
+    this.bounds.copy(box);
+    if (this.bounds.isEmpty()) this.bounds.set(new Vector3(-1, -1, -1), new Vector3(1, 1, 1));
+    for (const axis of AXES) {
+      this.projectBounds(axis);
+      if (this.enabled[axis]) continue;
+      this.position[axis] = (this.min[axis] + this.max[axis]) / 2;
+      this.bounds.getCenter(this.pivots[axis]);
       this.update(axis);
     }
   }
@@ -109,6 +201,11 @@ export class Sections {
       if (!this.enabled[axis]) continue;
       const { normal, constant } = this.planes[axis];
       if (normal.x * x + normal.y * y + normal.z * z + constant < 0) return true;
+    }
+    if (this.boxEnabled) {
+      for (const { normal, constant } of this.boxPlanes) {
+        if (normal.x * x + normal.y * y + normal.z * z + constant < 0) return true;
+      }
     }
     return false;
   };

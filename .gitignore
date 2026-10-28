@@ -6,3 +6,5 @@ dist
 __pycache__
 .pytest_cache
 public/_tmp
+revit/target/
+revit/samples/

@@ -1,0 +1,312 @@
+# Libellés français des paramètres intégrés de Revit, écrits à la main pour ce projet (vocabulaire de l'interface
+# française de Revit quand il existe ; aucun libellé d'Autodesk n'est repris).
+#
+# Colonnes : clé, libellé, groupe, nature de la valeur.
+#   clé       nom d'énumération (WALL_BASE_OFFSET) ou identifiant numérique (pour un paramètre que Rhino.Inside.Revit
+#             ne liste pas : Revit l'emploie mais ne le publie pas)
+#   groupe    nom court (« constraints » = autodesk.parameter.group:constraints) ou « revit:curtainGrid » pour
+#             autodesk.revit.group:curtainGrid ; « - » : aucun (affiché sous « Autre »)
+#   nature    L longueur (pieds → m), A surface, V volume, R angle (radians → °), B oui/non (entier 0/1), - autre
+# Revit n'enregistre pas le groupe d'un paramètre intégré : ceux-ci sont notre rangement, proche de celui de Revit.
+
+# -- plomberie interne de Revit (non montrés tels quels : la fiche les reprend en tête)
+ELEM_TYPE_PARAM	Type	-	-
+ELEM_FAMILY_PARAM	Famille	identityData	-
+ELEM_FAMILY_AND_TYPE_PARAM	Famille et type	identityData	-
+SYMBOL_ID_PARAM	Identifiant du type	-	-
+ALL_MODEL_TYPE_NAME	Nom du type	identityData	-
+ALL_MODEL_FAMILY_NAME	Nom de la famille	identityData	-
+ELEM_CATEGORY_PARAM	Catégorie	-	-
+ELEM_CATEGORY_PARAM_MT	Catégorie	-	-
+FAMILY_LEVEL_PARAM	Niveau	constraints	-
+SCHEDULE_LEVEL_PARAM	Niveau de référence	constraints	-
+PHASE_CREATED	Phase de création	phasing	-
+PHASE_DEMOLISHED	Phase de démolition	phasing	-
+DESIGN_OPTION_ID	Option de conception	phasing	-
+HOST_ID_PARAM	Hôte	constraints	-
+
+# -- données d'identification
+ALL_MODEL_MARK	Repère	identityData	-
+ALL_MODEL_TYPE_MARK	Repère	identityData	-
+ALL_MODEL_INSTANCE_COMMENTS	Commentaires	identityData	-
+ALL_MODEL_TYPE_COMMENTS	Commentaires	identityData	-
+ALL_MODEL_DESCRIPTION	Description	identityData	-
+ALL_MODEL_MANUFACTURER	Fabricant	identityData	-
+ALL_MODEL_MODEL	Modèle	identityData	-
+ALL_MODEL_URL	URL	identityData	-
+ALL_MODEL_COST	Coût	identityData	-
+ALL_MODEL_IMAGE	Image	identityData	-
+ALL_MODEL_TYPE_IMAGE	Image	identityData	-
+ASSEMBLY_CODE	Code d'assemblage	identityData	-
+ASSEMBLY_DESCRIPTION	Description de l'assemblage	identityData	-
+ASSEMBLY_NAME	Nom de l'assemblage	identityData	-
+UNIFORMAT_CODE	Code Uniformat	identityData	-
+UNIFORMAT_DESCRIPTION	Description Uniformat	identityData	-
+OMNICLASS_CODE	Numéro OmniClass	identityData	-
+OMNICLASS_DESCRIPTION	Titre OmniClass	identityData	-
+KEYNOTE_PARAM	Note-clé	identityData	-
+KEYNOTE_NUMBER	Numéro de note-clé	identityData	-
+KEYNOTE_TEXT	Texte de note-clé	identityData	-
+FIRE_RATING	Résistance au feu	identityData	-
+
+# -- murs
+WALL_BASE_CONSTRAINT	Contrainte inférieure	constraints	-
+WALL_BASE_OFFSET	Décalage inférieur	constraints	L
+WALL_HEIGHT_TYPE	Contrainte supérieure	constraints	-
+WALL_TOP_OFFSET	Décalage supérieur	constraints	L
+WALL_USER_HEIGHT_PARAM	Hauteur non contrainte	constraints	L
+WALL_BOTTOM_EXTENSION_DIST_PARAM	Distance de prolongation inférieure	constraints	L
+WALL_TOP_EXTENSION_DIST_PARAM	Distance de prolongation supérieure	constraints	L
+WALL_BOTTOM_IS_ATTACHED	Base attachée	constraints	B
+WALL_TOP_IS_ATTACHED	Sommet attaché	constraints	B
+WALL_ATTR_ROOM_BOUNDING	Délimitation de pièce	constraints	B
+WALL_KEY_REF_PARAM	Ligne de positionnement	constraints	-
+WALL_STRUCTURAL_SIGNIFICANT	Structurel	structural	B
+WALL_STRUCTURAL_USAGE_PARAM	Usage structurel	structural	-
+WALL_ATTR_WIDTH_PARAM	Épaisseur	geometry	L
+WALL_ATTR_HEIGHT_PARAM	Hauteur par défaut	geometry	L
+FUNCTION_PARAM	Fonction	construction	-
+WALL_CROSS_SECTION	Coupe du mur	construction	-
+WALL_TYPE_WIDTH_MEASURED_AT	Épaisseur mesurée à	construction	-
+WALL_SINGLE_SLANT_ANGLE_FROM_VERTICAL	Angle d'inclinaison par rapport à la verticale	constraints	R
+WALL_TAPERED_WIDTH_AT_BOTTOM	Épaisseur en bas	geometry	L
+WALL_TAPERED_WIDTH_AT_TOP	Épaisseur en haut	geometry	L
+-1001101	Hauteur calculée	geometry	L
+-1001111	Décalage inférieur calculé	constraints	L
+-1001115	Décalage d'attache supérieur	constraints	L
+-1001116	Décalage d'attache inférieur	constraints	L
+
+# -- cotes communes aux éléments hôtes
+CURVE_ELEM_LENGTH	Longueur	geometry	L
+HOST_AREA_COMPUTED	Surface	geometry	A
+HOST_VOLUME_COMPUTED	Volume	geometry	V
+HOST_PERIMETER_COMPUTED	Périmètre	geometry	L
+GENERIC_WIDTH	Largeur	geometry	L
+GENERIC_HEIGHT	Hauteur	geometry	L
+GENERIC_DEPTH	Profondeur	geometry	L
+GENERIC_THICKNESS	Épaisseur	geometry	L
+GENERIC_FINISH	Finition	materials	-
+GENERIC_CONSTRUCTION_TYPE	Type de construction	construction	-
+FAMILY_ROUGH_WIDTH_PARAM	Largeur brute	geometry	L
+FAMILY_ROUGH_HEIGHT_PARAM	Hauteur brute	geometry	L
+INSTANCE_SILL_HEIGHT_PARAM	Hauteur d'allège	constraints	L
+INSTANCE_HEAD_HEIGHT_PARAM	Hauteur de linteau	constraints	L
+INSTANCE_ELEVATION_PARAM	Altitude	constraints	L
+INSTANCE_FREE_HOST_OFFSET_PARAM	Décalage par rapport à l'hôte	constraints	L
+INSTANCE_FREE_HOST_PARAM	Hôte	constraints	-
+INSTANCE_OFFSET_POS_PARAM	Position de décalage	constraints	-
+INSTANCE_LENGTH_PARAM	Longueur	geometry	L
+INSTANCE_REFERENCE_LEVEL_PARAM	Niveau de référence	constraints	-
+INSTANCE_SCHEDULE_ONLY_LEVEL_PARAM	Niveau de nomenclature	constraints	-
+INSTANCE_STRUCT_USAGE_PARAM	Usage structurel	structural	-
+INSTANCE_MOVES_WITH_GRID_PARAM	Se déplace avec les grilles	constraints	B
+INSTANCE_MOVE_BASE_WITH_GRIDS	Base déplacée avec les grilles	constraints	B
+INSTANCE_MOVE_TOP_WITH_GRIDS	Sommet déplacé avec les grilles	constraints	B
+FAMILY_BASE_LEVEL_PARAM	Niveau de base	constraints	-
+FAMILY_TOP_LEVEL_PARAM	Niveau supérieur	constraints	-
+FAMILY_BASE_LEVEL_OFFSET_PARAM	Décalage de la base	constraints	L
+FAMILY_TOP_LEVEL_OFFSET_PARAM	Décalage du sommet	constraints	L
+DOOR_OPERATION_TYPE	Type d'ouverture	identityData	-
+DOOR_FRAME_TYPE	Type de cadre	identityData	-
+DOOR_FRAME_MATERIAL	Matériau du cadre	materials	-
+DOOR_EVACUATION_EXIT_TYPE	Type de sortie d'évacuation	identityData	-
+WINDOW_INSET	Retrait	geometry	L
+WINDOW_TYPE_NAME	Nom du type de fenêtre	identityData	-
+
+# -- sols, toitures, plafonds
+FLOOR_ATTR_THICKNESS_PARAM	Épaisseur	geometry	L
+FLOOR_ATTR_DEFAULT_THICKNESS_PARAM	Épaisseur par défaut	geometry	L
+FLOOR_HEIGHTABOVELEVEL_PARAM	Hauteur au-dessus du niveau	constraints	L
+FLOOR_PARAM_IS_STRUCTURAL	Structurel	structural	B
+FLOOR_PARAM_SPAN_DIRECTION	Direction de portée	structural	R
+ROOF_ATTR_THICKNESS_PARAM	Épaisseur	geometry	L
+ROOF_ATTR_DEFAULT_THICKNESS_PARAM	Épaisseur par défaut	geometry	L
+ROOF_BASE_LEVEL_PARAM	Niveau de base	constraints	-
+ROOF_CONSTRAINT_LEVEL_PARAM	Niveau de base	constraints	-
+ROOF_LEVEL_OFFSET_PARAM	Décalage par rapport au niveau	constraints	L
+ROOF_UPTO_LEVEL_PARAM	Niveau supérieur	constraints	-
+ROOF_CONSTRAINT_OFFSET_PARAM	Décalage par rapport au niveau de base	constraints	L
+ROOF_UPTO_LEVEL_OFFSET_PARAM	Décalage par rapport au niveau supérieur	constraints	L
+ROOF_SLOPE	Pente	geometry	-
+CEILING_THICKNESS	Épaisseur	geometry	L
+CEILING_HEIGHTABOVELEVEL_PARAM	Hauteur au-dessus du niveau	constraints	L
+CEILING_ATTR_SPACING1_PARAM	Espacement 1	geometry	L
+CEILING_ATTR_SPACING2_PARAM	Espacement 2	geometry	L
+BUILDINGPAD_HEIGHTABOVELEVEL_PARAM	Hauteur au-dessus du niveau	constraints	L
+
+# -- murs-rideaux
+MULLION_OFFSET	Décalage du meneau	constraints	L
+MULLION_ANGLE	Angle du meneau	geometry	R
+MULLION_POSITION	Position du meneau	geometry	-
+MULLION_DEPTH	Profondeur du meneau	geometry	L
+MULLION_DEPTH1	Profondeur 1 du meneau	geometry	L
+MULLION_DEPTH2	Profondeur 2 du meneau	geometry	L
+CUST_MULLION_THICK	Épaisseur	geometry	L
+CUST_MULLION_WIDTH1	Largeur 1	geometry	L
+CUST_MULLION_WIDTH2	Largeur 2	geometry	L
+RECT_MULLION_THICK	Épaisseur	geometry	L
+RECT_MULLION_WIDTH1	Largeur 1	geometry	L
+RECT_MULLION_WIDTH2	Largeur 2	geometry	L
+CURTAIN_WALL_SYSPANEL_THICKNESS	Épaisseur du panneau	geometry	L
+CURTAIN_WALL_SYSPANEL_OFFSET	Décalage du panneau	constraints	L
+CURTAIN_WALL_PANELS_WIDTH	Largeur du panneau	geometry	L
+CURTAIN_WALL_PANELS_HEIGHT	Hauteur du panneau	geometry	L
+
+# -- poteaux et ossature
+COLUMN_LOCATION_MARK	Repère d'emplacement	identityData	-
+COLUMN_BASE_ATTACHED_PARAM	Base attachée	constraints	B
+COLUMN_TOP_ATTACHED_PARAM	Sommet attaché	constraints	B
+COLUMN_BASE_ATTACHMENT_OFFSET_PARAM	Décalage d'attache de la base	constraints	L
+COLUMN_TOP_ATTACHMENT_OFFSET_PARAM	Décalage d'attache du sommet	constraints	L
+STRUCTURAL_MATERIAL_PARAM	Matériau structurel	materials	-
+FAMILY_STRUCT_MATERIAL_TYPE	Type de matériau structurel	structural	-
+BEAM_H_JUSTIFICATION	Justification horizontale	structural	-
+BEAM_V_JUSTIFICATION	Justification verticale	structural	-
+STRUCTURAL_SECTION_SHAPE	Forme de la section	structural	-
+
+# -- escaliers et garde-corps
+STAIRS_BASE_LEVEL	Niveau de base	constraints	-
+STAIRS_TOP_LEVEL	Niveau supérieur	constraints	-
+STAIRS_STAIRS_HEIGHT	Hauteur de l'escalier	geometry	L
+STAIRS_RUN_HEIGHT	Hauteur de la volée	geometry	L
+STAIRS_RUN_BOTTOM_ELEVATION	Altitude inférieure de la volée	constraints	L
+STAIRS_RUN_TOP_ELEVATION	Altitude supérieure de la volée	constraints	L
+STAIRS_RUN_ACTUAL_RUN_WIDTH	Largeur réelle de la volée	geometry	L
+STAIRS_RUN_ACTUAL_TREAD_DEPTH	Profondeur réelle de giron	geometry	L
+STAIRS_RUN_ACTUAL_RISER_HEIGHT	Hauteur réelle de contremarche	geometry	L
+STAIRS_RUN_ACTUAL_NUMBER_OF_TREADS	Nombre réel de girons	geometry	-
+STAIRS_RUN_ACTUAL_NUMBER_OF_RISERS	Nombre réel de contremarches	geometry	-
+STAIRS_ACTUAL_NUMBER_OF_RISERS	Nombre réel de contremarches	geometry	-
+STAIRS_DESIRED_NUMBER_OF_RISERS	Nombre de contremarches souhaité	geometry	-
+STAIRS_TOTAL_NUMBER_OF_RISERS	Nombre total de contremarches	geometry	-
+STAIRS_TOTAL_NUMBER_OF_TREADS	Nombre total de girons	geometry	-
+STAIRS_LANDING_THICKNESS	Épaisseur du palier	geometry	L
+STAIRS_LANDING_BASE_ELEVATION	Altitude de la base du palier	constraints	L
+STAIRS_RAILING_HEIGHT_OFFSET	Décalage de hauteur du garde-corps	constraints	L
+STAIRS_RAILING_BASE_LEVEL_PARAM	Niveau de base du garde-corps	constraints	-
+STAIRS_RAILING_HEIGHT	Hauteur du garde-corps	geometry	L
+STAIRS_RAILING_THICKNESS	Épaisseur du garde-corps	geometry	L
+STAIRS_RAILING_WIDTH	Largeur du garde-corps	geometry	L
+RAMP_ATTR_THICKNESS	Épaisseur de la rampe	geometry	L
+
+# -- pièces, espaces
+ROOM_NAME	Nom	identityData	-
+ROOM_NUMBER	Numéro	identityData	-
+ROOM_DEPARTMENT	Service	identityData	-
+ROOM_AREA	Surface	geometry	A
+ROOM_PERIMETER	Périmètre	geometry	L
+ROOM_VOLUME	Volume	geometry	V
+ROOM_HEIGHT	Hauteur	geometry	L
+ROOM_LEVEL_ID	Niveau	constraints	-
+ROOM_UPPER_LEVEL	Niveau supérieur	constraints	-
+ROOM_UPPER_OFFSET	Décalage supérieur	constraints	L
+ROOM_LOWER_OFFSET	Décalage inférieur	constraints	L
+ROOM_COMPUTATION_METHOD	Méthode de calcul	constraints	-
+ROOM_COMPUTATION_HEIGHT	Hauteur de calcul	constraints	L
+ROOM_FINISH_FLOOR	Finition du sol	materials	-
+ROOM_FINISH_CEILING	Finition du plafond	materials	-
+ROOM_FINISH_WALL	Finition des murs	materials	-
+ROOM_FINISH_BASE	Finition de la plinthe	materials	-
+ROOM_OCCUPANCY	Occupation	identityData	-
+ROOM_NUMBER_OF_PEOPLE_PARAM	Nombre de personnes	mechanicalLoads	-
+ROOM_AREA_PER_PERSON_PARAM	Surface par personne	mechanicalLoads	A
+ROOM_OCCUPANCY_UNIT_PARAM	Unité d'occupation	mechanicalLoads	-
+ROOM_CONDITION_TYPE_PARAM	Type de condition	mechanicalLoads	-
+ROOM_CONSTRUCTION_SET_PARAM	Jeu de construction	energyAnalysis	-
+ROOM_BASE_RETURN_AIRFLOW_ON_PARAM	Débit d'air de retour de base	mechanicalAirflow	B
+ROOM_BASE_HEAT_LOAD_ON_PARAM	Charge thermique de base	mechanicalLoads	B
+ROOM_BASE_LIGHTING_LOAD_ON_PARAM	Charge d'éclairage de base	electricalLoads	B
+ROOM_BASE_POWER_LOAD_ON_PARAM	Charge de puissance de base	electricalLoads	B
+ROOM_LIGHTING_LOAD_UNITS_PARAM	Unités de charge d'éclairage	electricalLoads	-
+ROOM_POWER_LOAD_UNITS_PARAM	Unités de charge de puissance	electricalLoads	-
+ROOM_ACTUAL_LIGHTING_LOAD_PER_AREA_PARAM	Charge d'éclairage réelle par surface	electricalLoads	-
+ROOM_ACTUAL_POWER_LOAD_PER_AREA_PARAM	Charge de puissance réelle par surface	electricalLoads	-
+ROOM_DESIGN_LIGHTING_LOAD_PARAM	Charge d'éclairage de conception	electricalLoads	-
+ROOM_DESIGN_POWER_LOAD_PARAM	Charge de puissance de conception	electricalLoads	-
+ROOM_PEOPLE_SENSIBLE_HEAT_GAIN_PER_PERSON_PARAM	Gain de chaleur sensible par personne	mechanicalLoads	-
+ROOM_PEOPLE_LATENT_HEAT_GAIN_PER_PERSON_PARAM	Gain de chaleur latente par personne	mechanicalLoads	-
+ROOM_PEOPLE_TOTAL_HEAT_GAIN_PER_PERSON_PARAM	Gain de chaleur total par personne	mechanicalLoads	-
+SPACE_NAME_PARAM	Nom	identityData	-
+SPACE_NUMBER_PARAM	Numéro	identityData	-
+SPACE_AREA	Surface	geometry	A
+SPACE_VOLUME	Volume	geometry	V
+SPACE_REFERENCE_LEVEL_PARAM	Niveau de référence	constraints	-
+
+# -- matériaux, graphismes
+MATERIAL_NAME	Nom du matériau	materials	-
+MATERIAL_ID_PARAM	Matériau	materials	-
+MATERIAL_VOLUME	Volume du matériau	materials	V
+MATERIAL_AREA	Surface du matériau	materials	A
+IS_VISIBLE_PARAM	Visible	graphics	B
+COARSE_SCALE_FILL_PATTERN_ID_PARAM	Motif de remplissage (échelle grossière)	graphics	-
+COARSE_SCALE_FILL_PATTERN_COLOR	Couleur du motif (échelle grossière)	graphics	-
+EXTRUSION_START_PARAM	Début de l'extrusion	constraints	L
+EXTRUSION_END_PARAM	Fin de l'extrusion	constraints	L
+
+# -- IFC
+IFC_GUID	GUID IFC enregistré	ifc	-
+IFC_TYPE_GUID	GUID IFC du type	ifc	-
+IFC_EXPORT_ELEMENT_AS	Exporter en IFC en tant que	ifc	-
+IFC_EXPORT_ELEMENT_TYPE_AS	Exporter le type en IFC en tant que	ifc	-
+IFC_EXPORT_ELEMENT	Exporter en IFC	ifc	-
+IFC_EXPORT_ELEMENT_TYPE	Exporter le type en IFC	ifc	-
+IFC_EXPORT_PREDEFINEDTYPE	Type IFC prédéfini	ifc	-
+IFC_EXPORT_PREDEFINEDTYPE_TYPE	Type IFC prédéfini du type	ifc	-
+IFC_PROJECT_GUID	GUID IFC du projet	ifc	-
+IFC_SITE_GUID	GUID IFC du site	ifc	-
+IFC_BUILDING_GUID	GUID IFC du bâtiment	ifc	-
+
+# -- analyse
+ANALYTICAL_DEFINE_THERMAL_PROPERTIES_BY	Propriétés thermiques définies par	analyticalModel	-
+ANALYTIC_CONSTRUCTION_LOOKUP_TABLE	Table de recherche de la construction	analyticalModel	-
+ANALYTIC_CONSTRUCTION_GBXML_TYPEID	Identifiant gbXML de la construction	analyticalModel	-
+ANALYTICAL_VISUAL_LIGHT_TRANSMITTANCE	Transmittance lumineuse visible	analyticalModel	-
+ANALYTICAL_SOLAR_HEAT_GAIN_COEFFICIENT	Coefficient de gain solaire	analyticalModel	-
+ANALYTICAL_HEAT_TRANSFER_COEFFICIENT	Coefficient de transfert thermique	analyticalModel	-
+
+# -- MEP (gaines, tuyaux, conduits, chemins de câbles, tableaux)
+RBS_SYSTEM_NAME_PARAM	Nom du système	mechanical	-
+RBS_SYSTEM_ABBREVIATION_PARAM	Abréviation du système	mechanical	-
+RBS_SYSTEM_CLASSIFICATION_PARAM	Classification du système	mechanical	-
+RBS_DUCT_SYSTEM_TYPE_PARAM	Type de système de gaine	mechanical	-
+RBS_PIPING_SYSTEM_TYPE_PARAM	Type de système de tuyauterie	plumbing	-
+RBS_DUCT_FLOW_PARAM	Débit	mechanicalAirflow	-
+RBS_PIPE_FLOW_PARAM	Débit	plumbing	-
+RBS_VELOCITY	Vitesse	mechanical	-
+RBS_CURVE_WIDTH_PARAM	Largeur	geometry	L
+RBS_CURVE_HEIGHT_PARAM	Hauteur	geometry	L
+RBS_CURVE_DIAMETER_PARAM	Diamètre	geometry	L
+RBS_PIPE_DIAMETER_PARAM	Diamètre	geometry	L
+RBS_PIPE_OUTER_DIAMETER	Diamètre extérieur	geometry	L
+RBS_PIPE_INNER_DIAM_PARAM	Diamètre intérieur	geometry	L
+RBS_PIPE_INSULATION_THICKNESS	Épaisseur d'isolation	geometry	L
+RBS_PIPE_WALL_THICKNESS	Épaisseur de paroi	geometry	L
+RBS_CURVE_SURFACE_AREA	Surface	geometry	A
+RBS_PIPE_VOLUME_PARAM	Volume	geometry	V
+RBS_CURVE_VERT_OFFSET_PARAM	Décalage vertical	constraints	L
+RBS_CURVE_HOR_OFFSET_PARAM	Décalage horizontal	constraints	L
+RBS_PIPE_BOTTOM_ELEVATION	Altitude inférieure	constraints	L
+RBS_PIPE_TOP_ELEVATION	Altitude supérieure	constraints	L
+RBS_PIPE_INVERT_ELEVATION	Altitude de radier	constraints	L
+RBS_DUCT_BOTTOM_ELEVATION	Altitude inférieure	constraints	L
+RBS_DUCT_TOP_ELEVATION	Altitude supérieure	constraints	L
+RBS_PIPE_SLOPE	Pente	constraints	-
+RBS_DUCT_SLOPE	Pente	constraints	-
+RBS_PIPE_SYSTEM_CALCULATION_PARAM	Calcul du système	plumbing	-
+RBS_PIPE_FLUID_TYPE_PARAM	Type de fluide	plumbing	-
+RBS_PIPE_FLUID_TEMPERATURE_PARAM	Température du fluide	plumbing	-
+RBS_PIPE_MATERIAL_PARAM	Matériau du tuyau	materials	-
+RBS_PIPE_SEGMENT_PARAM	Segment de tuyau	plumbing	-
+RBS_PIPE_TYPE_FITTING_LOSS_METHOD_PARAM	Méthode de perte de charge des raccords	plumbing	-
+RBS_PIPE_TYPE_FITTING_LOSS_TABLE_PARAM	Table de pertes de charge des raccords	plumbing	-
+RBS_CONDUIT_DIAMETER_PARAM	Diamètre	geometry	L
+RBS_CONDUIT_OUTER_DIAM_PARAM	Diamètre extérieur	geometry	L
+RBS_CONDUIT_INNER_DIAM_PARAM	Diamètre intérieur	geometry	L
+RBS_CABLETRAY_WIDTH_PARAM	Largeur	geometry	L
+RBS_CABLETRAY_HEIGHT_PARAM	Hauteur	geometry	L
+RBS_ELEC_PANEL_NAME	Nom du tableau	identityData	-
+RBS_ELEC_SWITCH_ID_PARAM	Identifiant d'interrupteur	electrical	-
+RBS_FAMILY_CONTENT_DISTRIBUTION_SYSTEM	Système de distribution	identityData	-
+RBS_FAMILY_CONTENT_ANNOTATION_DISPLAY	Affichage de l'annotation	identityData	B
+PIPING_GENDER_TYPE	Genre du raccord	plumbing	-
+PIPING_CONNECTION_TYPE	Type de connexion	plumbing	-

@@ -5,6 +5,7 @@ import { validateAppearanceRules, type AppearanceRule, type RuleCondition, type 
 import { ELEMENT_FIELDS, fieldLabel, isElementField } from '../data/elementFields.ts';
 import type { App } from './App.ts';
 import { button, clear, h, integer } from './dom.ts';
+import { PhasePanel } from './PhasePanel.ts';
 import './filter-panel.css';
 
 const MAX_ROWS = 300;
@@ -49,6 +50,7 @@ export class FilterPanel {
     this.ruleForm = h('div', { class: 'appearance-form', attrs: { hidden: '' } });
 
     this.el = h('section', { class: 'panel filter-panel' },
+      new PhasePanel(app).el,
       h('div', { class: 'appearance-header' },
         h('h3', { text: 'Règles d’apparence' }),
         h('p', { class: 'hint', text: 'Une seule liste pour les couleurs et les opacités. En cas de conflit, la dernière règle est prioritaire.' }),

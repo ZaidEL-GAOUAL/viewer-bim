@@ -33,7 +33,8 @@ export function depthPriority(flags: number, index: number): number {
  * à écrire un texel, quelle que soit la taille du modèle.
  */
 export class ElementState {
-  readonly count: number;
+  /** Nombre d'éléments ; ne change que par `grow` (modèle lu par morceaux). */
+  count: number;
   data: Uint8Array;
   texture: DataTexture;
   /** Uniforme partagé par tous les matériaux du modèle. */
@@ -44,10 +45,10 @@ export class ElementState {
   readonly onOpacityChange = new Set<() => void>();
   /** Prévenu après chaque lot de changements (commit, planning, opacité) : un autre moteur peut recopier l'état. */
   readonly onChange = new Set<() => void>();
-  private readonly opacityData: Float32Array;
-  private readonly scheduleData: Uint8Array;
+  private opacityData: Float32Array;
+  private scheduleData: Uint8Array;
   /** Rouge = état 4D ; vert = facteur de fondu. Une seule texture et un seul accès GPU. */
-  private readonly scheduleTexels: Uint8Array;
+  private scheduleTexels: Uint8Array;
   private readonly scheduleFades = new Map<number, number>();
   private translucent = 0;
 
@@ -59,19 +60,11 @@ export class ElementState {
     this.uniform = { value: this.texture };
     const { width, height } = this.texture.image;
     this.opacityData = new Float32Array(width * height).fill(-1);
-    const opacity = new DataTexture(this.opacityData, width, height, RedFormat, FloatType);
-    opacity.minFilter = opacity.magFilter = NearestFilter;
-    opacity.generateMipmaps = false;
-    opacity.needsUpdate = true;
-    this.opacityUniform = { value: opacity };
+    this.opacityUniform = { value: this.opacityTexture(width, height) };
     this.scheduleData = new Uint8Array(width * height);
     this.scheduleTexels = new Uint8Array(width * height * 2);
     for (let i = 1; i < this.scheduleTexels.length; i += 2) this.scheduleTexels[i] = 255;
-    const schedule = new DataTexture(this.scheduleTexels, width, height, RGFormat, UnsignedByteType);
-    schedule.minFilter = schedule.magFilter = NearestFilter;
-    schedule.generateMipmaps = false;
-    schedule.needsUpdate = true;
-    this.scheduleUniform = { value: schedule };
+    this.scheduleUniform = { value: this.scheduleTexture(width, height) };
   }
 
   private allocate(count: number): DataTexture {
@@ -86,6 +79,52 @@ export class ElementState {
     texture.generateMipmaps = false;
     texture.needsUpdate = true;
     return texture;
+  }
+
+  private opacityTexture(width: number, height: number): DataTexture {
+    const opacity = new DataTexture(this.opacityData, width, height, RedFormat, FloatType);
+    opacity.minFilter = opacity.magFilter = NearestFilter;
+    opacity.generateMipmaps = false;
+    opacity.needsUpdate = true;
+    return opacity;
+  }
+
+  private scheduleTexture(width: number, height: number): DataTexture {
+    const schedule = new DataTexture(this.scheduleTexels, width, height, RGFormat, UnsignedByteType);
+    schedule.minFilter = schedule.magFilter = NearestFilter;
+    schedule.generateMipmaps = false;
+    schedule.needsUpdate = true;
+    return schedule;
+  }
+
+  /**
+   * Agrandit l'état à `count` éléments (le modèle est lu par morceaux et vient d'en recevoir un) : les
+   * éléments déjà là gardent leurs drapeaux, couleur, opacité et état 4D, les nouveaux sont visibles et
+   * sans rien d'imposé. Les textures sont réallouées ; les uniformes, partagés par les matériaux, les
+   * suivent sans que rien ne soit recompilé.
+   */
+  grow(count: number): void {
+    if (count <= this.count) return;
+    const previous = this.count;
+    const oldTextures = [this.texture, this.opacityUniform.value, this.scheduleUniform.value];
+    this.texture = this.allocate(count);
+    for (let i = previous; i < count; i++) this.data[i * 4 + 3] = FLAG_VISIBLE;
+    this.uniform.value = this.texture;
+    const { width, height } = this.texture.image;
+    const opacityData = new Float32Array(width * height).fill(-1);
+    opacityData.set(this.opacityData.subarray(0, previous));
+    this.opacityData = opacityData;
+    this.opacityUniform.value = this.opacityTexture(width, height);
+    const scheduleData = new Uint8Array(width * height);
+    scheduleData.set(this.scheduleData.subarray(0, previous));
+    this.scheduleData = scheduleData;
+    const scheduleTexels = new Uint8Array(width * height * 2);
+    for (let i = 1; i < scheduleTexels.length; i += 2) scheduleTexels[i] = 255;
+    scheduleTexels.set(this.scheduleTexels.subarray(0, previous * 2));
+    this.scheduleTexels = scheduleTexels;
+    this.scheduleUniform.value = this.scheduleTexture(width, height);
+    this.count = count;
+    for (const texture of oldTextures) texture.dispose();
   }
 
   private setFlag(index: number, flag: number, on: boolean): void {

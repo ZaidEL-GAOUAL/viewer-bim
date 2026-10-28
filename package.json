@@ -10,7 +10,9 @@
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/typescript/bin/tsc -p worker",
     "typecheck:worker": "node node_modules/typescript/bin/tsc -p worker",
     "test": "node --test --test-timeout=30000 \"tests/**/*.test.ts\"",
-    "sample": "node scripts/make-sample.mjs"
+    "sample": "node scripts/make-sample.mjs",
+    "build:revit": "node scripts/build-revit.mjs",
+    "samples:revit": "node scripts/fetch-revit-samples.mjs"
   },
   "dependencies": {
     "cesium": "^1.146.0",

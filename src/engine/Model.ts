@@ -37,23 +37,36 @@ export interface PickHit {
   cap: boolean;
 }
 
+/**
+ * Ce qu'un modèle partage avec sa cuisson (voir `ModelBuilder`, buildModel.ts) : des structures prolongées en
+ * place à chaque morceau. Le modèle naît vide ; ses éléments et ses lots arrivent par `grow`.
+ */
 export interface ModelData {
   group: Group;
-  chunks: Chunk[];
-  keys: string[];
-  names: string[];
-  extras: (Record<string, unknown> | undefined)[];
-  boxes: Float32Array;
   ranges: ElementRange[][];
   state: ElementState;
   box: Box3;
   offset: Vector3;
-  triangleCount: number;
-  materials: Material[];
-  textures: Texture[];
   stencilBack: Material;
   stencilFront: Material;
   selectColor: IUniform<Color>;
+}
+
+/**
+ * Ce qu'un morceau cuit ajoute au modèle (voir `ModelBuilder`, buildModel.ts) : ses éléments, à la suite des
+ * précédents, et ses lots. L'état des éléments, les plages et la boîte du modèle, partagés par référence, ont déjà
+ * été prolongés par la cuisson ; les boîtes des éléments arrivent ici réallouées, anciens éléments compris.
+ */
+export interface ModelGrowth {
+  keys: string[];
+  names: string[];
+  extras: (Record<string, unknown> | undefined)[];
+  chunks: Chunk[];
+  boxes: Float32Array;
+  triangleCount: number;
+  /** Matériaux et textures créés pour ces lots (ceux d'un lot précédent, réutilisés, n'y sont pas). */
+  materials: Material[];
+  textures: Texture[];
 }
 
 export interface RaycastOptions {
@@ -66,6 +79,8 @@ export interface RaycastOptions {
   capBackfaces?: boolean;
   /** Ignore tout ce qui est plus proche que cette distance. */
   minDistance?: number;
+  /** Ignore tout ce qui est plus loin que cette distance : les éléments trop éloignés ne sont même pas triés. */
+  maxDistance?: number;
 }
 
 interface Candidate {
@@ -110,65 +125,108 @@ function slab(
 export class Model {
   readonly group: Group;
   readonly chunks: Chunk[];
-  /** Nombre d'éléments du fichier chargé ; la géométrie reste en lecture seule. */
-  readonly count: number;
+  /**
+   * Nombre d'éléments du fichier chargé ; la géométrie reste en lecture seule. Un modèle lu par morceaux grandit
+   * (`grow`) : les éléments se suivent, un numéro déjà attribué ne change jamais.
+   */
+  count: number;
   /** Identifiant de liaison avec les métadonnées, pour chaque élément. */
   readonly keys: string[];
   readonly names: string[];
   /** `extras` du nœud glTF (hors identifiant), utilisés si aucun JSON n'est fourni. */
   readonly extras: (Record<string, unknown> | undefined)[];
-  /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. */
-  readonly boxes: Float32Array;
+  /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. Réalloué par `grow` : à relire, jamais à garder. */
+  boxes: Float32Array;
   readonly ranges: ElementRange[][];
   readonly state: ElementState;
   readonly box: Box3;
   /** Décalage retiré aux coordonnées d'origine pour recentrer le modèle (précision des flottants). */
   readonly offset: Vector3;
-  readonly triangleCount: number;
+  triangleCount: number;
   readonly stencilBack: Material;
   readonly stencilFront: Material;
+  private readonly selectColor: IUniform<Color>;
   private readonly materials: Material[];
   private readonly textures: Texture[];
   private readonly candidates: Candidate[] = [];
   private readonly appearanceMeshes: Mesh[] = [];
+  /** Nombre de lots qui ont leur double translucide ; les doubles ne naissent qu'à la première translucidité. */
+  private doubled = 0;
+  private doubling = false;
 
   constructor(data: ModelData) {
     this.group = data.group;
-    this.chunks = data.chunks;
-    this.count = data.keys.length;
-    this.keys = data.keys;
-    this.names = data.names;
-    this.extras = data.extras;
-    this.boxes = data.boxes;
+    this.chunks = [];
+    this.count = 0;
+    this.keys = [];
+    this.names = [];
+    this.extras = [];
+    this.boxes = new Float32Array(0);
     this.ranges = data.ranges;
     this.state = data.state;
     this.box = data.box;
     this.offset = data.offset;
-    this.triangleCount = data.triangleCount;
-    this.materials = data.materials;
-    this.textures = data.textures;
+    this.triangleCount = 0;
+    this.selectColor = data.selectColor;
+    this.materials = [];
+    this.textures = [];
     this.stencilBack = data.stencilBack;
     this.stencilFront = data.stencilFront;
     this.state.onOpacityChange.add(() => {
-      if (this.state.hasTranslucency && this.appearanceMeshes.length === 0) {
-        for (const chunk of this.chunks) {
-          if (chunk.transparent) continue;
-          const material = (chunk.mesh.material as Material).clone();
-          material.transparent = true;
-          material.depthWrite = false;
-          applyElementState(material, this.state, data.selectColor, 'translucent');
-          const mesh = new Mesh(chunk.mesh.geometry, material);
-          mesh.matrixAutoUpdate = false;
-          mesh.matrix.copy(chunk.mesh.matrix);
-          mesh.layers.set(1);
-          mesh.renderOrder = 1;
-          this.materials.push(material);
-          this.appearanceMeshes.push(mesh);
-          this.group.add(mesh);
-        }
-      }
+      if (this.state.hasTranslucency) this.addAppearanceMeshes();
       for (const mesh of this.appearanceMeshes) mesh.visible = this.state.hasTranslucency;
     });
+  }
+
+  /**
+   * Prolonge le modèle d'un morceau cuit (voir `ModelGrowth`) : ses lots entrent dans la scène, ses éléments
+   * prennent les numéros suivants. Le modèle reste affichable et cliquable entre deux morceaux.
+   */
+  grow(part: ModelGrowth): void {
+    if (part.keys.length !== part.names.length || part.extras.length !== part.keys.length) {
+      throw new Error('Morceau incohérent : les clés, noms et propriétés des éléments ne correspondent pas.');
+    }
+    if (part.boxes.length !== (this.keys.length + part.keys.length) * 6) throw new Error('Morceau incohérent : il manque des boîtes d’éléments.');
+    // Pas de `push(...tableau)` : des dizaines de milliers d'éléments dépasseraient la pile d'appels.
+    for (const key of part.keys) this.keys.push(key);
+    for (const name of part.names) this.names.push(name);
+    for (const extra of part.extras) this.extras.push(extra);
+    for (const chunk of part.chunks) {
+      this.chunks.push(chunk);
+      this.group.add(chunk.mesh);
+    }
+    for (const material of part.materials) this.materials.push(material);
+    for (const texture of part.textures) this.textures.push(texture);
+    this.boxes = part.boxes;
+    this.count = this.keys.length;
+    this.triangleCount += part.triangleCount;
+    // Les doubles translucides, s'ils ont commencé, couvrent aussi les nouveaux lots.
+    if (this.doubling) this.addAppearanceMeshes();
+  }
+
+  /**
+   * Un double translucide par lot opaque, pour les opacités imposées (voir applyElementState) : créés à la première
+   * translucidité, puis pour chaque lot ajouté depuis.
+   */
+  private addAppearanceMeshes(): void {
+    this.doubling = true;
+    for (; this.doubled < this.chunks.length; this.doubled++) {
+      const chunk = this.chunks[this.doubled];
+      if (chunk.transparent) continue;
+      const material = (chunk.mesh.material as Material).clone();
+      material.transparent = true;
+      material.depthWrite = false;
+      applyElementState(material, this.state, this.selectColor, 'translucent');
+      const mesh = new Mesh(chunk.mesh.geometry, material);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(chunk.mesh.matrix);
+      mesh.layers.set(1);
+      mesh.renderOrder = 1;
+      mesh.visible = this.state.hasTranslucency;
+      this.materials.push(material);
+      this.appearanceMeshes.push(mesh);
+      this.group.add(mesh);
+    }
   }
 
   elementBox(index: number, target: Box3): Box3 {
@@ -223,6 +281,7 @@ export class Model {
     const clipped = options.clipped;
     const capBackfaces = options.capBackfaces === true;
     const minDistance = Math.max(1e-9, options.minDistance ?? 0);
+    const maxDistance = options.maxDistance ?? Infinity;
     const ox = ray.origin.x, oy = ray.origin.y, oz = ray.origin.z;
     const dx = ray.direction.x, dy = ray.direction.y, dz = ray.direction.z;
     const ix = 1 / dx, iy = 1 / dy, iz = 1 / dz;
@@ -234,7 +293,7 @@ export class Model {
     for (let i = 0, n = this.count; i < n; i++) {
       if (!this.state.isRendered(i)) continue;
       const tmin = slab(boxes, i * 6, ox, oy, oz, dx, dy, dz, ix, iy, iz);
-      if (tmin < 0) continue;
+      if (tmin < 0 || tmin > maxDistance) continue;
       if (used === candidates.length) candidates.push({ element: i, t: tmin });
       else {
         candidates[used].element = i;
@@ -268,7 +327,7 @@ export class Model {
           if (blocks) {
             // Seuls les blocs traversés par le rayon, et plus proches que le meilleur point connu.
             const entry = slab(blocks, block * 6, ox, oy, oz, dx, dy, dz, ix, iy, iz);
-            if (entry < 0 || entry > best) continue;
+            if (entry < 0 || entry > best || entry > maxDistance) continue;
             from = range.start + block * BLOCK_INDICES;
             to = Math.min(end, from + BLOCK_INDICES);
           }
@@ -289,7 +348,7 @@ export class Model {
           const v = (dx * qx + dy * qy + dz * qz) * inv;
           if (v < 0 || u + v > 1) continue;
           const t = (e2x * qx + e2y * qy + e2z * qz) * inv;
-          if (t <= minDistance) continue;
+          if (t <= minDistance || t > maxDistance) continue;
           let priority = bestPriority;
           if (bestElement >= 0) {
             const tolerance = best * 2e-6 + 1e-6;

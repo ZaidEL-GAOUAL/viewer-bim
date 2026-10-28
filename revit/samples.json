@@ -1,0 +1,555 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "name": "2024_Core_Interior",
+      "repo": "magnetar-io/revit-test-datasets",
+      "path": "Revit/2024_Core_Interior.rvt",
+      "licence": "MIT",
+      "url": "https://media.githubusercontent.com/media/magnetar-io/revit-test-datasets/fd755e18cec40ed016d06b082f420d796571fef1/Revit/2024_Core_Interior.rvt",
+      "year": 2024,
+      "bytes": 33718272,
+      "sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014"
+    },
+    {
+      "name": "Revit_IFC5_Einhoven",
+      "repo": "magnetar-io/revit-test-datasets",
+      "path": "Revit/Revit_IFC5_Einhoven.rvt",
+      "licence": "MIT",
+      "url": "https://media.githubusercontent.com/media/magnetar-io/revit-test-datasets/fd755e18cec40ed016d06b082f420d796571fef1/Revit/Revit_IFC5_Einhoven.rvt",
+      "year": 2023,
+      "bytes": 913408,
+      "sha256": "d3a0c6d37d3f47a1726bc5aa7fe3880ed3c13bbe819b5e64680f6710b15aa948"
+    },
+    {
+      "name": "RE1-Architecture",
+      "repo": "Drshelden/IFC-ECS",
+      "path": "data/RE1/RE1-Architecture.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1/RE1-Architecture.rvt",
+      "year": 2025,
+      "bytes": 6627328,
+      "sha256": "4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4"
+    },
+    {
+      "name": "RE1-Electrical",
+      "repo": "Drshelden/IFC-ECS",
+      "path": "data/RE1/RE1-Electrical.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1/RE1-Electrical.rvt",
+      "year": 2025,
+      "bytes": 13438976,
+      "sha256": "9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b"
+    },
+    {
+      "name": "DynamoSample_2023",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "doc/distrib/Samples/Data/DynamoSample_2023.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/doc/distrib/Samples/Data/DynamoSample_2023.rvt",
+      "year": 2023,
+      "bytes": 6475776,
+      "sha256": "703585d2f4cebf167b3163410b270eedbfa63db58f2b9350929261e12588ee67"
+    },
+    {
+      "name": "DynamoSample_2024",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "doc/distrib/Samples/Data/DynamoSample_2024.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/doc/distrib/Samples/Data/DynamoSample_2024.rvt",
+      "year": 2024,
+      "bytes": 6770688,
+      "sha256": "b9d1db386aeef1c6efd9ea3010dd0411e8777e2acfd704746fc3f837691fc5e4"
+    },
+    {
+      "name": "DynamoSample_2025",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "doc/distrib/Samples/Data/DynamoSample_2025.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/doc/distrib/Samples/Data/DynamoSample_2025.rvt",
+      "year": 2025,
+      "bytes": 6807552,
+      "sha256": "dea3565fbe2d46d6a3765a3002fe0f523c789e84bdd3effd047cda0ec8a1849a"
+    },
+    {
+      "name": "SampleModel",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/SampleModel.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/SampleModel.rvt",
+      "year": 2017,
+      "bytes": 16592896,
+      "sha256": "9753ccb5dc6f31d384be20ce9c9161878710c87246a9f91d9f2d1c9d0e5bd9fc"
+    },
+    {
+      "name": "Vignette-04-BaseFile",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Workflow/Vignette/Vignette-04-BaseFile.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Workflow/Vignette/Vignette-04-BaseFile.rvt",
+      "year": 2016,
+      "bytes": 21463040,
+      "sha256": "471d55aaf8751d038cd5ecec6be5a25f4c1664dcf560c28b24a7554c70b14f61"
+    },
+    {
+      "name": "DuctSegmentFlow",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Subelement/DuctSegmentFlow.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Subelement/DuctSegmentFlow.rvt",
+      "year": 2025,
+      "bytes": 10432512,
+      "sha256": "b77d9e1bef7c691171fb347a1cd98a3c630dae0a63592febfbee1748766fe517"
+    },
+    {
+      "name": "RefineryPrimer-2023-BuildingGenerator",
+      "repo": "DynamoDS/RefineryPrimer",
+      "path": "Samples/Revit2023/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/RefineryPrimer/c766c7e24de5b6991111d18444cbf948b3760ce4/Samples/Revit2023/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "year": 2023,
+      "bytes": 17969152,
+      "sha256": "2caed7c1066f04b1b433302b8bf475589de6c401b38c4e47b2dc31645718c24b"
+    },
+    {
+      "name": "RefineryPrimer-2024-BuildingGenerator",
+      "repo": "DynamoDS/RefineryPrimer",
+      "path": "Samples/Revit2024/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/RefineryPrimer/c766c7e24de5b6991111d18444cbf948b3760ce4/Samples/Revit2024/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "year": 2024,
+      "bytes": 18915328,
+      "sha256": "96852cb1c347fcf808b6bda25de075c82e4a315bde5e913ee8f716faafd422ad"
+    },
+    {
+      "name": "RefineryPrimer-2026-BuildingGenerator",
+      "repo": "DynamoDS/RefineryPrimer",
+      "path": "Samples/Revit2026/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/RefineryPrimer/c766c7e24de5b6991111d18444cbf948b3760ce4/Samples/Revit2026/02-01_BuildingGenerator/02-01_BuildingGenerator.rvt",
+      "year": 2026,
+      "bytes": 19312640,
+      "sha256": "afe2db1cd99634a85c40da19ae9db88f8460002783f78253f37a5b8b33368568"
+    },
+    {
+      "name": "rac_advanced_sample_project",
+      "repo": "DynamoDS/DynamoWorkshops",
+      "path": "2018/Beginner/Dynamo Scripts/07_Occupancy/07_rac_advanced_sample_project_!Start.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoWorkshops/ae75c522ac523ba0f946581c23eeb8687500dd28/2018/Beginner/Dynamo%20Scripts/07_Occupancy/07_rac_advanced_sample_project_%21Start.rvt",
+      "year": 2019,
+      "bytes": 15888384,
+      "sha256": "e213c5450c9d4542a269350fc94841984a5346c460b9423fbf132dacefe564bf"
+    },
+    {
+      "name": "mega_advanced_sample_file",
+      "repo": "DynamoDS/DynamoWorkshops",
+      "path": "2019/DW331545-L-Dynamo for BIM Managers/mega-advanced_sample_file.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoWorkshops/ae75c522ac523ba0f946581c23eeb8687500dd28/2019/DW331545-L-Dynamo%20for%20BIM%20Managers/mega-advanced_sample_file.rvt",
+      "year": 2020,
+      "bytes": 16809984,
+      "sha256": "d0c67ad94435fbcd1edac6b389418a3cfd203834fd0b9cc86e62ea874136aa15"
+    },
+    {
+      "name": "ConnectorTestR20",
+      "repo": "chuongmep/OpenMEP",
+      "path": "OpenMEPTest/Resources/ConnectorTestR20.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/chuongmep/OpenMEP/b172d526b91bdf818f602dfecbc92a3d77be9645/OpenMEPTest/Resources/ConnectorTestR20.rvt",
+      "year": 2020,
+      "bytes": 9515008,
+      "sha256": "0755774cf40ed2c15d3e7a17f33e930765cc8aca0b7abfc6ce494918854049f4"
+    },
+    {
+      "name": "singleDirectShape",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/DirectShape/singleDirectShape.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/DirectShape/singleDirectShape.rvt",
+      "year": 2015,
+      "bytes": 5505024,
+      "sha256": "3b05630eb71230b567b891f7829a9a6326b435b002b99d571d3830790fe50431"
+    },
+    {
+      "name": "RiR-Template-2018",
+      "repo": "mcneel/rhino.inside-revit",
+      "path": "src/RhinoInside.Revit.External/Resources/RVT2018/RiR-Template.rte",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/mcneel/rhino.inside-revit/c8e2c5c3b6e70f89a3c66d71ee0015c3702d420f/src/RhinoInside.Revit.External/Resources/RVT2018/RiR-Template.rte",
+      "year": 2018,
+      "bytes": 458752,
+      "sha256": "741d83469e08f79d5d50c19926f874b1688cce599b3b3505de8e33273e8056fa"
+    },
+    {
+      "name": "RoomsAndExits",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/PathOfTravel/RoomsAndExits.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/PathOfTravel/RoomsAndExits.rvt",
+      "year": 2021,
+      "bytes": 5402624,
+      "sha256": "618d23d8ba65bedf5279abc9aaea5a371f7cf7f8c871d3b1995567dbb304b89c"
+    },
+    {
+      "name": "revit-curtainwall-byprofile_v21",
+      "repo": "mcneel/rhino.inside-revit",
+      "path": "docs/static/src/gh-screencaps/revit-curtainwall-byprofile_v21.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/mcneel/rhino.inside-revit/c8e2c5c3b6e70f89a3c66d71ee0015c3702d420f/docs/static/src/gh-screencaps/revit-curtainwall-byprofile_v21.rvt",
+      "year": 2021,
+      "bytes": 10010624,
+      "sha256": "34ca54e91112c5e99781df8f056a1d5278ee2bf2ee0d42c27cbea48660c4cddb"
+    },
+    {
+      "name": "CeilingType",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/CeilingType/CeilingType.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/CeilingType/CeilingType.rvt",
+      "year": 2022,
+      "bytes": 5357568,
+      "sha256": "892d15f05d87b0f4b85550bb45ca706664225f8d3bb3dc3761507038b02db30b"
+    },
+    {
+      "name": "revit-openings_v22",
+      "repo": "mcneel/rhino.inside-revit",
+      "path": "docs/static/src/gh-screencaps/revit-openings_v22.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/mcneel/rhino.inside-revit/c8e2c5c3b6e70f89a3c66d71ee0015c3702d420f/docs/static/src/gh-screencaps/revit-openings_v22.rvt",
+      "year": 2022,
+      "bytes": 565248,
+      "sha256": "0873240d8078bbe75f1c372e681f3dd2af46661b5658880522c68977baac29d4"
+    },
+    {
+      "name": "MassWithBoxAndCone",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/MassWithBoxAndCone.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/MassWithBoxAndCone.rfa",
+      "year": 2016,
+      "bytes": 552960,
+      "sha256": "95b8515582619c92d87b88e7a1ae47e39412d699da5ea325d38de6500c9cda9e"
+    },
+    {
+      "name": "AdaptivePanel",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "doc/distrib/Samples/Data/AdaptivePanel.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/doc/distrib/Samples/Data/AdaptivePanel.rfa",
+      "year": 2027,
+      "bytes": 962560,
+      "sha256": "2518b10b237da2735e68d787d44f558aaec9205cca99bc6030b643fc09e08c70"
+    },
+    {
+      "name": "AdaptiveComponent-Revit2013",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/AdaptiveComponent/AdaptiveComponent.0001.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/AdaptiveComponent/AdaptiveComponent.0001.rfa",
+      "year": 2013,
+      "bytes": 1646592,
+      "sha256": "ff1c94952aec6ef87e843d3b67cb9b462f49af03764000113e2cfd2a014d2347"
+    },
+    {
+      "name": "DividedCurve-Revit2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/DividedCurve/DividedCurve.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/DividedCurve/DividedCurve.rfa",
+      "year": 2014,
+      "bytes": 405504,
+      "sha256": "0fd3541da74d9b4bb4280fef48e072efd70d90cef78f7743f0a92e0086267404"
+    },
+    {
+      "name": "FamilyDocumentTests",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/FamilyDocument/familyDocumentTests.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/FamilyDocument/familyDocumentTests.rfa",
+      "year": 2020,
+      "bytes": 720896,
+      "sha256": "43396c7fd86788643326f0b7bc24978554ac484ff263f612231bd253fd40eafb"
+    },
+    {
+      "name": "ShellFamily",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/shell.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/shell.rfa",
+      "year": 2016,
+      "bytes": 897024,
+      "sha256": "26ab9b92c5f84c24cea085996ea40d95c1df593138ce4c99b5e9a43b8ecc700b"
+    },
+    {
+      "name": "Project1-Central",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Document/CentralModel/Project1.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Document/CentralModel/Project1.rvt",
+      "year": 2020,
+      "bytes": 7172096,
+      "sha256": "6b8439f9d773853759d1dcecf249b79ec97583e90a25fd16ab3bf975a0419977"
+    },
+    {
+      "name": "Project1-LocalFile",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Document/LocalModel/Project1_LocalFile.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Document/LocalModel/Project1_LocalFile.rvt",
+      "year": 2020,
+      "bytes": 5750784,
+      "sha256": "aed4e0a6bb7fa149a5c043c029b73fd491103fa41c2599a5b1c0599802c38eee"
+    },
+    {
+      "name": "Project1-BIM360-Local",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Document/BIM360/4481adfb-0f03-4e58-9f49-8bd37dde9e0e.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Document/BIM360/4481adfb-0f03-4e58-9f49-8bd37dde9e0e.rvt",
+      "year": 2020,
+      "bytes": 5750784,
+      "sha256": "e78a1211fb7cb681d18f0660797b45e0f93ca2dc1b3936dcdbdaa7375d2c44b8"
+    },
+    {
+      "name": "revit-docs_v20_project_ws",
+      "repo": "mcneel/rhino.inside-revit",
+      "path": "docs/static/src/gh-screencaps/revit-docs_v20_project_ws.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/mcneel/rhino.inside-revit/c8e2c5c3b6e70f89a3c66d71ee0015c3702d420f/docs/static/src/gh-screencaps/revit-docs_v20_project_ws.rvt",
+      "year": 2020,
+      "bytes": 528384,
+      "sha256": "a693e0a4d06192140ce892c56084c5ca64ccdba3774db678a12db70a664659cf"
+    },
+    {
+      "name": "void-cutter-2012",
+      "repo": "jeremytammik/InstanceVoidCutTest",
+      "path": "Cutter.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/jeremytammik/InstanceVoidCutTest/feb9da6e7356c7e09721eb686f1aed4a961f0840/Cutter.rfa",
+      "year": 2012,
+      "bytes": 303104,
+      "sha256": "f65a8162a1a4a761212cd2e2af5f6a82ac224f0f353bd9d0f90fa3cefa066122"
+    },
+    {
+      "name": "setout-point-2013",
+      "repo": "jeremytammik/SetoutPoints",
+      "path": "test/SetoutPoint_2013.rfa",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/jeremytammik/SetoutPoints/087c7ecac304d146f5ad98718a3d50f0add01393/test/SetoutPoint_2013.rfa",
+      "year": 2013,
+      "bytes": 278528,
+      "sha256": "8e36388597f882c0be3e1698e767d0cc7346ba1025a48ec1edd2cac21a8ba98b"
+    },
+    {
+      "name": "dynamo-nyc-site-2013",
+      "repo": "DynamoDS/Dynamo",
+      "path": "Samples/nyc_site.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/Dynamo/af6500cc1aeef137b4c5a67ffb2f06b7bfadbf8f/Samples/nyc_site.rvt",
+      "year": 2013,
+      "bytes": 3887104,
+      "sha256": "0540bd2a81145e7957757a5e6a8ac71cddf17c6b2a6cf320b5e6c2973796b4cb"
+    },
+    {
+      "name": "dynamo-tower-6-ds-2013",
+      "repo": "DynamoDS/Dynamo",
+      "path": "Samples/10 Parametric Tower/tower 6 ds.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/Dynamo/af6500cc1aeef137b4c5a67ffb2f06b7bfadbf8f/Samples/10%20Parametric%20Tower/tower%206%20ds.rfa",
+      "year": 2013,
+      "bytes": 2146304,
+      "sha256": "7756f1643abaca5fd54429f0ca4f0228dd7ecbc880ea08621b6d6bd8bb1f6ca8"
+    },
+    {
+      "name": "dynamo-pentagon-profile-2013",
+      "repo": "DynamoDS/Dynamo",
+      "path": "Samples/10 Parametric Tower/pentagon profile.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/Dynamo/af6500cc1aeef137b4c5a67ffb2f06b7bfadbf8f/Samples/10%20Parametric%20Tower/pentagon%20profile.rfa",
+      "year": 2013,
+      "bytes": 278528,
+      "sha256": "d09858de4b9f1b8fd37ad76f7b0c69e0dc1b7ce980a9604dbc4c2d96b5d95948"
+    },
+    {
+      "name": "dynamo-inst-param-2013",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Samples/instparam.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Samples/instparam.rvt",
+      "year": 2013,
+      "bytes": 1409024,
+      "sha256": "728b3f277bd255b3ed610b6b6cc814debc700aeec71212df2b8cecd8526f8ec2"
+    },
+    {
+      "name": "dynamo-indexed-family-instances-2013",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Samples/IndexedFamilyInstances.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Samples/IndexedFamilyInstances.rfa",
+      "year": 2013,
+      "bytes": 1449984,
+      "sha256": "6d6c4cc1b1e72c55161c6514b325129ebfc8c31d1bbedde4e3d6343a692ad4ce"
+    },
+    {
+      "name": "dynamo-walls-floors-levels-2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Bugs/MAGN-122_wallsAndFloorsAndLevels.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Bugs/MAGN-122_wallsAndFloorsAndLevels.rvt",
+      "year": 2014,
+      "bytes": 2576384,
+      "sha256": "173e6ddcc28bdd45ec4d40ad9e484e13b3b08789dab9ef25952978d9e5bf99a7"
+    },
+    {
+      "name": "dynamo-structural-framing-2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Bugs/MAGN-438_structuralFraming_simple.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Bugs/MAGN-438_structuralFraming_simple.rvt",
+      "year": 2014,
+      "bytes": 4358144,
+      "sha256": "66060ed5a8d736e66c993212ace2fda5e0df044b6e09961a5441b50756a74d70"
+    },
+    {
+      "name": "dynamo-create-wall-2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/ElementBinding/CreateWallInDynamo.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/ElementBinding/CreateWallInDynamo.rvt",
+      "year": 2014,
+      "bytes": 2568192,
+      "sha256": "28d7488c577a0edc2842ff48a0205be8d182cc7493f5d3fc2d1fe466f6904803"
+    },
+    {
+      "name": "dynamo-topography-2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Topography/Topography.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Topography/Topography.rvt",
+      "year": 2014,
+      "bytes": 2846720,
+      "sha256": "24f8fc3a51f4852b2ab94be2d7af5f1cfbdfa061723a145d03987fba555e26ec"
+    },
+    {
+      "name": "drone-hangar-building-2014",
+      "repo": "dougklassen/Revit-My-Drone",
+      "path": "Revit Demo Project-Hangar/Building.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/dougklassen/Revit-My-Drone/01b99f1629e3d321d5d14d5490d90b9119907062/Revit%20Demo%20Project-Hangar/Building.rvt",
+      "year": 2014,
+      "bytes": 9216000,
+      "sha256": "6cba6b6137a3532e1d22ec9fc37716db51b13bb807f0b1aa6472867d7b86b3af"
+    },
+    {
+      "name": "clockwork-wall-stuff-2014",
+      "repo": "andydandy74/ClockworkForDynamo",
+      "path": "package_samples/0.6.3/Wall Stuff/WallStuff_Sample.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/andydandy74/ClockworkForDynamo/9421dc07fc8fdd0b6d461a90992ba0de10b55f8e/package_samples/0.6.3/Wall%20Stuff/WallStuff_Sample.rvt",
+      "year": 2014,
+      "bytes": 1114112,
+      "sha256": "a95255c8fe4509307eb9bb140bc22116c01bdb530cf988d7243ed5fd40e9083d"
+    },
+    {
+      "name": "clockwork-roof-floor-stuff-2014",
+      "repo": "andydandy74/ClockworkForDynamo",
+      "path": "package_samples/0.6.3/Roof And Floor Stuff/RoofAndFloorStuff_Sample.rvt",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/andydandy74/ClockworkForDynamo/9421dc07fc8fdd0b6d461a90992ba0de10b55f8e/package_samples/0.6.3/Roof%20And%20Floor%20Stuff/RoofAndFloorStuff_Sample.rvt",
+      "year": 2014,
+      "bytes": 1044480,
+      "sha256": "de1a93657f3fb496f933d04099611ce0735bc473771faf17824bbc074c93e62a"
+    },
+    {
+      "name": "dynamo-adaptive-component-2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/AdaptiveComponent/AdaptiveComponent.0002.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/AdaptiveComponent/AdaptiveComponent.0002.rfa",
+      "year": 2014,
+      "bytes": 1380352,
+      "sha256": "98a4703f60823f00d079247a5e8b68ceeddfbfab24f182ad95260e4695023968"
+    },
+    {
+      "name": "tbc-exhaust-fan-build2007",
+      "repo": "jeremytammik/tbc",
+      "path": "a/zip/Exhaust_Fan.rfa",
+      "licence": "MIT",
+      "url": "https://raw.githubusercontent.com/jeremytammik/tbc/58a944c168a49dfd7878445a75d3127c6ada1b8a/a/zip/Exhaust_Fan.rfa",
+      "year": null,
+      "bytes": 180224,
+      "sha256": "c92fd6b493a948fa75ab2b79fbd6d15f38bc7f720fbdbe3a7ed931b15893bde5"
+    },
+    {
+      "name": "dynamo-solar-radiation-vasari2012",
+      "repo": "DynamoDS/Dynamo",
+      "path": "Samples/07 Solar Radiation Optimizer/SolarRadiationProject.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/Dynamo/af6500cc1aeef137b4c5a67ffb2f06b7bfadbf8f/Samples/07%20Solar%20Radiation%20Optimizer/SolarRadiationProject.rvt",
+      "year": null,
+      "bytes": 1892352,
+      "sha256": "e98cd08238a62d8c36c4a0ab3f095b54274e2d8a304a06cf59fa77332fdf71a3"
+    },
+    {
+      "name": "dynamo-reference-plane-vasari2013",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/ReferencePlane/ReferencePlane.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/ReferencePlane/ReferencePlane.rfa",
+      "year": null,
+      "bytes": 294912,
+      "sha256": "58789b2eff6db1c924408a45be716009f7d45e16fdf6f8ecd9baf36491a86bb5"
+    },
+    {
+      "name": "DynamoSample_2014",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Samples/DynamoSample_2014.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/9d3ee7288fe35fe234c29291aa5ca6904478f370/test/System/Samples/DynamoSample_2014.rvt",
+      "year": 2014,
+      "bytes": 5394432,
+      "sha256": "ce8c51ab8ed2c40e6e486f00d2b8340f7a23218b0bece9d17f3bf22434af9c3f"
+    },
+    {
+      "name": "dynamo-inst-param-2016",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Samples/instparam.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Samples/instparam.rvt",
+      "year": 2016,
+      "bytes": 1708032,
+      "sha256": "c9ef7db2216ec00be844d7d5d8bf2e811e68641fc599bf91e379d7334fcd3981"
+    },
+    {
+      "name": "dynamo-indexed-family-instances-2016",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Samples/IndexedFamilyInstances.rfa",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Samples/IndexedFamilyInstances.rfa",
+      "year": 2016,
+      "bytes": 1585152,
+      "sha256": "65b8c5c398aa0b3ad31233b986e1d3c0cf9445f2f2c2afc5d672cb974d1217a3"
+    },
+    {
+      "name": "dynamo-walls-floors-levels-2016",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Bugs/MAGN-122_wallsAndFloorsAndLevels.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Bugs/MAGN-122_wallsAndFloorsAndLevels.rvt",
+      "year": 2016,
+      "bytes": 3198976,
+      "sha256": "45db84aeecadccb4cc2d1983488859ffe783ed35847849dc5ea7b9983aab7eb7"
+    },
+    {
+      "name": "dynamo-topography-2016",
+      "repo": "DynamoDS/DynamoRevit",
+      "path": "test/System/Topography/Topography.rvt",
+      "licence": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/DynamoDS/DynamoRevit/49cd43c5c3b21271640ae043b8b77374e4796843/test/System/Topography/Topography.rvt",
+      "year": 2016,
+      "bytes": 3473408,
+      "sha256": "4ac0bd698e17a4d0b70cf4bd5e050a631d224cc40da921f6b0faaf0615139af0"
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+# Libellés français des catégories de Revit : nom OST_, libellé (au pluriel, comme dans la liste des catégories de Revit).
+# Écrits à la main pour ce projet ; les catégories non listées ici reçoivent un rendu automatique de leur nom.
+OST_Walls	Murs
+OST_WallsFinish1	Finition 1 de murs
+OST_WallsFinish2	Finition 2 de murs
+OST_WallsStructure	Structure de murs
+OST_WallsInsulation	Isolation de murs
+OST_WallsMembrane	Membrane de murs
+OST_WallsSubstrate	Support de murs
+OST_StackedWalls	Murs empilés
+OST_Windows	Fenêtres
+OST_Doors	Portes
+OST_Floors	Sols
+OST_FloorsFinish1	Finition 1 de sols
+OST_FloorsFinish2	Finition 2 de sols
+OST_FloorsStructure	Structure de sols
+OST_FloorsInsulation	Isolation de sols
+OST_FloorsMembrane	Membrane de sols
+OST_FloorsSubstrate	Support de sols
+OST_Roofs	Toitures
+OST_RoofsFinish1	Finition 1 de toitures
+OST_RoofsFinish2	Finition 2 de toitures
+OST_RoofsStructure	Structure de toitures
+OST_RoofsInsulation	Isolation de toitures
+OST_RoofsMembrane	Membrane de toitures
+OST_RoofsSubstrate	Support de toitures
+OST_Ceilings	Plafonds
+OST_CeilingsFinish1	Finition 1 de plafonds
+OST_CeilingsFinish2	Finition 2 de plafonds
+OST_CeilingsStructure	Structure de plafonds
+OST_CeilingsInsulation	Isolation de plafonds
+OST_CeilingsMembrane	Membrane de plafonds
+OST_CeilingsSubstrate	Support de plafonds
+OST_Furniture	Mobilier
+OST_FurnitureSystems	Systèmes de mobilier
+OST_Casework	Mobilier fixe
+OST_Columns	Poteaux
+OST_StructuralColumns	Poteaux porteurs
+OST_StructuralFraming	Ossature porteuse
+OST_StructuralFramingOther	Ossature porteuse (autre)
+OST_StructuralFoundation	Fondations porteuses
+OST_StructuralTruss	Fermes porteuses
+OST_StructuralStiffener	Raidisseurs
+OST_Girder	Poutres maîtresses
+OST_Joist	Solives
+OST_Purlin	Pannes
+OST_HorizontalBracing	Contreventement horizontal
+OST_VerticalBracing	Contreventement vertical
+OST_KickerBracing	Contreventement d'about
+OST_Truss	Fermes
+OST_Stairs	Escaliers
+OST_StairsRuns	Volées d'escalier
+OST_StairsLandings	Paliers d'escalier
+OST_StairsTrisers	Contremarches d'escalier
+OST_StairsSupports	Supports d'escalier
+OST_StairsStringerCarriage	Limons d'escalier
+OST_MultistoryStairs	Escaliers multi-niveaux
+OST_StairsRailing	Garde-corps
+OST_StairsRailingBaluster	Balustres de garde-corps
+OST_StairsRailingRail	Lisses de garde-corps
+OST_RailingSystemSegment	Segments de garde-corps
+OST_RailingSystemPost	Poteaux de garde-corps
+OST_RailingSystemPanel	Panneaux de garde-corps
+OST_RailingSystemHardware	Quincaillerie de garde-corps
+OST_RailingTopRail	Lisses hautes de garde-corps
+OST_RailingHandRail	Mains courantes de garde-corps
+OST_RailingSupport	Supports de garde-corps
+OST_RailingTermination	Terminaisons de garde-corps
+OST_Ramps	Rampes
+OST_Cornices	Corniches
+OST_Reveals	Feuillures
+OST_Fascia	Bandeaux
+OST_Gutter	Gouttières
+OST_EdgeSlab	Nez de dalle
+OST_RoofSoffit	Sous-faces de toiture
+OST_GenericModel	Modèles génériques
+OST_Rooms	Pièces
+OST_Areas	Surfaces
+OST_MEPSpaces	Espaces
+OST_CurtainWallPanels	Panneaux de mur-rideau
+OST_CurtainWallMullions	Meneaux de mur-rideau
+OST_CurtainGrids	Grilles de mur-rideau
+OST_CurtaSystem	Systèmes de mur-rideau
+OST_Parts	Parties
+OST_Divisions	Divisions
+OST_Massing	Volumétrie
+OST_Mass	Masses
+OST_MassFloor	Sols de masse
+OST_MassForm	Formes de masse
+OST_MassZone	Zones de masse
+OST_Materials	Matériaux
+OST_Lights	Lumières
+OST_Cameras	Caméras
+OST_Lines	Lignes
+OST_Grids	Grilles
+OST_Levels	Niveaux
+OST_Sheets	Feuilles
+OST_RasterImages	Images
+OST_RvtLinks	Liaisons Revit
+OST_PointClouds	Nuages de points
+OST_DetailComponents	Composants de détail
+OST_Site	Site
+OST_SitePoint	Points de site
+OST_Topography	Topographie
+OST_Toposolid	Toposolides
+OST_BuildingPad	Terrassements de bâtiment
+OST_Roads	Routes
+OST_Parking	Stationnement
+OST_Planting	Végétation
+OST_Entourage	Environnement
+OST_Hardscape	Aménagements minéraux
+OST_SpecialityEquipment	Équipements spéciaux
+OST_FoodServiceEquipment	Équipements de restauration
+OST_MedicalEquipment	Équipements médicaux
+OST_FireProtection	Protection incendie
+OST_VerticalCirculation	Circulations verticales
+OST_AudioVisualDevices	Appareils audiovisuels
+OST_Signage	Signalétique
+OST_Blocks	Blocs
+OST_ProjectBasePoint	Point de base du projet
+OST_SharedBasePoint	Point de relevé
+OST_AnalyticalPanel	Panneaux analytiques
+OST_AnalyticalMember	Éléments analytiques
+OST_GuideGrid	Grilles de guidage
+OST_ProfileFamilies	Familles de profils
+OST_ProjectInformation	Informations du projet
+OST_ElectricalEquipment	Équipements électriques
+OST_ElectricalFixtures	Appareils électriques
+OST_ElectricalCircuit	Circuits électriques
+OST_LightingFixtures	Appareils d'éclairage
+OST_LightingDevices	Dispositifs d'éclairage
+OST_MechanicalEquipment	Équipements mécaniques
+OST_MechanicalControlDevices	Dispositifs de contrôle mécanique
+OST_PlumbingFixtures	Appareils sanitaires
+OST_PlumbingEquipment	Équipements de plomberie
+OST_Sprinklers	Sprinklers
+OST_DuctCurves	Gaines
+OST_DuctFitting	Raccords de gaine
+OST_DuctTerminal	Bouches d'air
+OST_DuctAccessory	Accessoires de gaine
+OST_DuctSystem	Systèmes de gaines
+OST_FlexDuctCurves	Gaines souples
+OST_PlaceHolderDucts	Gaines provisoires
+OST_PipeCurves	Tuyaux
+OST_PipeFitting	Raccords de tuyauterie
+OST_PipeAccessory	Accessoires de tuyauterie
+OST_PipingSystem	Systèmes de tuyauterie
+OST_FlexPipeCurves	Tuyaux flexibles
+OST_PlaceHolderPipes	Tuyaux provisoires
+OST_CableTray	Chemins de câbles
+OST_CableTrayFitting	Raccords de chemin de câbles
+OST_Conduit	Conduits
+OST_ConduitFitting	Raccords de conduit
+OST_Wire	Fils
+OST_TelephoneDevices	Appareils téléphoniques
+OST_NurseCallDevices	Appareils d'appel infirmière
+OST_SecurityDevices	Appareils de sécurité
+OST_CommunicationDevices	Appareils de communication
+OST_DataDevices	Appareils de données
+OST_FireAlarmDevices	Appareils d'alarme incendie
+OST_FabricationDuctwork	Réseaux de gaines (fabrication)
+OST_FabricationPipework	Tuyauteries (fabrication)
+OST_FabricationContainment	Conduits de câbles (fabrication)
+OST_FabricationHangers	Suspentes (fabrication)
+OST_Rebar	Armatures
+OST_AreaRein	Armatures surfaciques
+OST_FabricReinforcement	Treillis soudés
+OST_StructConnections	Assemblages structurels
+OST_Coupler	Manchons
+OST_BridgeAbutments	Culées de pont
+OST_BridgePiers	Piles de pont
+OST_BridgeDecks	Tabliers de pont
+OST_BridgeGirders	Poutres de pont
+OST_BridgeArches	Arches de pont
+OST_BridgeCables	Câbles de pont
+OST_BridgeTowers	Pylônes de pont
+OST_BridgeBearings	Appareils d'appui de pont
+OST_BridgeFoundations	Fondations de pont

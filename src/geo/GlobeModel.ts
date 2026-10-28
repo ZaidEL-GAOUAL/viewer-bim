@@ -8,7 +8,6 @@
 import { FLAG_COLORED, FLAG_SELECTED } from '../engine/elementState.ts';
 import type { Model } from '../engine/Model.ts';
 import type { Viewer } from '../engine/Viewer.ts';
-import { AXES } from '../engine/Sections.ts';
 import { writeCesiumGlb } from './cesiumGlb.ts';
 
 type Cesium = typeof import('cesium');
@@ -254,11 +253,13 @@ export class GlobeModel {
   private readonly syncSections = (): void => {
     if (!this.cesiumModel || this.disposed) return;
     const cesium = this.cesium;
-    const { planes, enabled } = this.viewer.sections;
+    const sections = this.viewer.sections;
+    const planes = sections.clipPlanes;
     this.clipping.removeAll();
-    for (const axis of AXES) {
-      if (!enabled[axis]) continue;
-      const { normal, constant } = planes[axis];
+    // Les trois plans libres et, quand une vue enregistrée en pose une, les six plans de sa boîte de coupe.
+    for (let k = 0; k < planes.length; k++) {
+      if (!sections.planeEnabled(k)) continue;
+      const { normal, constant } = planes[k];
       this.clipping.add(new cesium.ClippingPlane(new cesium.Cartesian3(normal.x, normal.y, normal.z), constant));
     }
     this.scene.requestRender();

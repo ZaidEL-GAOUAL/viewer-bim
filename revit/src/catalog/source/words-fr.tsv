@@ -1,0 +1,1536 @@
+# Dictionnaire des mots des identifiants de Revit (WALL_BASE_OFFSET, OST_StructuralColumns) vers
+# le français, pour le rendu automatique des libellés que personne n'a écrits à la main.
+# Colonnes : mot (majuscules), genre, traduction.
+#   nm nf    nom masculin, féminin (singulier)       nmp nfp   pluriel (les adjectifs s'accordent par un « s »)
+#   a        adjectif : « masculin|féminin » (une seule forme si elle ne varie pas)
+#   x        mot ignoré (outil grammatical, bruit d'identifiant)
+# Texte écrit pour ce projet ; aucun libellé d'Autodesk n'est repris.
+ABOUT	x
+ABOVE	a	au-dessus
+ABSORPTANCE	nf	absorptance
+ABUTMENT	nf	culée
+ABUTMENTS	nfp	culées
+ACCESSORY	nm	accessoire
+ACCIDENTAL	a	accidentel|accidentelle
+ACH	nm	renouvellement d'air
+ACTIVE	a	actif|active
+ACTUAL	a	réel|réelle
+ADAPTIVE	a	adaptatif|adaptative
+ADD	x
+ADDITIONAL	a	supplémentaire
+ADJACENT	a	adjacent|adjacente
+ADJUST	x
+ADJUSTED	a	ajusté|ajustée
+ADJUSTMENT	nm	ajustement
+ADSK	x
+ADT	x
+AIR	nm	air
+AIRFLOW	nm	débit d'air
+AIRLOOP	nf	boucle d'air
+ALARM	nf	alarme
+ALIGNMENT	nm	alignement
+ALIGNMENTS	nmp	alignements
+ALL	a	tout|toute
+ALLOW	x
+ALLOWED	a	autorisé|autorisée
+ALONG	x
+ALT	a	alternatif|alternative
+ALTERNATE	a	alternatif|alternative
+ALWAYS	x
+AMBIENT	a	ambiant|ambiante
+AND	x
+ANALEMMA	nm	analemme
+ANALYSIS	nf	analyse
+ANALYTICAL	a	analytique
+ANCHOR	nm	ancrage
+ANCHORS	nmp	ancrages
+ANGLE	nm	angle
+ANGLES	nmp	angles
+ANGULAR	a	angulaire
+ANNOTATION	nf	annotation
+ANNOTATIONS	nfp	annotations
+ANY	a	quelconque
+AREA	nf	surface
+AREAS	nfp	surfaces
+ARC	nm	arc
+ARCH	nf	arche
+ARCHES	nfp	arches
+ARRAY	nm	réseau
+ARROW	nf	flèche
+ARROWHEAD	nf	pointe de flèche
+ARROWS	nfp	flèches
+AS	x
+ASSEMBLED	a	assemblé|assemblée
+ASSEMBLIES	nmp	assemblages
+ASSEMBLY	nm	assemblage
+ASSET	nm	bien
+ASSOC	a	associé|associée
+ASSOCIATE	x
+ASSOCIATED	a	associé|associée
+ASSOCIATION	nf	association
+AT	x
+ATTACH	x
+ATTACHED	a	attaché|attachée
+ATTACHMENT	nf	attache
+ATTR	x
+ATTRIBUTES	x
+AUDIO	a	audio
+AUTHOR	nm	auteur
+AUTO	a	automatique
+AUTOJOIN	nf	jonction automatique
+AUTOMATIC	a	automatique
+AVERAGE	a	moyen|moyenne
+AXIS	nm	axe
+BACK	a	arrière
+BACKED	a	doublé|doublée
+BACKGROUND	nm	arrière-plan
+BALLAST	nm	ballast
+BALUSTER	nm	balustre
+BALUSTERS	nmp	balustres
+BANK	nm	talus
+BAR	nf	barre
+BARS	nfp	barres
+BASE	nf	base
+BASED	a	basé|basée
+BASEPOINT	nm	point de base
+BASES	nfp	bases
+BE	x
+BEAM	nf	poutre
+BEAMS	nfp	poutres
+BEARING	nm	appui
+BEARINGS	nmp	appuis
+BEGINNING	nm	début
+BEHAVIOR	nm	comportement
+BELOW	a	en dessous
+BELT	nf	ceinture
+BEND	nm	coude
+BENDING	nm	pliage
+BENT	a	plié|pliée
+BLOCK	nm	bloc
+BLOCKS	nmp	blocs
+BOLT	nm	boulon
+BOLTS	nmp	boulons
+BOOLEAN	nm	booléen
+BORDER	nf	bordure
+BORDER1	nf	bordure 1
+BORDER2	nf	bordure 2
+BOTTOM	a	inférieur|inférieure
+BOUND	a	limité|limitée
+BOUNDARY	nf	limite
+BOUNDING	a	englobant|englobante
+BOX	nf	boîte
+BRACE	nm	contreventement
+BRANCH	nf	branche
+BREAK	nf	coupure
+BRIDGE	nm	pont
+BUILDING	nm	bâtiment
+BUILDINGPAD	nm	terrassement
+BY	x
+BYPASS	nm	dérivation
+CABLE	nm	câble
+CABLES	nmp	câbles
+CABLETRAY	nm	chemin de câbles
+CALC	x
+CALCULATED	a	calculé|calculée
+CALCULATION	nm	calcul
+CALCULATOR	nm	calculateur
+CALL	nm	appel
+CALLOUT	nm	détail de repère
+CALLOUTS	nmp	détails de repère
+CAMERA	nf	caméra
+CAMERAS	nfp	caméras
+CAN	x
+CAP	nm	chapeau
+CAPACITY	nf	capacité
+CAPS	nmp	chapeaux
+CARPETING	nf	moquette
+CARRIAGE	nm	chariot
+CASE	nm	cas
+CASES	nmp	cas
+CASEWORK	nm	mobilier fixe
+CATEGORIES	nfp	catégories
+CATEGORY	nf	catégorie
+CEILING	nm	plafond
+CEILINGS	nmp	plafonds
+CELL	nf	cellule
+CELLS	nfp	cellules
+CENTER	nm	centre
+CENTERED	a	centré|centrée
+CENTERLINE	nm	axe
+CENTROID	nm	centre de gravité
+CHAIN	nf	chaîne
+CHAINS	nfp	chaînes
+CHANGE	nm	changement
+CHECKED	a	vérifié|vérifiée
+CHECKING	nf	vérification
+CHILLED	a	refroidi|refroidie
+CHORD	nf	membrure
+CHORDS	nfp	membrures
+CIRC	a	circulaire
+CIRCLE	nm	cercle
+CIRCUIT	nm	circuit
+CIRCUITING	nm	circuit
+CIRCULAR	a	circulaire
+CIRCULATION	nf	circulation
+CLASSIFICATION	nf	classification
+CLEAR	a	libre
+CLEARANCE	nm	dégagement
+CLIENT	nm	client
+CLINE	nm	axe
+CLIP	nm	découpe
+CLIPPING	nm	découpe
+CLOSED	a	fermé|fermée
+CLOSURE	nf	fermeture
+CLOUD	nm	nuage
+CLOUDS	nmp	nuages
+COARSE	a	grossier|grossière
+CODE	nm	code
+COEFF	nm	coefficient
+COEFFICIENT	nm	coefficient
+COL	nm	poteau
+COLOR	nf	couleur
+COLUMN	nm	poteau
+COLUMNS	nmp	poteaux
+COMBINATION	nf	combinaison
+COMMENTS	nmp	commentaires
+COMMON	a	commun|commune
+COMMUNICATION	nf	communication
+COMPASS	nm	compas
+COMPLETELY	x
+COMPONENT	nm	composant
+COMPONENTS	nmp	composants
+COMPOSEDNAME	nm	nom composé
+COMPOUND	a	composé|composée
+COMPRESSION	nf	compression
+COMPUTATION	nm	calcul
+COMPUTED	a	calculé|calculée
+CONCEPTUAL	a	conceptuel|conceptuelle
+CONCRETE	nm	béton
+CONDENSER	nm	condenseur
+CONDITION	nf	condition
+CONDITIONS	nfp	conditions
+CONDUCTORS	nmp	conducteurs
+CONDUIT	nm	conduit
+CONDUITRUN	nm	tronçon de conduit
+CONFIG	nf	configuration
+CONFIGURATION	nf	configuration
+CONNECT	x
+CONNECTION	nf	connexion
+CONNECTIONS	nfp	connexions
+CONNECTOR	nm	connecteur
+CONSTANT	nf	constante
+CONSTRAIN	x
+CONSTRAINT	nf	contrainte
+CONSTRAINTS	nfp	contraintes
+CONSTRUCTION	nf	construction
+CONSTRUCTIONS	nfp	constructions
+CONT	a	continu|continue
+CONTAINER	nm	conteneur
+CONTAINMENT	nm	confinement
+CONTENT	nm	contenu
+CONTINUOUS	a	continu|continue
+CONTINUOUSRAIL	nf	main courante continue
+CONTOUR	nm	courbe de niveau
+CONTOURS	nmp	courbes de niveau
+CONTROL	nm	contrôle
+COOL	a	froid|froide
+COOLING	nm	refroidissement
+COPE	nf	découpe
+COPING	nm	couvertine
+CORE	nm	noyau
+CORNICES	nfp	corniches
+COUNT	nm	nombre
+COUPLED	a	couplé|couplée
+COUPLER	nm	manchon
+COVER	nm	enrobage
+COVERAGE	nf	couverture
+CRANK	nm	décrochement
+CRANKS	nmp	décrochements
+CREASE	nm	pli
+CREATED	a	créé|créée
+CREATION	nf	création
+CRITICALPATH	nm	chemin critique
+CROP	nm	cadrage
+CROSS	a	transversal|transversale
+CTC	x
+CURRENT	nm	courant
+CURTAIN	nm	mur-rideau
+CURTAINGRID	nf	grille de mur-rideau
+CURVE	nf	courbe
+CURVED	a	courbe
+CURVES	nfp	courbes
+CURVETYPE	nm	type de courbe
+CUST	a	personnalisé|personnalisée
+CUSTOM	a	personnalisé|personnalisée
+CUT	nf	coupe
+CUTLINE	nf	ligne de coupe
+CUTMARK	nm	repère de coupe
+CUTS	nfp	coupes
+CUTTER	nm	découpeur
+CUTTING	a	coupant|coupante
+D	nm	D
+DAMPER	nm	clapet
+DAMPERS	nmp	clapets
+DASH	nm	tiret
+DATA	nfp	données
+DATE	nf	date
+DATETIME	nf	date et heure
+DATUM	nm	repère de référence
+DBG	x
+DEAD	a	permanent|permanente
+DECK	nm	tablier
+DECKS	nmp	tabliers
+DEF	a	par défaut
+DEFAULT	a	par défaut
+DEFAULTS	nmp	valeurs par défaut
+DEFINES	x
+DEFINING	a	définissant|définissante
+DEFINITION	nf	définition
+DEFINITIONS	nfp	définitions
+DEFORMATION	nf	déformation
+DEHUMIDIFICATION	nf	déshumidification
+DELETABLE	a	supprimable
+DEMAND	nf	demande
+DEMANDFACTOR	nm	facteur de demande
+DEMANDLOAD	nf	charge de demande
+DEMOLISHED	a	démoli|démolie
+DEPARTMENT	nm	service
+DEPR	nf	dépréciation
+DEPTH	nf	profondeur
+DESC	nf	description
+DESCRIPTION	nf	description
+DESIGN	nf	conception
+DESIGNED	a	conçu|conçue
+DESIGNFLOW	nm	débit de conception
+DESIGNOPTIONS	nfp	options de conception
+DESIRED	a	souhaité|souhaitée
+DETAIL	nm	détail
+DETAILED	a	détaillé|détaillée
+DETAILS	nmp	détails
+DETERMINATION	nf	détermination
+DEVIATION	nf	écart
+DEVICE	nm	dispositif
+DEVICES	nmp	dispositifs
+DIAG	a	diagonal|diagonale
+DIAGONAL	a	diagonal|diagonale
+DIALOG	nm	boîte de dialogue
+DIAMETER	nm	diamètre
+DIAPHRAGM	nm	diaphragme
+DIAPHRAGMS	nmp	diaphragmes
+DIM	nf	cote
+DIMENSION	nf	cote
+DIMENSIONS	nfp	cotes
+DIMMING	nm	variation
+DIR	nf	direction
+DIRECTION	nf	direction
+DIRT	nf	salissure
+DISABLE	x
+DISABLED	a	désactivé|désactivée
+DISCARDED	a	écarté|écartée
+DISCIPLINE	nf	discipline
+DISPLACED	a	déplacé|déplacée
+DISPLACEMENT	nm	déplacement
+DISPLAY	nm	affichage
+DISPLAYED	a	affiché|affichée
+DIST	nf	distance
+DISTANCE	nf	distance
+DISTRIB	nf	distribution
+DISTRIBUTION	nf	distribution
+DISTRIBUTIONSYS	nm	système de distribution
+DIVIDE	x
+DIVIDED	a	divisé|divisée
+DIVIDEDPATH	nm	chemin divisé
+DIVISION	nf	division
+DIVISIONS	nfp	divisions
+DOOR	nf	porte
+DOORS	nfp	portes
+DOT	nm	point
+DOUBLE	a	double
+DOWN	a	bas|basse
+DPART	nf	partie
+DRAFT	nm	brouillon
+DRAG	nf	traînée
+DRAIN	nm	évacuation
+DRAW	x
+DRAWN	a	dessiné|dessinée
+DRIVEN	a	piloté|pilotée
+DRIVING	a	pilotant|pilotante
+DROP	nf	descente
+DUCT	nf	gaine
+DUCTS	nfp	gaines
+DUCTWORK	nm	réseau de gaines
+DUTY	nm	service
+E	nm	E
+EA	x
+EACH	a	chaque
+EAVE	nm	débord de toit
+EDGE	nm	bord
+EDGES	nmp	bords
+EDIT	x
+EDITABLE	a	modifiable
+EDITED	a	modifié|modifiée
+EFFICACY	nf	efficacité lumineuse
+EFFICIENCY	nm	rendement
+ELACTICITY	nf	élasticité
+ELASTIC	a	élastique
+ELBOW	nm	coude
+ELBOWDOWN	nm	coude vers le bas
+ELBOWUP	nm	coude vers le haut
+ELEC	a	électrique
+ELECTICAL	a	électrique
+ELECTRICAL	a	électrique
+ELEM	x
+ELEMENT	nm	élément
+ELEMENTS	nmp	éléments
+ELEV	nf	altitude
+ELEVATION	nf	altitude
+ELEVATIONS	nfp	altitudes
+ELEVATN	nf	altitude
+ELT	nm	élément
+EMBED	x
+EMBEDDED	a	incorporé|incorporée
+EMISSIVITY	nf	émissivité
+EMITTER	nm	émetteur
+ENABLE	x
+ENABLED	a	activé|activée
+ENCLOSURE	nm	coffret
+END	nf	extrémité
+END0	nf	extrémité 0
+END1	nf	extrémité 1
+ENDTREATMENT	nm	traitement d'extrémité
+ENERGY	nf	énergie
+ENGINEERING	nf	ingénierie
+ENTITY	nf	entité
+ENTOURAGE	nm	environnement
+ENTRY	nf	entrée
+ENVELOPE	nf	enveloppe
+EQ	a	égal|égale
+EQUALITY	nf	égalité
+EQUIP	nm	équipement
+EQUIPMENT	nm	équipement
+EST	a	estimé|estimée
+EVACUATION	nf	évacuation
+EXACT	a	exact|exacte
+EXCAVATION	nf	excavation
+EXCHANGE	nm	échange
+EXCLUDED	a	exclu|exclue
+EXHAUST	nm	extraction
+EXISTING	a	existant|existante
+EXIT	nf	sortie
+EXP	x
+EXPANSION	nf	dilatation
+EXPORT	nf	exportation
+EXPOSURE	nf	exposition
+EXTEND	x
+EXTENSION	nf	prolongation
+EXTENTS	nfp	étendues
+EXTERIOR	a	extérieur|extérieure
+EXTERNAL	a	externe
+FABRIC	nm	treillis
+FABRICATION	nf	fabrication
+FACE	nf	face
+FACES	nfp	faces
+FACET	nf	facette
+FACTOR	nm	facteur
+FAILED	a	en échec
+FAILURE	nm	échec
+FAM	nf	famille
+FAMILIES	nfp	familles
+FAMILY	nf	famille
+FAMILYNAME	nm	nom de famille
+FAR	a	éloigné|éloignée
+FBX	x
+FEED	nf	alimentation
+FEEDER	nm	câble d'alimentation
+FIELD	nm	champ
+FIELDS	nmp	champs
+FILENAME	nm	nom de fichier
+FILL	nm	remplissage
+FILLED	a	rempli|remplie
+FILLET	nm	congé
+FILLS	nmp	remplissages
+FILTER	nm	filtre
+FILTERED	a	filtré|filtrée
+FILTERS	nmp	filtres
+FINISH	nf	finition
+FINISHING	nf	finition
+FIRE	nm	feu
+FIRST	a	premier|première
+FIX	x
+FIXED	a	fixe
+FIXTURE	nm	appareil
+FIXTURES	nmp	appareils
+FLANGE	nf	semelle
+FLEX	a	flexible
+FLEXDUCT	nf	gaine flexible
+FLEXIBLE	a	flexible
+FLIP	x
+FLIPPED	a	retourné|retournée
+FLOOR	nm	sol
+FLOORS	nmp	sols
+FLOW	nm	débit
+FLUID	nm	fluide
+FLUIDS	nmp	fluides
+FOLD	nm	pli
+FOLDER	nm	dossier
+FOLDERS	nmp	dossiers
+FOLLOW	x
+FOOD	nf	restauration
+FOOTER	nm	pied de page
+FOOTING	nf	semelle de fondation
+FOR	x
+FORCE	nf	force
+FORCES	nfp	forces
+FOREGROUND	nm	premier plan
+FORM	nf	forme
+FORMAT	nm	format
+FORMATTED	a	formaté|formatée
+FORMULA	nf	formule
+FOUNDATION	nf	fondation
+FOUNDATIONS	nfp	fondations
+FRAME	nm	cadre
+FRAMES	nmp	cadres
+FRAMING	nf	ossature
+FREQUENCY	nf	fréquence
+FRICTION	nm	frottement
+FROM	x
+FRONT	a	avant
+FULL	a	complet|complète
+FURNITURE	nm	mobilier
+FUTURE	a	futur|future
+GAP	nm	espace
+GAS	nm	gaz
+GAUGE	nf	jauge
+GB	x
+GBXML	nm	gbXML
+GENERAL	a	général|générale
+GENERIC	a	générique
+GEO	a	géographique
+GEOM	nf	géométrie
+GEOMETRY	nf	géométrie
+GIRDER	nf	poutre maîtresse
+GIRDERS	nfp	poutres maîtresses
+GLASS	nm	verre
+GLAZING	nm	vitrage
+GLOW	nf	luminescence
+GRAPH	nm	graphe
+GRAPHIC	a	graphique
+GRAPHICAL	a	graphique
+GRAPHICS	nmp	graphismes
+GRID	nf	grille
+GRIDLINE	nf	ligne de grille
+GRIDLINES	nfp	lignes de grille
+GRIDS	nfp	grilles
+GROUND	nm	sol
+GROUNDS	nmp	mises à la terre
+GROUP	nm	groupe
+GROUPS	nmp	groupes
+GUIDE	nm	guide
+GUTTER	nf	gouttière
+H	nm	H
+HANDRAIL	nf	main courante
+HANDRAILS	nfp	mains courantes
+HANGER	nm	suspente
+HANGERS	nmp	suspentes
+HARD	a	dur|dure
+HARDSCAPE	nm	aménagement minéral
+HARDWARE	nf	quincaillerie
+HAS	x
+HAVE	x
+HEAD	nf	tête
+HEADER	nm	en-tête
+HEAT	nf	chaleur
+HEATING	nm	chauffage
+HEAVY	a	épais|épaisse
+HEEL	nm	talon
+HEIGHT	nf	hauteur
+HIDDEN	a	masqué|masquée
+HIGH	a	haut|haute
+HIGHEST	a	le plus haut
+HISTORY	nm	historique
+HOLDER	nm	support
+HOLE	nm	trou
+HOLES	nmp	trous
+HOME	nm	accueil
+HORIZ	a	horizontal|horizontale
+HORIZONTAL	a	horizontal|horizontale
+HOST	nm	hôte
+HOSTED	a	hébergé|hébergée
+HOSTING	nm	hébergement
+HOT	a	chaud|chaude
+HOTS	nmp	phases
+HUMIDIFICATION	nf	humidification
+HVAC	x
+HVACLOAD	nf	charge CVC
+HW	nf	eau chaude
+HYDRAULIC	a	hydraulique
+HYDRONIC	a	hydronique
+ICON	nf	icône
+ID	nm	identifiant
+ID1	nm	identifiant 1
+ID2	nm	identifiant 2
+IDENTIFICATION	nf	identification
+IDENTITY	nf	identité
+IFC	nm	IFC
+IGNORE	x
+ILLUMINANCE	nm	éclairement
+ILLUMINATION	nm	éclairage
+IMAGE	nf	image
+IMAGES	nfp	images
+IMPERIAL	a	impérial|impériale
+IMPLICIT	a	implicite
+IMPORT	nf	importation
+IN	x
+INCLUDE	x
+INCLUDED	a	inclus|incluse
+INCOMPLETE	a	incomplet|incomplète
+INDENT	nm	retrait
+INDEX	nm	indice
+INDIVIDUAL	a	individuel|individuelle
+INERTIA	nf	inertie
+INFILTRATION	nf	infiltration
+INFO	nf	information
+INFORMATION	nf	information
+INHERIT	x
+INPUT	nf	saisie
+INSERT	nm	insert
+INSERTS	nmp	inserts
+INST	nf	instance
+INSTALL	nf	installation
+INSTANCE	nf	instance
+INSULATION	nf	isolation
+INTENSITY	nf	intensité
+INTEREST	nm	intérêt
+INTERIOR	a	intérieur|intérieure
+INTERNAL	a	interne
+INTERSECTING	a	sécant|sécante
+INTERVAL	nm	intervalle
+INVERTED	a	inversé|inversée
+INVISIBLE	a	invisible
+INWARD	a	vers l'intérieur
+IOS	x
+IS	x
+ISHAPE	nm	profilé en I
+ISOLATED	a	isolé|isolée
+ISOLATOR	nm	isolateur
+ISOLATORS	nmp	isolateurs
+ISSUE	nf	émission
+ISSUED	a	émis|émise
+ITALIC	a	italique
+ITEM	nm	élément
+JOIN	nf	jonction
+JOINS	nfp	jonctions
+JOINT	nm	joint
+JOINTS	nmp	joints
+JOIST	nf	solive
+JSON	x
+JUST	x
+JUSTFICATION	nf	justification
+JUSTIFICATION	nf	justification
+JUSTIFY	x
+KEEP	x
+KEEPS	x
+KEY	nf	clé
+KEYNOTE	nf	note-clé
+KEYWORD	nm	mot-clé
+KEYWORDS	nmp	mots-clés
+KICKER	nm	renfort
+KFACTOR	nm	facteur K
+LABEL	nf	étiquette
+LABELS	nfp	étiquettes
+LAMP	nf	lampe
+LANDING	nm	palier
+LANDINGS	nmp	paliers
+LAP	nm	recouvrement
+LAST	a	dernier|dernière
+LATENT	a	latent|latente
+LATERAL	a	latéral|latérale
+LATITUDE	nf	latitude
+LAYER	nf	couche
+LAYERS	nfp	couches
+LAYOUT	nf	disposition
+LEADER	nf	ligne de repère
+LEFT	a	gauche
+LEG	nm	côté
+LEGEND	nf	légende
+LEGENDS	nfp	légendes
+LEN	nf	longueur
+LENGTH	nf	longueur
+LENGTHS	nfp	longueurs
+LEVEL	nm	niveau
+LEVELS	nmp	niveaux
+LIB	nf	bibliothèque
+LIGHT	nf	lumière
+LIGHTING	nm	éclairage
+LIGHTS	nfp	lumières
+LINE	nf	ligne
+LINEAR	a	linéaire
+LINES	nfp	lignes
+LINEWORK	nm	linéaire
+LINING	nm	revêtement
+LININGS	nmp	revêtements
+LINK	nm	lien
+LINKED	a	lié|liée
+LINKS	nmp	liens
+LIQUID	nm	liquide
+LIVE	a	variable
+LOAD	nf	charge
+LOADCASE	nm	cas de charge
+LOADCLASSIFICATION	nf	classification de charge
+LOADED	a	chargé|chargée
+LOADS	nfp	charges
+LOCAL	a	local|locale
+LOCATION	nf	position
+LOCATIONS	nfp	positions
+LOCK	x
+LONG	a	long|longue
+LONGER	a	plus long|plus longue
+LONGITUDE	nf	longitude
+LONGITUDINAL	a	longitudinal|longitudinale
+LOOKUP	nf	recherche
+LOOP	nf	boucle
+LOOPS	nfp	boucles
+LOSS	nf	perte
+LOW	a	bas|basse
+LOWER	a	inférieur|inférieure
+LOWEST	a	le plus bas
+LUGS	nmp	cosses
+LUMEN	nm	lumen
+LUMINAIREPLANE	nm	plan du luminaire
+LV	nm	niveau
+MAIN	a	principal|principale
+MAINS	nmp	arrivées
+MAJOR	a	majeur|majeure
+MAKE	x
+MANAGEMENT	nf	gestion
+MANAGER	nm	gestionnaire
+MANUFACTURER	nm	fabricant
+MANUALLY	x
+MAP	nf	carte
+MARK	nf	repère
+MARKS	nmp	repères
+MARKUPS	nmp	annotations de révision
+MASKING	nm	masquage
+MASS	nf	masse
+MASSING	nf	volumétrie
+MASSZONE	nf	zone de masse
+MAT	nm	matériau
+MATCH	x
+MATCHES	x
+MATERIAL	nm	matériau
+MATERIALS	nmp	matériaux
+MAX	a	maximal|maximale
+MAXIM	a	maximal|maximale
+MAXIMUM	a	maximal|maximale
+MECHANICAL	a	mécanique
+MECHJOINT	nm	joint mécanique
+MEDICAL	a	médical|médicale
+MEDIUM	a	moyen|moyenne
+MEMBER	nm	élément
+MEMBERS	nmp	éléments
+MEP	nm	MEP
+METHOD	nf	méthode
+METRIC	a	métrique
+MGR	nm	gestionnaire
+MID	a	médian|médiane
+MIDDLE	a	médian|médiane
+MIN	a	minimal|minimale
+MINIM	a	minimal|minimale
+MINIMUM	a	minimal|minimale
+MINOR	a	mineur|mineure
+MINUS	x
+MIRROR	nm	miroir
+MIRRORED	a	en miroir
+MODE	nm	mode
+MODEL	nm	modèle
+MODELS	nmp	modèles
+MODIFICATION	nf	modification
+MODIFICATIONS	nfp	modifications
+MODIFIED	a	modifié|modifiée
+MODIFY	x
+MODULE	nm	module
+MODULUS	nm	module
+MOMENT	nm	moment
+MOMENTS	nmp	moments
+MONTH	nm	mois
+MOTOR	nm	moteur
+MOUNTING	nm	montage
+MOVE	x
+MOVES	x
+MULL	nm	meneau
+MULLION	nm	meneau
+MULLIONS	nmp	meneaux
+MULT	nm	multiplicateur
+MULTI	a	multiple
+MULTIPLE	a	multiple
+MULTIPLIER	nm	multiplicateur
+NAME	nm	nom
+NAMES	nmp	noms
+NAMING	nm	nommage
+NATURE	nf	nature
+NAV	nf	navigation
+NEAR	a	proche
+NEUTRAL	nm	neutre
+NEUTRALS	nmp	neutres
+NET	a	net|nette
+NO	x
+NOBLE	a	noble
+NODE	nm	nœud
+NODES	nmp	nœuds
+NON	a	non
+NORMAL	a	normal|normale
+NORTH	nm	nord
+NOSING	nm	nez de marche
+NOT	x
+NOTCH	nf	encoche
+NOTES	nfp	notes
+NUM	nm	nombre
+NUMBER	nm	numéro
+NUMBERING	nf	numérotation
+NUMBERS	nmp	numéros
+NURSE	nf	infirmière
+OBJECT	nm	objet
+OBSOLETE	a	obsolète
+OCCUPANCY	nf	occupation
+OCCUPIABLE	a	occupable
+OEM	x
+OF	x
+OFF	a	désactivé|désactivée
+OFFSET	nm	décalage
+OFFSETFACES	nfp	faces décalées
+ON	x
+ONE	a	un
+ONLY	a	seul|seule
+OPEN	a	ouvert|ouverte
+OPENING	nf	ouverture
+OPERABLE	a	ouvrant|ouvrante
+OPERATING	a	d'exploitation
+OPERATION	nf	exploitation
+OPTION	nf	option
+OPTIONS	nfp	options
+OR	x
+ORDER	nm	ordre
+ORG	nf	organisation
+ORGANIZATION	nf	organisation
+ORIENT	x
+ORIENTATION	nf	orientation
+ORIGIN	nf	origine
+ORIGINAL	a	d'origine
+ORIGINATING	a	d'origine
+ORTHOGONAL	a	orthogonal|orthogonale
+OTHER	a	autre
+OTHERS	nmp	autres
+OUT	a	sortant|sortante
+OUTDOOR	a	extérieur|extérieure
+OUTER	a	extérieur|extérieure
+OUTLINE	nm	contour
+OUTLINES	nmp	contours
+OUTSIDE	a	extérieur|extérieure
+OVAL	a	ovale
+OVERALL	a	global|globale
+OVERHANG	nm	débord
+OVERHEAD	a	en hauteur
+OVERLAPPING	a	chevauchant|chevauchante
+OVERRIDE	nf	surcharge
+OVERRIDES	nfp	surcharges
+PAD	nm	plateforme
+PADDING	nm	marge
+PAINT	nf	peinture
+PANEL	nm	panneau
+PANELS	nmp	panneaux
+PARALLEL	a	parallèle
+PARAM	x
+PARAMETER	nm	paramètre
+PARAMETERS	nmp	paramètres
+PARAMETRIC	a	paramétrique
+PARENT	a	parent|parente
+PARKING	nm	stationnement
+PART	nf	partie
+PARTMAKER	nm	créateur de pièces
+PARTS	nfp	parties
+PATH	nm	chemin
+PATH1	nm	chemin 1
+PATH2	nm	chemin 2
+PATHS	nmp	chemins
+PATTERN	nm	motif
+PATTERNS	nmp	motifs
+PEAK	nm	pointe
+PEN	nm	crayon
+PEOPLE	nfp	personnes
+PERCENT	nm	pourcentage
+PERCENTAGE	nm	pourcentage
+PERIMETER	nm	périmètre
+PERMEABILITY	nf	perméabilité
+PERPENDICULAR	a	perpendiculaire
+PERSON	nf	personne
+PERSPECTIVE	nf	perspective
+PHASE	nf	phase
+PHASES	nfp	phases
+PHASING	nf	phase de construction
+PHOTO	nf	photo
+PHOTOMETRIC	a	photométrique
+PHOTOMETRICS	nfp	données photométriques
+PHY	a	physique
+PHYSICAL	a	physique
+PIER	nf	pile
+PIERS	nfp	piles
+PILE	nm	pieu
+PILES	nmp	pieux
+PIPE	nm	tuyau
+PIPES	nmp	tuyaux
+PIPING	nf	tuyauterie
+PIPINGFLOW	nm	débit de tuyauterie
+PIPEWORK	nf	tuyauterie
+PIVOT	nm	pivot
+PIXEL	nm	pixel
+PLACE	x
+PLACEMENT	nm	placement
+PLAN	nm	plan
+PLANE	nm	plan
+PLANES	nmp	plans
+PLANT	nf	plante
+PLANTING	nf	plantation
+PLATE	nf	plaque
+PLATES	nfp	plaques
+PLENUM	nm	plénum
+PLUMBING	nf	plomberie
+PLUS	x
+POCHE	nm	poché
+POINT	nm	point
+POINTS	nmp	points
+POISSON	nm	Poisson
+POLE	nm	pôle
+POLES	nmp	pôles
+POROSITY	nf	porosité
+POS	nf	position
+POSITION	nf	position
+POSITIONING	nm	positionnement
+POST	nm	poteau
+POSTS	nmp	poteaux
+POWER	nf	puissance
+PRE	x
+PRECAST	a	préfabriqué|préfabriquée
+PRECUT	a	prédécoupé|prédécoupée
+PREFER	x
+PREFERENCE	nf	préférence
+PREFERENCES	nfp	préférences
+PREFERRED	a	préféré|préférée
+PREFIX	nm	préfixe
+PRESENT	a	présent|présente
+PRESERVE	x
+PRESET	a	prédéfini|prédéfinie
+PRESSURE	nf	pression
+PRESSUREDROP	nf	perte de charge
+PREVIEW	nm	aperçu
+PRIM	a	principal|principale
+PRIMARY	a	principal|principale
+PRIVATE	a	privé|privée
+PROFILE	nm	profil
+PROFILES	nmp	profils
+PROJ	nm	projet
+PROJECT	nm	projet
+PROJECTED	a	projeté|projetée
+PROJECTION	nf	projection
+PROJLENGTH	nf	longueur projetée
+PROPERTIES	nfp	propriétés
+PROPERTY	nf	propriété
+PROPORTION	nf	proportion
+PROPORTIONS	nfp	proportions
+PROTECTED	a	protégé|protégée
+PROTECTION	nf	protection
+PULLDOWN	nm	menu déroulant
+PURLIN	nf	panne
+QUANTITY	nf	quantité
+R	nm	R
+RADIAL	a	radial|radiale
+RADIANT	a	rayonnant|rayonnante
+RADIUS	nm	rayon
+RAFTER	nm	chevron
+RAIL	nm	lisse
+RAILING	nm	garde-corps
+RAILINGS	nmp	garde-corps
+RAISED	a	surélevé|surélevée
+RAMP	nf	rampe
+RAMPS	nfp	rampes
+RANGES	nfp	plages
+RASTER	nm	raster
+RATE	nm	taux
+RATING	nf	classement
+RATINGS	nmp	classements
+RATIO	nm	rapport
+RAY	nm	rayon
+READ	x
+READABLE	a	lisible
+REACTION	nf	réaction
+REF	nf	référence
+REFELEMENT	nm	élément de référence
+REFERENCE	nf	référence
+REFERENCED	a	référencé|référencée
+REFERENCING	nm	référencement
+REGEN	nf	régénération
+REGENERATED	a	régénéré|régénérée
+REGENERATION	nf	régénération
+REGION	nf	région
+REGIONS	nfp	régions
+REHEAT	nm	réchauffage
+REIN	nm	ferraillage
+REINFORCEMENT	nm	ferraillage
+RELATED	a	associé|associée
+RELATIVE	a	relatif|relative
+RELEASE	nf	libération
+RELEASES	nfp	libérations
+REMAINDER	nm	reste
+REMOVED	a	supprimé|supprimée
+RENDER	nm	rendu
+RENDERING	nm	rendu
+REP	nf	représentation
+REPEAT	nf	répétition
+REPEATER	nm	répéteur
+REPEATING	a	répété|répétée
+REPORT	nm	rapport
+REPORTING	a	de rapport
+REPS	nfp	représentations
+RESISTANCE	nf	résistance
+RESISTIVITY	nf	résistivité
+RESIZE	x
+RESOLUTION	nf	résolution
+RESPONSE	nf	réponse
+RESTRAINT	nf	retenue
+RESULTS	nmp	résultats
+RETURN	nm	retour
+REUSE	x
+REVEAL	nm	feuillure
+REVEALS	nmp	feuillures
+REVISION	nf	révision
+REVISIONS	nfp	révisions
+REYNOLDS	nm	Reynolds
+RFA	x
+RGB	nm	RVB
+RIDGE	nm	faîtage
+RIGHT	a	droit|droite
+RISE	nf	montée
+RISEDROP	nf	montée et descente
+RISER	nf	contremarche
+RISERS	nfp	contremarches
+ROAD	nf	route
+ROADS	nfp	routes
+ROLE	nm	rôle
+ROLL	nm	roulis
+ROOF	nf	toiture
+ROOFS	nfp	toitures
+ROOM	nf	pièce
+ROOMS	nfp	pièces
+ROOT	x
+ROT	nf	rotation
+ROTATE	x
+ROTATION	nf	rotation
+ROUGH	a	brut|brute
+ROUGHNESS	nf	rugosité
+ROUND	a	rond|ronde
+ROUNDING	nm	arrondi
+ROW	nf	rangée
+ROWS	nfp	rangées
+RULE	nf	règle
+RULES	nfp	règles
+RUN	nf	volée
+RUNS	nfp	volées
+RUNG	nm	barreau
+RVT	x
+S	nm	S
+SAMPLE	nm	échantillon
+SCALE	nf	échelle
+SCHED	nf	nomenclature
+SCHEDULE	nf	nomenclature
+SCHEDULED	a	planifié|planifiée
+SCHEDULES	nfp	nomenclatures
+SCHEMA	nm	schéma
+SCHEME	nm	schéma
+SCHEMES	nmp	schémas
+SCREEN	nm	écran
+SECONDARY	a	secondaire
+SECTION	nf	section
+SECTIONS	nfp	sections
+SECURITY	nf	sécurité
+SEEK	x
+SEG	nm	segment
+SEGMENT	nm	segment
+SEGMENTED	a	segmenté|segmentée
+SEGMENTS	nmp	segments
+SELECTION	nf	sélection
+SELF	x
+SEPARATOR	nm	séparateur
+SEQUENCE	nf	séquence
+SEQUENCES	nfp	séquences
+SERVER	nm	serveur
+SERVICE	nm	service
+SERVICES	nmp	services
+SET	nm	jeu
+SETBACK	nm	retrait
+SETPOINT	nf	consigne
+SETS	nmp	jeux
+SETTING	nm	réglage
+SETTINGS	nmp	réglages
+SHADE	nm	ombrage
+SHADED	a	ombré|ombrée
+SHADING	nm	ombrage
+SHADOWS	nfp	ombres
+SHAFT	nf	trémie
+SHAPE	nf	forme
+SHARE	x
+SHEAR	nm	cisaillement
+SHEARSTUD	nm	goujon de cisaillement
+SHEET	nf	feuille
+SHEETMETAL	nf	tôle
+SHEETS	nfp	feuilles
+SHELL	nf	coque
+SHIFT	nm	décalage
+SHORT	a	court|courte
+SHORTEN	x
+SHORTER	a	plus court|plus courte
+SHOULDER	nm	épaulement
+SHOW	a	affiché|affichée
+SIDE	nm	côté
+SIGMA	nm	sigma
+SIGNAGE	nf	signalétique
+SILH	nf	silhouette
+SILHOUETTE	nf	silhouette
+SILL	nm	seuil
+SIMILAR	a	similaire
+SINGLE	a	simple
+SINGLEDAY	a	sur un jour
+SITE	nm	site
+SIZE	nf	taille
+SKETCH	nf	esquisse
+SKYLIGHT	nm	lanterneau
+SKYLIGHTS	nmp	lanterneaux
+SLAB	nf	dalle
+SLABS	nfp	dalles
+SLANT	nf	inclinaison
+SLANTED	a	incliné|inclinée
+SLIDING	a	coulissant|coulissante
+SLIVER	nm	éclat
+SLOPE	nf	pente
+SLOPED	a	en pente
+SLOPES	nfp	pentes
+SNAP	nm	accrochage
+SNAPPING	nm	accrochage
+SNAPS	nmp	accrochages
+SNOW	nf	neige
+SOFFIT	nm	sous-face
+SOLAR	a	solaire
+SOLARSTUDY	nf	étude solaire
+SOURCE	nf	source
+SPACE	nm	espace
+SPACES	nmp	espaces
+SPACING	nm	espacement
+SPAN	nf	portée
+SPANACTIVE	a	de portée active
+SPANLENGTH	nf	longueur de portée
+SPATIAL	a	spatial|spatiale
+SPEC	nf	spécification
+SPECIAL	a	spécial|spéciale
+SPECIFIC	a	spécifique
+SPECIFY	x
+SPEED	nf	vitesse
+SPIRAL	a	en spirale
+SPLICE	nm	raboutage
+SPLIT	x
+SPLITTER	nm	diviseur
+SPOT	a	ponctuel|ponctuelle
+SPRING	nm	ressort
+SPRINKLER	nm	sprinkler
+SPRINKLERS	nmp	sprinklers
+STACKED	a	empilé|empilée
+STAGGER	nm	décalage
+STAGGERED	a	décalé|décalée
+STAIR	nm	escalier
+STAIRS	nm	escalier
+STAIRSTYPE	nm	type d'escalier
+STANDARD	nf	norme
+STANDARDS	nfp	normes
+START	nm	début
+STATE	nm	état
+STATIC	a	statique
+STATION	nf	station
+STATUS	nm	statut
+STEEL	nm	acier
+STEP	nf	marche
+STEPS	nfp	marches
+STIFFENER	nm	raidisseur
+STIFFENERS	nmp	raidisseurs
+STILL	a	fixe
+STIRRUP	nm	étrier
+STORY	nm	étage
+STRAIGHT	a	droit|droite
+STRESS	nf	contrainte
+STRING	nf	chaîne de caractères
+STRINGER	nm	limon
+STRINGERS	nmp	limons
+STRONG	a	fort|forte
+STRUCT	a	structurel|structurelle
+STRUCTURAL	a	structurel|structurelle
+STRUCTURE	nf	structure
+STUD	nm	goujon
+STUDS	nmp	goujons
+STYLE	nm	style
+STYLES	nmp	styles
+SUB	a	sous-
+SUBCATEGORY	nf	sous-catégorie
+SUBFEED	nf	alimentation secondaire
+SUFFIX	nm	suffixe
+SUM	nf	somme
+SUMMARY	nm	récapitulatif
+SUN	nm	soleil
+SUNRISE	nm	lever du soleil
+SUNSET	nm	coucher du soleil
+SUPPLY	nf	alimentation
+SUPPORT	nm	support
+SUPPORTS	nmp	supports
+SUPPORTTYPE	nm	type de support
+SUPPRESS	x
+SURFACE	nf	surface
+SURFACES	nfp	surfaces
+SURVEY	nm	relevé
+SUSPENDED	a	suspendu|suspendue
+SUSPENSION	nf	suspension
+SWEEP	nm	balayage
+SWITCH	nm	interrupteur
+SYM	nm	symbole
+SYMBOL	nm	symbole
+SYMBOLIC	a	symbolique
+SYMBOLOGY	nf	symbologie
+SYMBOLS	nmp	symboles
+SYS	nm	système
+SYSTEM	nm	système
+SYSTEMS	nmp	systèmes
+TABLE	nm	tableau
+TAG	nf	étiquette
+TAGS	nfp	étiquettes
+TAIL	nf	queue
+TAN	x
+TAPER	nm	conicité
+TAPERED	a	conique
+TEE	nm	té
+TEEDOWN	nm	té vers le bas
+TEEUP	nm	té vers le haut
+TELEPHONE	nm	téléphone
+TEMPERATURE	nf	température
+TEMPLATE	nm	gabarit
+TEMPLATES	nmp	gabarits
+TEMPORARY	a	temporaire
+TENDON	nm	câble de précontrainte
+TENDONS	nmp	câbles de précontrainte
+TENSILE	a	de traction
+TENSION	nf	tension
+TERMINAL	nm	terminal
+TERMINATION	nf	terminaison
+TEXT	nm	texte
+THERMAL	a	thermique
+THICK	a	épais|épaisse
+THICKNESS	nf	épaisseur
+THIN	a	mince
+THRESHOLD	nm	seuil
+THRU	x
+TICK	nm	repère
+TICKMARK	nm	repère
+TILE	nm	carreau
+TIME	nm	temps
+TIMES	nmp	temps
+TITLE	nm	titre
+TMP	a	temporaire
+TO	x
+TOE	nm	pied
+TOLERANCE	nf	tolérance
+TOP	a	supérieur|supérieure
+TOPOGRAPHY	nf	topographie
+TOPOSOLID	nm	solide topographique
+TOPOSURFACE	nf	surface topographique
+TOPSIDE	nm	dessus
+TORSIONAL	a	de torsion
+TOTAL	a	total|totale
+TOWER	nf	tour
+TOWERS	nfp	tours
+TRADESIZE	nf	taille commerciale
+TRANSFER	nm	transfert
+TRANSFORMATION	nf	transformation
+TRANSFORMER	nm	transformateur
+TRANSLATION	nf	translation
+TRANSMITS	x
+TRANSMITTANCE	nf	transmittance
+TRANSPARENCY	nf	transparence
+TRANSPARENT	a	transparent|transparente
+TRAP	nm	siphon
+TRAVEL	nm	déplacement
+TRAY	nm	chemin
+TREAD	nm	giron
+TREADS	nmp	girons
+TREATMENT	nm	traitement
+TRIANGLE	nm	triangle
+TRISER	nf	contremarche
+TRISERS	nfp	contremarches
+TRISERTYPE	nm	type de contremarche
+TRUE	a	vrai|vraie
+TRUSS	nf	ferme
+TRUSSES	nfp	fermes
+TWO	a	deux
+TYPE	nm	type
+TYPES	nmp	types
+U	nm	U
+UI	nf	interface
+UNDERGROUND	a	souterrain|souterraine
+UNDERLAY	nm	sous-jacent
+UNDERLINE	a	souligné|soulignée
+UNDERSIDE	nf	sous-face
+UNION	nf	union
+UNITS	nfp	unités
+UP	a	haut|haute
+UPDATE	x
+UPDOWN	a	haut-bas
+UPPER	a	supérieur|supérieure
+UPTO	x
+USAGE	nm	usage
+USE	x
+USER	nm	utilisateur
+USING	x
+UTILITY	nm	réseau
+UTILIZATION	nf	utilisation
+V	nm	V
+VALID	a	valide
+VALUE	nf	valeur
+VALVE	nf	vanne
+VAPOR	nf	vapeur
+VAL	nf	valeur
+VARIABLE	a	variable
+VENDOR	nm	fournisseur
+VENT	nf	évent
+VENTILATION	nf	ventilation
+VERSION	nf	version
+VERT	a	vertical|verticale
+VERTICAL	a	vertical|verticale
+VIBRATION	nf	vibration
+VIEW	nf	vue
+VIEWER	nm	visualiseur
+VIEWERS	nmp	visualiseurs
+VIEWPORT	nm	zone de vue
+VIEWPORTS	nmp	zones de vue
+VIEWS	nfp	vues
+VIS	a	visible
+VISIBILITY	nf	visibilité
+VISIBLE	a	visible
+VISUAL	a	visuel|visuelle
+VOID	nm	vide
+VOIDS	nmp	vides
+VOLTAGE	nf	tension
+VOLUME	nm	volume
+W	nm	W
+WALL	nm	mur
+WALLS	nmp	murs
+WARNING	nm	avertissement
+WARPING	nm	gauchissement
+WASTE	nm	déchet
+WATER	nf	eau
+WATTAGE	nf	puissance
+WAYS	nfp	voies
+WEB	nf	âme
+WEBS	nfp	âmes
+WEIGHT	nm	poids
+WELD	nf	soudure
+WELDED	a	soudé|soudée
+WELDS	nfp	soudures
+WIDE	a	large
+WIDTH	nf	largeur
+WIND	nm	vent
+WINDER	nm	marche balancée
+WINDERS	nmp	marches balancées
+WINDOW	nf	fenêtre
+WINDOWS	nfp	fenêtres
+WIRE	nm	fil
+WIRES	nmp	fils
+WITH	x
+WITHOUT	x
+WOOD	nm	bois
+WORK	nm	travail
+WORKPLANE	nm	plan de travail
+WORKSETS	nmp	sous-projets
+WRAPPING	nm	habillage
+X	nm	X
+XML	x
+XZ	nm	XZ
+Y	nm	Y
+YIELD	nf	limite d'élasticité
+YOUNG	nm	Young
+YZ	nm	YZ
+Z	nm	Z
+ZERO	nm	zéro
+ZONE	nf	zone
+ZONES	nfp	zones
+ZONING	nm	zonage
+RBS	x	
+REBAR	nf	armature
+HOOK	nm	crochet
+FITTING	nm	raccord
+APPARENT	a	apparent|apparente
+CWP	nm	panneau de mur-rideau
+PRODUCT	nm	produit
+PHASEA	nf	phase A
+PHASEB	nf	phase B
+PHASEC	nf	phase C
+PHASE1	nf	phase 1
+PHASE2	nf	phase 2
+PHASE3	nf	phase 3
+COORDINATE	nf	coordonnée
+COORD	nf	coordonnée
+IND	nm	indicateur
+MOD	nm	modificateur
+WINDERPATTERN	nm	motif de marches balancées
+ABBREVIATION	nf	abréviation
+SPANHOOK	nm	crochet de portée
+3D	a	3D
+2D	a	2D
+STICK	nm	bâton
+FP	nf	protection incendie
+LOADSUMMARY	nm	récapitulatif de charge
+MX	nm	Mx
+MY	nm	My
+MZ	nm	Mz
+FX	nm	Fx
+FY	nm	Fy
+FZ	nm	Fz
+GSTYLE	nm	style graphique
+MEASUREMENT	nf	mesure
+SSE	nf	modification de forme de dalle
+RUNTYPE	nm	type de volée
+BUBBLE	nf	bulle
+STUDY	nf	étude
+SLOT	nf	fente
+INTERMEDIATE	a	intermédiaire
+GRADE	nf	pente
+DIRECTCONTEXT3D	x	
+MULTIPLANAR	a	multiplanaire
+CONNECTED	a	connecté|connectée
+DENSITY	nf	densité
+CUTBACK	nm	retrait
+CONDUCTIVITY	nf	conductivité
+INSIDE	a	intérieur|intérieure
+CORNER	nm	angle
+LANDINGTYPE	nm	type de palier
+MONOLITHIC	a	monolithique
+CREATE	x	
+TARGET	nf	cible
+MAKER	nm	créateur
+TRANSITION	nf	transition
+LOCKED	a	verrouillé|verrouillée
+INITIAL	a	initial|initiale
+EMIT	nf	émission
+CONDUCTOR	nm	conducteur
+ROUTING	nm	cheminement
+TAKEOFF	nm	piquage
+RANGE	nf	plage
+NEW	a	nouveau|nouvelle
+MATCHLINE	nf	ligne de raccord
+TOTALESTLOAD	nf	charge totale estimée
+TOTALLOAD	nf	charge totale
+GROSS	a	brut|brute
+COPY	nf	copie
+ADDL	a	supplémentaire
+LAPSPLICE	nm	raboutage par recouvrement
+SEPARATION	nf	séparation
+DECAL	nm	décalcomanie
+FONT	nf	police
+APPEARANCE	nf	apparence
+COLLECTION	nf	collection
+HEADS	nfp	têtes
+WITNS	nf	ligne d'attache
+LANGLE	nf	cornière
+WEAK	a	faible
+PROFILE1	nm	profil 1
+PROFILE2	nm	profil 2
+RIGID	a	rigide
+EDITOR	nm	éditeur
+EPS	nm	polystyrène expansé
+INSULATIONS	nfp	isolations
+ELLIPSE	nf	ellipse
+PARAMS	nmp	paramètres
+SCHEMATIC	a	schématique
+REPRESENTATION	nf	représentation
+CONSTRAINED	a	contraint|contrainte
+ALIGN	x	
+TOGGLE	x	
+INFRASTRUCTURE	nf	infrastructure
+CIRCUITS	nmp	circuits
+ROUTE	nm	itinéraire
+CHANGES	nmp	changements
+HOUR	nf	heure
+ENGAGEMENT	nm	engagement
+MULTISTORY	a	multi-niveaux
+PARTITION	nf	cloison
+HOTWATER	nf	eau chaude
+COIL	nf	batterie
+REFLECTIVITY	nf	réflectivité
+OVERRIDDEN	a	modifié|modifiée
+TRIM	nm	finition
+SAME	a	identique
+RESULT	nm	résultat
+CLASS	nf	classe
+EXT	a	extérieur|extérieure
+MEASURE	nf	mesure
+UNIT	nf	unité
+FILE	nm	fichier
+CTRL	nm	contrôle
+TILT	nf	inclinaison
+DOUBLEWALL	nm	mur double
+SPECIFICATION	nf	spécification
+STRENGTH	nf	résistance
+AZIMUTH	nm	azimut
+FASCIA	nm	bandeau
+HOR	a	horizontal|horizontale
+CANTILEVER	nm	porte-à-faux
+IWELDED	nm	profilé en I soudé
+MULTIDAY	a	sur plusieurs jours
+PSEUDO	a	pseudo
+CURTA	nm	système
+ANGLED	a	angulaire
+BLEND	nm	raccordement
+HOOKS	nmp	crochets
+FUNCTION	nf	fonction
+APPLICATION	nf	application
+SHARED	a	partagé|partagée
+VISCOSITY	nf	viscosité
+HAND	nf	main
+BEGIN	nm	début
+NORMALIZED	a	normalisé|normalisée
+INVERT	nm	radier
+MOD1	nm	modificateur 1
+MOD2	nm	modificateur 2
+MOD3	nm	modificateur 3
+VELOCITY	nf	vitesse
+BUS	nm	bus
+INNER	a	intérieur|intérieure
+VOLTAGETYPE	nm	type de tension
+ANALYTIC	a	analytique
+MULTISHAPE	a	multiforme
+GRID1	nf	grille 1
+GRID2	nf	grille 2
+EXTRUSION	nf	extrusion
+SUBDIVIDE	x	
+GRIP	nf	prise
+TAPPING	nm	piquage
+ALPHA	nm	alpha
+COATING	nm	revêtement
+FREE	a	libre
+STANDBY	a	de secours
+PREHEAT	nm	préchauffage
+WATERLOOP	nf	boucle d'eau
+URL	nm	URL
+RECTANGLE	nm	rectangle
+REDUCTION	nf	réduction
+ORIFICE	nm	orifice
+DIAM	nm	diamètre
+BALANCED	a	équilibré|équilibrée
+GAIN	nm	gain
+TURNS	nmp	tours
+BODY	nm	corps
+PT	nm	point
+MRK	nf	repère
+TIE	nm	chaînage
+PITCH	nm	pas

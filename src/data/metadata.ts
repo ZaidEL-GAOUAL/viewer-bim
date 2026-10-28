@@ -2,6 +2,8 @@
 // Rien ici ne suppose un nom de propriété : tout est découvert dans le fichier.
 
 import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
+import { parsePhases, type Phases } from './phases.ts';
+import { parseViews, type SavedView } from './savedViews.ts';
 
 export type PropValue = string | number | boolean | null;
 export type FlatProps = Record<string, PropValue>;
@@ -22,6 +24,10 @@ export interface Metadata {
   propertiesMode?: 'replace';
   /** Position de la maquette sur Terre (voir geo/georeference.ts), si le fichier la donne. */
   georeference?: Georeference;
+  /** Phases du projet et leurs filtres (voir data/phases.ts), si le fichier les donne. */
+  phases?: Phases;
+  /** Vues enregistrées (voir data/savedViews.ts), si le fichier en donne. */
+  views?: SavedView[];
 }
 
 /**
@@ -132,6 +138,11 @@ export function parseMetadata(json: unknown): Metadata {
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
   const georeference = parseGeoreference(json.georeference);
   if (georeference) metadata.georeference = georeference;
+  // Sections facultatives : une section illisible est ignorée, elle n'empêche pas d'ouvrir le fichier.
+  const phases = parsePhases(json.phases);
+  if (phases) metadata.phases = phases;
+  const views = parseViews(json.views);
+  if (views.length > 0) metadata.views = views;
   return metadata;
 }
 

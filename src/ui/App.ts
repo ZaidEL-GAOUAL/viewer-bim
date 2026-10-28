@@ -1,18 +1,23 @@
-import { Box3 } from 'three';
+import { Box3, Sphere } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { IFC_READ_ONLY, PropertyStore, flattenProperties, unflattenProperties, mergeProperties, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
+import { IFC_READ_ONLY, PropertyStore, flattenProperties, unflattenProperties, mergeProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
+import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
+import { cameraPose, hiddenByView, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
+import { combineHidden, layerChanges } from '../data/viewLayer.ts';
 import { writeGlb } from '../engine/writeGlb.ts';
 import { PropertyEdits } from '../data/PropertyEdits.ts';
 import { evaluateAppearanceRules, validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
 import { updateGlbMetadata } from '../engine/updateGlbMetadata.ts';
 import { hexToRgb } from '../data/palette.ts';
-import { buildModel, gltfSource } from '../engine/buildModel.ts';
+import { ModelBuilder, buildModel, gltfSource } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
 import { IfcTooLargeError, convertIfc, isIfcFile, packageUsd } from '../ifc/convertIfc.ts';
 import { isUsdFile, loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
-import type { ModelSource } from '../engine/buildModel.ts';
-import type { Model } from '../engine/Model.ts';
+import { isRevitFile, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
+import { describeRevitReport } from '../revit/revitReport.ts';
+import type { ModelSource, RawInput } from '../engine/buildModel.ts';
+import { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { AXES } from '../engine/Sections.ts';
 import { STANDARD_VIEWS, VIEW_ORDER } from '../engine/views.ts';
@@ -25,6 +30,8 @@ import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
 import { SectionPanel } from './SectionPanel.ts';
+import { ViewsPanel } from './ViewsPanel.ts';
+import { WalkPanel } from './WalkPanel.ts';
 import { MapPanel } from './MapPanel.ts';
 import { georeferenceToJson, type Georeference } from '../geo/georeference.ts';
 import { TreePanel } from './TreePanel.ts';
@@ -32,7 +39,7 @@ import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference';
+export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view';
 export type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
@@ -57,8 +64,14 @@ function isOutOfMemory(error: unknown): boolean {
   return /rangeerror|out of memory|allocation failed|invalid (typed )?array length|array buffer/i.test(message);
 }
 
+/** « 1 élément », « 2 éléments » : le singulier en dessous de 2, comme le veut le français (« 0 élément »). */
+const counted = (n: number, singular: string, plural = `${singular}s`) => `${integer.format(n)} ${n < 2 ? singular : plural}`;
+
 const tooHeavyMessage = (name: string) =>
   `« ${name} » est trop lourd pour la mémoire dont dispose le navigateur. Fermez d’autres onglets et réessayez, ou ouvrez un modèle plus léger (découpé par bâtiment ou par lot, par exemple).`;
+
+/** Exemples qui sont des fichiers sources (pas des GLB) : ils passent par le convertisseur IFC ou le lecteur Revit. */
+const RAW_SAMPLES = new Map([['ifc', 'ifc-demo.ifc'], ['revit', 'revit-demo.rvt']]);
 
 const NO_MATCH =
   'Aucun identifiant du fichier JSON ne correspond aux éléments du modèle. Vérifiez le champ « extras.id » ou le nom des nœuds.';
@@ -109,6 +122,13 @@ export class App {
   private metadataInput!: HTMLInputElement;
   private conversionEl!: HTMLElement;
   private conversionText!: HTMLElement;
+  private conversionTitle!: HTMLElement;
+  /**
+   * Lecture d'un fichier Revit en cours : l'ouverture d'un autre modèle l'interrompt (`controller`), pour ne pas garder
+   * deux lecteurs en mémoire. `candidates` : les JSON de métadonnées que `installModel` départagera à la fin ; un JSON
+   * déposé seul pendant la lecture y est ajouté au lieu de l'interrompre.
+   */
+  private revitReading: { controller: AbortController; candidates: Metadata[] } | null = null;
   /** Fichiers produits par la dernière conversion d'IFC, proposés au téléchargement. */
   private conversion: { name: string; model: Blob; extension: string; glb: ArrayBuffer } | null = null;
   /** Nombre de valeurs modifiées dans le panneau Propriétés depuis le chargement du modèle. */
@@ -119,6 +139,19 @@ export class App {
   propertyEdits: PropertyEdits | null = null;
   appearanceRules: AppearanceRule[] = [];
   groupingPaths: string[] = [];
+  /** Phase et filtre de phase choisis (section `phases` des métadonnées), ou null : tout le modèle, sans filtre. */
+  phaseSelection: PhaseSelection | null = null;
+  /** Ce que la phase choisie fait de chaque élément (voir data/phases.ts). */
+  phaseEvaluation: PhaseEvaluation | null = null;
+  /** Vue enregistrée ouverte (section `views`), ou null : l'affichage normal. */
+  activeView: SavedView | null = null;
+  /** Éléments que la vue enregistrée masque (éléments et catégories), ou null. */
+  private viewHidden: Uint8Array | null = null;
+  /** Éléments que la phase et la vue masquent en ce moment : de quoi les réafficher quand elles changent. */
+  private layerHidden: Uint8Array | null = null;
+  /** La caméra d'avant l'ouverture de la première vue enregistrée : « Vue par défaut » la rétablit. */
+  private cameraBeforeViews: ReturnType<Viewer['capturePose']> | null = null;
+  private keyIndex: Map<string, number> | null = null;
   private readonly planning: SchedulePanel;
   get grouping(): readonly string[] { return this.groupingPaths; }
   private originalGlb: ArrayBuffer | Blob | null = null;
@@ -149,7 +182,7 @@ export class App {
 
     // ------------------------------------------------------------ barre d'outils
     const fileInput = h('input', {
-      attrs: { type: 'file', multiple: '', accept: '.ifc,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
+      attrs: { type: 'file', multiple: '', accept: '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
     });
     // Un .gltf vient souvent avec un .bin et un dossier de textures : on peut ouvrir le dossier entier.
     const folderInput = h('input', { attrs: { type: 'file', webkitdirectory: '', hidden: '' } });
@@ -167,6 +200,7 @@ export class App {
       h('option', { text: 'Petit bâtiment (220 éléments)', attrs: { value: 'demo' } }),
       h('option', { text: 'Tour (22 500 éléments)', attrs: { value: 'demo-large' } }),
       h('option', { text: 'Maquette IFC (convertie dans le navigateur)', attrs: { value: 'ifc' } }),
+      h('option', { text: 'Maquette Revit (2023)', attrs: { value: 'revit' } }),
     );
     samples.addEventListener('change', () => {
       if (samples.value) void this.loadSample(samples.value);
@@ -182,6 +216,9 @@ export class App {
       void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
     }, { title: 'Poser la maquette sur la carte (globe, plan ou photo aérienne)', attrs: { 'aria-pressed': 'false' } });
     const sectionPanel = new SectionPanel(this);
+    const viewsPanel = new ViewsPanel(this);
+    // Mode visite : touche V ou bouton, carte d'aide dans la vue ; le double-clic ne replace que hors mesure.
+    const walkPanel = new WalkPanel(this.viewer, (message) => this.toast(message), () => !isPointMeasure(this.tool) && this.tool !== 'section');
     const sectionToggle = button('Coupes', () => {
       const open = sectionPanel.toggle();
       sectionToggle.setAttribute('aria-pressed', String(open));
@@ -241,10 +278,11 @@ export class App {
       if (this.propertyEdits?.changed) event.preventDefault();
     });
 
-    // Format de sortie : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
-    // le format choisi, et c'est ce fichier qui est affiché et proposé au téléchargement.
-    const formats = h('div', { class: 'segmented formats', attrs: { role: 'group', 'aria-label': 'Format' } });
-    for (const [format, label, hint] of [['glb', 'GLB', 'Fichiers glTF binaires (.glb) : compacts, lus par tous les outils 3D'], ['usd', 'USD', 'Fichiers OpenUSD (.usdz) : métadonnées embarquées dans chaque élément']] as const) {
+    // Format d'export : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
+    // le format choisi, et c'est ce fichier qui est affiché et proposé au téléchargement. Ce n'est pas le format du
+    // fichier ouvert (un fichier Revit n'est converti en rien) : d'où l'étiquette « Export ».
+    const formats = h('div', { class: 'segmented', attrs: { role: 'group', 'aria-labelledby': 'export-format-label' } });
+    for (const [format, label, hint] of [['glb', 'GLB', 'Exporter en glTF binaire (.glb) : compact, lu par tous les outils 3D. Un IFC est converti dans ce format.'], ['usd', 'USD', 'Exporter en OpenUSD (.usdz) : métadonnées embarquées dans chaque élément. Un IFC est converti dans ce format.']] as const) {
       const element = button(label, () => this.setFormat(format), { title: hint });
       this.formatButtons.set(format, element);
       formats.append(element);
@@ -270,9 +308,12 @@ export class App {
     const topbar = h('header', { class: 'topbar' },
       panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
-      formats,
+      h('div', { class: 'formats', title: 'Format des téléchargements (GLB ↓ ou USD ↓) et de la conversion d’un IFC, pas celui du fichier ouvert' },
+        h('span', { class: 'bar-label', text: 'Export', attrs: { id: 'export-format-label' } }),
+        formats,
+      ),
       h('div', { class: 'bar-group' },
-        button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .glb ou .gltf et son .json de métadonnées' }),
+        button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .ifc, un fichier Revit (.rvt, .rfa, gabarits .rte et .rft), ou un .glb ou .gltf avec son .json de métadonnées' }),
         button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
         button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
         samples, fileInput, folderInput, this.metadataInput,
@@ -280,7 +321,9 @@ export class App {
       tools, clearMeasures, history,
       h('div', { class: 'bar-group' },
         this.twoDButton,
+        walkPanel.button,
         mapToggle,
+        viewsPanel.button,
         sectionToggle,
         button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
         this.maskButton,
@@ -298,7 +341,7 @@ export class App {
     this.emptyEl = h('div', { class: 'empty' },
       h('div', { class: 'empty-card' },
         h('h1', { text: 'Déposez un modèle' }),
-        h('p', { text: 'Un fichier .ifc (converti sur place, en GLB ou en USD selon le format choisi en haut), un .glb ou un .usdz avec son .json de métadonnées, ou le dossier d’un .gltf (avec son .bin et ses textures).' }),
+        h('p', { text: 'Un fichier .ifc (converti sur place, en GLB ou en USD selon le format d’export choisi en haut), un fichier Revit (.rvt, .rfa, gabarits .rte et .rft ; lus sur place, sans Revit), un .glb ou un .usdz avec son .json de métadonnées, ou le dossier d’un .gltf (avec son .bin et ses textures).' }),
         h('div', { class: 'empty-actions' },
           button('Choisir des fichiers…', () => fileInput.click(), { class: 'primary' }),
           button('Choisir un dossier…', () => folderInput.click()),
@@ -317,11 +360,12 @@ export class App {
       mapToggle.setAttribute('aria-pressed', String(this.mapPanel.isOpen));
     };
 
-    // Après la conversion d'un IFC : rappel du résultat et téléchargement des deux fichiers produits.
+    // Après la conversion d'un IFC ou la lecture d'un .rvt : rappel du résultat et téléchargement des deux fichiers.
     this.conversionText = h('p', { class: 'hint' });
+    this.conversionTitle = h('h2', { class: 'card-title', text: 'IFC converti' });
     this.conversionEl = h('section', { class: 'card conversion-card', attrs: { hidden: '' } },
       h('div', { class: 'card-head' },
-        h('h2', { class: 'card-title', text: 'IFC converti' }),
+        this.conversionTitle,
         button('×', () => (this.conversionEl.hidden = true), { class: 'measure-remove', title: 'Fermer' }),
       ),
       this.conversionText,
@@ -330,7 +374,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, sectionPanel.el, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -427,6 +471,8 @@ export class App {
     if (!model) return;
     this.isolation = null;
     this.masked.clear();
+    // « Tout afficher » montre aussi ce que la phase ou la vue enregistrée masquaient : leur filtre de visibilité est levé.
+    this.layerHidden = null;
     for (let i = 0; i < model.count; i++) model.state.setVisible(i, true);
     this.visibilityChanged();
   }
@@ -542,7 +588,9 @@ export class App {
     const model = this.model;
     if (!model) return;
     for (let i = 0; i < model.count; i++) { model.state.clearColor(i); model.state.setOpacity(i, null); }
-    for (const [i, appearance] of evaluateAppearanceRules(this.store, this.appearanceRules, { keys: model.keys, label: (index) => this.elementLabel(index) })) {
+    // Les remplacements de la phase passent sous les règles : une règle d'apparence l'emporte, attribut par attribut.
+    const rules = evaluateAppearanceRules(this.store, this.appearanceRules, { keys: model.keys, label: (index) => this.elementLabel(index) });
+    for (const [i, appearance] of this.phaseEvaluation ? mergeAppearance(this.phaseEvaluation.appearance, rules) : rules) {
       if (appearance.color) model.state.setColor(i, ...hexToRgb(appearance.color));
       if (appearance.opacity !== undefined) model.state.setOpacity(i, appearance.opacity);
     }
@@ -551,6 +599,107 @@ export class App {
   groupBy(paths: string[]): void {
     if (paths.some((path) => !this.store.paths.includes(path))) throw new Error('Une propriété de regroupement est introuvable.');
     this.groupingPaths = [...new Set(paths)]; this.emit('grouping');
+  }
+
+  // ----------------------------------------------------------- phases et vues
+
+  /** Les phases du projet, si le fichier de métadonnées en décrit. */
+  get phases(): Phases | undefined {
+    return this.metadata?.phases;
+  }
+
+  /** Les vues enregistrées du fichier de métadonnées. */
+  get savedViews(): readonly SavedView[] {
+    return this.metadata?.views ?? [];
+  }
+
+  /**
+   * Choisit la phase et le filtre de phase (null : tout le modèle, sans filtre). Les éléments que le filtre masque dans
+   * cette phase sont masqués, ceux qu'il « remplace » (existant, démoli…) prennent la couleur de leur état, comme dans une
+   * vue de Revit ; les règles d'apparence restent prioritaires.
+   */
+  setPhase(selection: PhaseSelection | null): void {
+    this.applyPhase(selection);
+    this.refreshLayers();
+    this.emit('phase');
+  }
+
+  /** Calcule l'état de chaque élément dans la phase choisie, sans rien appliquer. */
+  private applyPhase(selection: PhaseSelection | null): void {
+    const phases = this.phases, model = this.model;
+    this.phaseSelection = phases && model && selection && phases.order.includes(selection.phase) ? selection : null;
+    this.phaseEvaluation = this.phaseSelection && phases && model
+      ? evaluatePhases(phases, this.phaseSelection, model.count, (index, property) => ownValue(this.store.propsOf(index), property))
+      : null;
+  }
+
+  /** Remet à jour ce que la phase et la vue masquent, et les couleurs de la phase. */
+  private refreshLayers(): void {
+    this.syncLayerVisibility();
+    this.refreshAppearance();
+  }
+
+  /**
+   * Masque ce que la phase et la vue enregistrée masquent, réaffiche ce qu'elles masquaient avant. Un élément qu'elles ne
+   * touchent pas garde le choix de l'utilisateur (arbre, filtres, isolement) ; l'état est celui des éléments, pas une
+   * couche à part : l'arbre, le cadrage et les clics le voient.
+   */
+  private syncLayerVisibility(): void {
+    const model = this.model;
+    if (!model) return;
+    const next = combineHidden(model.count, this.phaseEvaluation?.hidden, this.viewHidden);
+    const { hide, show } = layerChanges(model.count, this.layerHidden, next);
+    this.layerHidden = next;
+    if (hide.length > 0) this.setVisible(hide, false);
+    if (show.length > 0) this.setVisible(show, true);
+  }
+
+  private indexOfKey(): Map<string, number> {
+    const model = this.model;
+    if (!this.keyIndex || this.keyIndex.size !== (model?.keys.length ?? 0)) this.keyIndex = new Map((model?.keys ?? []).map((key, index) => [key, index]));
+    return this.keyIndex;
+  }
+
+  /**
+   * Ouvre une vue enregistrée : la caméra (en glissant), la boîte de coupe, les éléments et catégories masqués, la phase et
+   * son filtre. `null` : la vue par défaut, c'est-à-dire l'affichage normal, la caméra d'avant la première vue ouverte.
+   */
+  openView(view: SavedView | null): void {
+    const model = this.model, { viewer } = this;
+    if (!model) return;
+    if (view === null) {
+      viewer.sections.setBox(null);
+      viewer.sectionsChanged();
+      this.viewHidden = null;
+      this.applyPhase(null);
+      this.refreshLayers();
+      if (this.cameraBeforeViews) viewer.restorePose(this.cameraBeforeViews);
+      this.cameraBeforeViews = null;
+      this.syncProjectionUi();
+      this.activeView = null;
+      this.emit('phase');
+      this.emit('view');
+      return;
+    }
+    if (!this.mapPanel.isOpen) this.cameraBeforeViews ??= viewer.capturePose();
+    // Boîte de coupe : celle de la vue, ou aucune.
+    viewer.sections.setBox(view.sectionBox ? sectionBoxLocal(view.sectionBox, model.offset.toArray()) : null);
+    viewer.sectionsChanged();
+    const hidden = hiddenByView(view, model.count, this.indexOfKey(), (index, property) => ownValue(this.store.propsOf(index), property));
+    this.viewHidden = hidden.includes(1) ? hidden : null;
+    this.applyPhase(view.phase ? { phase: view.phase, filter: view.phaseFilter } : null);
+    this.refreshLayers();
+    if (this.mapPanel.isOpen) {
+      this.toast('Fermez la carte pour placer la caméra : le reste de la vue est appliqué.');
+    } else {
+      const sphere = model.box.getBoundingSphere(new Sphere());
+      const { width, height } = viewer.size;
+      viewer.setCameraPose(cameraPose(view.camera, model.offset.toArray(), { center: sphere.center.toArray(), radius: sphere.radius }, width / Math.max(height, 1)));
+      this.syncProjectionUi();
+    }
+    this.activeView = view;
+    this.emit('phase');
+    this.emit('view');
   }
 
   fitTo(indices: Iterable<number>): void {
@@ -594,11 +743,16 @@ export class App {
   setTwoD(on: boolean): void {
     if (on === this.twoD) return;
     this.viewer.setProjection(on ? 'orthographic' : 'perspective');
+    this.syncProjectionUi();
+    if (this.twoD) this.viewer.viewFrom('front');
+    else this.viewer.invalidate();
+  }
+
+  /** Les boutons de la vue 2D suivent la projection de la caméra (une vue enregistrée peut la changer). */
+  private syncProjectionUi(): void {
     const active = this.twoD;
     this.viewBar.hidden = !active;
     this.twoDButton.setAttribute('aria-pressed', String(active));
-    if (active) this.viewer.viewFrom('front');
-    else this.viewer.invalidate();
   }
 
   /**
@@ -628,13 +782,20 @@ export class App {
     const modelFiles = byDepth(inputs.filter((input) => isModelFile(input.file.name) || isUsdFile(input.file.name)));
     const modelFile = modelFiles[0] as InputFile | undefined;
     const jsonFiles = byDepth(inputs.filter((input) => /\.json$/i.test(input.file.name)));
-    const ifcFile = byDepth(inputs.filter((input) => isIfcFile(input.file.name)))[0] as InputFile | undefined;
-    if (!modelFile && !ifcFile && jsonFiles.length === 0) {
-      this.toast('Déposez un fichier .ifc, .glb ou .gltf, avec éventuellement un .json de métadonnées.', true);
+    // Un IFC ou un fichier Revit n'est lu que si aucun modèle 3D (glb, gltf, usd) n'est fourni ; à profondeur égale, l'IFC passe d'abord.
+    const sourceFile = byDepth([
+      ...inputs.filter((input) => isIfcFile(input.file.name)),
+      ...inputs.filter((input) => isRevitFile(input.file.name)),
+    ])[0] as InputFile | undefined;
+    if (!modelFile && !sourceFile && jsonFiles.length === 0) {
+      this.toast('Déposez un fichier .ifc, Revit (.rvt, .rfa, gabarits .rte et .rft), .glb ou .gltf, avec éventuellement un .json de métadonnées.', true);
       return;
     }
-    if ((modelFile || ifcFile) && !this.confirmReplace()) return;
-    const ticket = this.beginLoad('Lecture des fichiers…');
+    if ((modelFile || sourceFile) && !this.confirmReplace()) return;
+    // Un JSON seul (métadonnées ou planning) pendant la lecture d'un fichier Revit ne l'interrompt pas : pas de nouveau
+    // chargement (il ferait abandonner la lecture, voir `beginLoad`) ; ses métadonnées rejoignent celles de la lecture.
+    const reading = !modelFile && !sourceFile ? this.revitReading : null;
+    const ticket = reading ? this.loadTicket : this.beginLoad('Lecture des fichiers…');
     try {
       const metadataFiles: { name: string; text: string }[] = [];
       const schedules: { name: string; schedule: Schedule }[] = [];
@@ -650,12 +811,10 @@ export class App {
           catch (error) { planningError ||= error instanceof Error ? error.message : String(error); }
         } else metadataFiles.push({ name: input.file.name, text });
       }
-      if (!modelFile && ifcFile) {
-        await this.loadIfc(ticket, ifcFile.file);
-      } else if (modelFile) {
-        // Un dossier peut contenir des .json sans rapport : on lit tous ceux qui ont la forme d'un
-        // fichier de métadonnées, et on retiendra celui qui correspond le mieux au modèle.
-        // Un JSON illisible n'empêche pas d'afficher le modèle.
+      // Un dossier peut contenir des .json sans rapport : on lit tous ceux qui ont la forme d'un
+      // fichier de métadonnées, et on retiendra celui qui correspond le mieux au modèle.
+      // Un JSON illisible n'empêche pas d'afficher le modèle.
+      const readCandidates = () => {
         const candidates: Metadata[] = [];
         let metadataError = '';
         for (const candidate of metadataFiles) {
@@ -665,6 +824,15 @@ export class App {
             metadataError ||= `« ${candidate.name} » : ${error instanceof Error ? error.message : String(error)}`;
           }
         }
+        return { candidates, metadataError };
+      };
+      if (!modelFile && sourceFile && isRevitFile(sourceFile.file.name)) {
+        const { candidates, metadataError } = readCandidates();
+        await this.loadRevit(ticket, sourceFile.file, candidates, metadataError);
+      } else if (!modelFile && sourceFile) {
+        await this.loadIfc(ticket, sourceFile.file);
+      } else if (modelFile) {
+        const { candidates, metadataError } = readCandidates();
         // Au-delà de cette taille, le navigateur ne peut plus lire le fichier d'un seul bloc.
         const heavy = inputs.find((input) => input.file.size > MAX_MODEL_BYTES);
         if (heavy) {
@@ -713,6 +881,16 @@ export class App {
         } else if (modelFiles.length > 1) {
           this.toast(`${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`);
         }
+      } else if (metadataFiles.length && reading && this.revitReading === reading) {
+        // La lecture a son propre JSON (celui du fichier) : ceux-ci sont départagés avec lui à la fin, par leurs identifiants.
+        const { candidates, metadataError } = readCandidates();
+        if (candidates.length === 0) {
+          this.toast(metadataError, true);
+        } else {
+          reading.candidates.push(...candidates);
+          const names = candidates.map((candidate) => `« ${candidate.source ?? 'JSON'} »`).join(', ');
+          this.toast(`Métadonnées reçues (${names}) : elles seront appliquées quand la lecture du fichier Revit sera terminée.${metadataError ? ` ${metadataError}` : ''}`, metadataError !== '');
+        }
       } else if (metadataFiles.length) {
         const metadata = this.readMetadata(metadataFiles[0].text, metadataFiles[0].name);
         if (ticket !== this.loadTicket) return;
@@ -736,7 +914,7 @@ export class App {
     } catch (error) {
       if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
     } finally {
-      this.endLoad(ticket);
+      if (!reading) this.endLoad(ticket);
     }
   }
 
@@ -785,7 +963,7 @@ export class App {
     this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
     const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
     const lines = [
-      `${integer.format(elements)} éléments convertis en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, reliés à leurs propriétés par leur identifiant IFC.`,
+      `${counted(elements, 'élément')} ${elements < 2 ? 'converti' : 'convertis'} en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, ${elements < 2 ? 'relié à ses propriétés par son' : 'reliés à leurs propriétés par leur'} identifiant IFC.`,
     ];
     if (linework > 0) {
       lines.push(`${integer.format(linework)} ${linework > 1 ? 'objets sans volume (axes de trame, annotations) ont été laissés' : 'objet sans volume (axe de trame, annotation) a été laissé'} de côté : rien ne manque au bâtiment.`);
@@ -796,11 +974,102 @@ export class App {
       const more = failedCount > 5 ? ` et ${integer.format(failedCount - 5)} autres` : '';
       lines.push(`Attention : ${integer.format(failedCount)} ${failedCount > 1 ? 'éléments n’ont pas pu être convertis et manquent' : 'élément n’a pas pu être converti et manque'} à l’affichage (${shown}${more}).`);
     }
+    this.conversionTitle.textContent = 'IFC converti';
     this.conversionText.textContent = lines.join(' ');
     this.conversionText.classList.toggle('warning', failedCount > 0);
     this.conversionEl.hidden = false;
     this.syncDownloads();
     if (produced.extension === 'usdz') this.setQuickLook(produced.model);
+  }
+
+  /**
+   * Lit un fichier Revit (.rvt, .rfa, .rte, .rft) dans le navigateur (lecteur WebAssembly du dossier revit/, dans un worker), et
+   * affiche le modèle à mesure que la géométrie arrive : chaque morceau de la sortie du lecteur est cuit en lots dès
+   * sa réception (`ModelBuilder`), sans GLB entre les deux, et la vue grandit ; la caméra se cadre sur le premier
+   * morceau, puis sur le modèle entier à la fin. L'interface (arbre, fiches, métadonnées : le JSON du contrat n'est
+   * complet qu'à la fin) n'est reliée au modèle qu'une fois la lecture terminée. Le fichier n'est envoyé à aucun serveur.
+   * `candidates` : JSON déposés avec le fichier, ou pendant sa lecture, essayés après les métadonnées du fichier lui-même ;
+   * `metadataError` : ce qui a empêché de lire l'un d'eux (le fichier Revit s'affiche quand même, avec ses propres propriétés).
+   */
+  private async loadRevit(ticket: number, file: File, candidates: Metadata[], metadataError = ''): Promise<void> {
+    const { base, extension } = splitRevitName(file.name);
+    const reading = (this.revitReading = { controller: new AbortController(), candidates: [...candidates] });
+    // Le modèle en construction, montré dans la vue dès son premier morceau ; jeté si la lecture échoue ou recommence.
+    const loading: { builder: ModelBuilder | null } = { builder: null };
+    let status = '';
+    const discard = () => {
+      const { builder } = loading;
+      if (!builder) return;
+      loading.builder = null;
+      if (this.viewer.model === builder.model) this.viewer.setModel(null);
+      builder.model.dispose();
+      this.emptyEl.hidden = this.viewer.model !== null;
+    };
+    let result: RevitRead;
+    try {
+      result = await readRevit(file, (message) => {
+        status = message;
+        if (ticket === this.loadTicket) this.busy(message);
+      }, reading.controller.signal, (raw, first) => {
+        if (ticket !== this.loadTicket) return;
+        // La relecture en mode prudent repart du début : ce qui en était affiché est à refaire.
+        if (first) discard();
+        let { builder } = loading;
+        if (!builder) {
+          builder = loading.builder = new ModelBuilder(this.viewer.selectColor);
+          builder.append(raw);
+          this.showLoadingModel(builder.model);
+        } else {
+          builder.append(raw);
+          this.viewer.modelGrown();
+        }
+        const shown = builder.model.count;
+        this.busy(`${status} ${counted(shown, 'élément')} ${shown < 2 ? 'affiché' : 'affichés'}.`);
+      });
+      if (ticket !== this.loadTicket) {
+        discard();
+        return;
+      }
+      const { report } = result;
+      if (!report.elements || !report.triangles) {
+        throw new Error([`« ${file.name} » ne contient aucun élément avec une géométrie à afficher.`, ...report.warnings].join(' '));
+      }
+      const metadata = this.readMetadata(result.metadata, `${base}.json`);
+      // Le modèle construit pendant la lecture est installé tel quel, avec les libellés des fiches à la place des noms
+      // provisoires de ses morceaux ; sans morceau (le lecteur a tout rendu d'un bloc), le modèle brut va tel quel à
+      // buildModel. Les téléchargements réécrivent le modèle affiché (writeGlb). Un modèle seul, c'est que la lecture
+      // qui a rendu le résultat (la relecture prudente, après une panique) n'a remis aucun morceau : ce qui est construit
+      // vient de la lecture interrompue, et n'est pas le modèle.
+      if (!Array.isArray(result.raw)) discard();
+      const built = loading.builder?.model;
+      if (built && result.names && result.names.length === built.names.length) {
+        for (let i = 0; i < result.names.length; i++) built.names[i] = result.names[i] || built.keys[i];
+      }
+      const source = built ?? result.raw;
+      // Le JSON du fichier d'abord, puis ceux déposés avec lui ou pendant la lecture : `installModel` lit cette liste au
+      // moment d'installer, donc un JSON qui arrive encore pendant qu'il prépare le modèle compte aussi.
+      reading.candidates.unshift(metadata);
+      if (!(await this.installModel(ticket, source, reading.candidates, `${base}.${extension}`))) {
+        discard();
+        return;
+      }
+    } catch (error) {
+      discard();
+      // Construire les morceaux peut épuiser la mémoire du fil principal (RangeError) : message pour l'utilisateur, comme à l'installation.
+      if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(file.name));
+      throw error;
+    } finally {
+      if (this.revitReading === reading) this.revitReading = null;
+    }
+    const { report } = result;
+    const { text, warning } = describeRevitReport(report);
+    this.conversionTitle.textContent = 'Fichier Revit lu';
+    this.conversionText.textContent = text;
+    this.conversionText.classList.toggle('warning', warning);
+    this.conversionEl.hidden = false;
+    this.syncDownloads();
+    // Comme pour un glTF : un JSON illisible n'empêche pas le modèle, mais l'utilisateur doit le savoir.
+    if (metadataError) this.toast(`JSON non pris en compte, seules les propriétés du fichier Revit sont affichées. ${metadataError}`, true);
   }
 
   /** Les métadonnées courantes (fichier JSON, `extras` du modèle et modifications réunis), au format du contrat. */
@@ -809,6 +1078,9 @@ export class App {
     if (!model) return '';
     const out = this.store.export(model.keys) as Record<string, unknown>;
     if (this.georeference) out.georeference = georeferenceToJson(this.georeference);
+    // Phases et vues enregistrées : le fichier d'origine les donne, le JSON exporté les garde.
+    if (this.metadata?.phases) out.phases = phasesToJson(this.metadata.phases);
+    if (this.metadata?.views) out.views = viewsToJson(this.metadata.views);
     return JSON.stringify(out);
   }
 
@@ -917,6 +1189,8 @@ export class App {
   private afterPropertyEdit(path: string): void {
     this.edits = this.propertyEdits?.count ?? 0; this.lastEdit = { path };
     this.setQuickLook(null); this.syncDownloads(); this.updateStats();
+    // Une phase de création modifiée change l'état de l'élément dans la phase choisie.
+    if (this.phaseSelection) { this.applyPhase(this.phaseSelection); this.syncLayerVisibility(); this.emit('phase'); }
     this.refreshAppearance(); this.emit('metadata'); this.emit('history');
   }
   private confirmReplace(): boolean {
@@ -924,10 +1198,19 @@ export class App {
   }
 
   async loadSample(name: string): Promise<void> {
-    if (name === 'ifc') {
-      // L'exemple IFC passe par le vrai convertisseur, comme un fichier déposé.
-      const response = await fetch(`${import.meta.env.BASE_URL}samples/ifc-demo.ifc`);
-      await this.loadFiles([{ file: new File([await response.blob()], 'ifc-demo.ifc'), path: 'ifc-demo.ifc' }]);
+    const raw = RAW_SAMPLES.get(name);
+    if (raw) {
+      // Les exemples IFC et Revit passent par le vrai convertisseur ou lecteur, comme un fichier déposé.
+      let blob: Blob;
+      try {
+        const response = await fetch(`${import.meta.env.BASE_URL}samples/${raw}`);
+        if (!response.ok) throw new Error(`erreur ${response.status}`);
+        blob = await response.blob();
+      } catch (error) {
+        this.toast(`Impossible de charger l’exemple : ${error instanceof Error ? error.message : String(error)}.`, true);
+        return;
+      }
+      await this.loadFiles([{ file: new File([blob], raw), path: raw }]);
       return;
     }
     if (!this.confirmReplace()) return;
@@ -948,6 +1231,7 @@ export class App {
    * ancien est abandonné : son résultat ne remplace pas le modèle le plus récent.
    */
   private beginLoad(message: string): number {
+    this.revitReading?.controller.abort();
     this.busy(message);
     this.toastEl.hidden = true; // un message d'erreur précédent ne doit pas survivre à un nouvel essai
     return ++this.loadTicket;
@@ -990,27 +1274,12 @@ export class App {
     for (const [format, element] of this.formatButtons) element.setAttribute('aria-pressed', String(format === this.format));
   }
 
-  private async installModel(ticket: number, gltf: GLTF | ModelSource, candidates: Metadata[], name: string): Promise<boolean> {
-    if (ticket !== this.loadTicket) return false;
-    const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
-    this.busy('Optimisation de la géométrie…');
-    await nextFrame();
-    if (ticket !== this.loadTicket) return false;
-    let model: Model;
-    const nodeKeys = new Map<number, string>();
-    try {
-      let source: ModelSource = 'parser' in gltf ? gltfSource(gltf) : gltf;
-      if ('parser' in gltf) source = { ...source, onElement: (object, key) => {
-        const node = gltf.parser.associations.get(object)?.nodes;
-        if (node !== undefined) nodeKeys.set(node, key);
-      } };
-      model = buildModel(source, this.viewer.selectColor);
-    } catch (error) {
-      // Un modèle très lourd peut épuiser la mémoire pendant la fusion de sa géométrie.
-      if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(name));
-      throw error;
-    }
-
+  /**
+   * Remet l'application dans l'état « aucun modèle » (sélection, isolement, règles, phase, vue, métadonnées…) et rend
+   * le modèle qu'elle affichait, à libérer par l'appelant. Les panneaux ne sont pas prévenus : l'appelant le fait
+   * une fois le nouvel état en place.
+   */
+  private detachModel(): Model | null {
     const previous = this.model;
     this.measure.clear();
     this.selection.clear();
@@ -1018,11 +1287,76 @@ export class App {
     this.masked.clear();
     this.conversion = null;
     this.conversionEl.hidden = true;
-    this.model = model;
+    this.model = null;
     this.originalGlb = null;
-    this.originalNodeKeys = nodeKeys;
+    this.originalNodeKeys = new Map();
     this.appearanceRules = [];
     this.groupingPaths = [];
+    this.phaseSelection = null;
+    this.phaseEvaluation = null;
+    this.activeView = null;
+    this.viewHidden = null;
+    this.layerHidden = null;
+    this.cameraBeforeViews = null;
+    this.keyIndex = null;
+    this.metadata = null;
+    this.georeference = null;
+    this.fileName = '';
+    return previous;
+  }
+
+  /**
+   * Un modèle en cours de lecture (Revit, par morceaux) prend la place du précédent dans la vue dès son premier
+   * morceau. L'interface, elle, attend la fin de la lecture : d'ici là, elle est dans l'état « aucun modèle » (rien
+   * à sélectionner ni à filtrer, pas de fiche ; la carte n'a pas de maquette), et la vue seule grandit.
+   */
+  private showLoadingModel(model: Model): void {
+    const previous = this.detachModel();
+    this.viewer.setModel(model);
+    this.emptyEl.hidden = true;
+    if (!previous) return;
+    previous.dispose();
+    this.store = new PropertyStore(0);
+    this.propertyEdits = null;
+    this.edits = 0;
+    this.matched = 0;
+    this.setQuickLook(null);
+    this.syncDownloads();
+    this.updateStats();
+    this.emit('model');
+    this.emit('selection');
+    this.emit('visibility');
+  }
+
+  /** Installe un modèle : construit d'une scène ou d'un modèle brut, ou déjà construit (lecture Revit par morceaux). */
+  private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, candidates: Metadata[], name: string): Promise<boolean> {
+    if (ticket !== this.loadTicket) return false;
+    const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
+    let model: Model;
+    const nodeKeys = new Map<number, string>();
+    if (gltf instanceof Model) {
+      model = gltf;
+    } else {
+      this.busy('Optimisation de la géométrie…');
+      await nextFrame();
+      if (ticket !== this.loadTicket) return false;
+      try {
+        // Un modèle brut (Revit) n'a ni nœuds glTF ni scène : il va tel quel à buildModel.
+        const source: ModelSource | RawInput = 'parser' in gltf ? { ...gltfSource(gltf), onElement: (object, key) => {
+          const node = gltf.parser.associations.get(object)?.nodes;
+          if (node !== undefined) nodeKeys.set(node, key);
+        } } : gltf;
+        model = buildModel(source, this.viewer.selectColor);
+      } catch (error) {
+        // Un modèle très lourd peut épuiser la mémoire pendant la fusion de sa géométrie.
+        if (isOutOfMemory(error)) throw new Error(tooHeavyMessage(name));
+        throw error;
+      }
+    }
+
+    const previous = this.detachModel();
+    this.model = model;
+    this.originalNodeKeys = nodeKeys;
     // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
     let metadata: Metadata | null = candidates[0] ?? null;
     let bestMatches = metadata ? this.countMatches(metadata) : 0;
@@ -1036,8 +1370,9 @@ export class App {
     this.metadata = metadata;
     this.georeference = metadata?.georeference ?? null;
     this.fileName = name;
+    // Le modèle lu par morceaux est déjà dans la vue : le remettre cadre la caméra sur le modèle entier.
     this.viewer.setModel(model);
-    previous?.dispose();
+    if (previous && previous !== model) previous.dispose();
 
     this.emptyEl.hidden = true;
     this.rebuildStore();
@@ -1090,7 +1425,7 @@ export class App {
     if (matched === 0) {
       this.toast(NO_MATCH, true);
     } else if (matched < model.count) {
-      this.toast(`Métadonnées associées à ${integer.format(matched)} éléments sur ${integer.format(model.count)}.`);
+      this.toast(`Métadonnées associées à ${counted(matched, 'élément')} sur ${integer.format(model.count)}.`);
     }
   }
 
@@ -1119,9 +1454,9 @@ export class App {
     for (let i = 0; i < model.count; i++) if (!model.state.isVisible(i)) hidden++;
     const parts = [
       this.fileName,
-      `${integer.format(model.count)} éléments`,
-      `${integer.format(model.triangleCount)} triangles`,
-      `${model.chunks.length} lots`,
+      counted(model.count, 'élément'),
+      counted(model.triangleCount, 'triangle'),
+      counted(model.chunks.length, 'lot'),
     ];
     parts.push(
       this.metadata

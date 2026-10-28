@@ -5,10 +5,15 @@ L'affichage ne repose que sur three.js : pas d'ifc.js, de xeokit ni d'OpenIFC. L
 mesures, le picking, l'arborescence et les filtres sont écrits dans ce dépôt.
 
 Un fichier **IFC** peut aussi être déposé directement : il est converti en GLB + JSON, ou en
-**USD** (`.usdz`) selon le format choisi dans la barre d'outils, par le convertisseur du dossier
+**USD** (`.usdz`) selon le format choisi dans la barre d'outils (« Export : GLB | USD »), par le convertisseur du dossier
 [pipeline/](pipeline/README.md), qui s'appuie sur IfcOpenShell et conserve l'identifiant de
 chaque élément pour relier la géométrie aux métadonnées. Le viewer lit les deux formats avec les
 mêmes fonctions.
+
+Un fichier **Revit** (`.rvt` projet, ou `.rfa` famille) se dépose aussi tel quel. Un lecteur écrit en Rust, compilé en
+WebAssembly, en lit la géométrie et les propriétés dans un worker du navigateur, sans Revit, sans
+service Autodesk et sans IFC ni GLB intermédiaire. Détails dans
+[docs/lecture-revit.md](docs/lecture-revit.md).
 
 Le viewer est générique : il ne connaît aucun standard BIM et découvre les propriétés dans le
 JSON. Le format attendu est décrit dans [docs/contrat-metadonnees.md](docs/contrat-metadonnees.md).
@@ -40,6 +45,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 | `npm run build` | Vérification des types puis build de production dans `dist/` |
 | `npm test` | Tests unitaires et d'intégration (lanceur de tests intégré à Node, version 24 ou plus) |
 | `npm run sample` | Régénère le bâtiment de démonstration (`-- --large` pour la tour de 22 500 éléments) |
+| `npm run build:revit` | Recompile le lecteur Revit (`revit/`, Rust) en WebAssembly dans `src/revit/pkg/`. Inutile pour lancer, tester ou construire le viewer : le résultat est versionné |
+| `npm run samples:revit` | Télécharge dans `revit/samples/` (ignoré par git) les fichiers Revit d'essai publics, empreinte sha256 vérifiée |
 
 ## Fonctions
 
@@ -48,6 +55,75 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   ouvert. La conversion utilise plusieurs workers (jusqu’à quatre, selon les ressources
   signalées par le navigateur et la taille du fichier) ; il ne s’agit pas de cœurs physiques
   réservés. Le GLB et le JSON produits peuvent être téléchargés.
+- **Ouverture d'un fichier Revit (.rvt, .rfa, gabarits .rte et .rft)** : lu sur place, sans serveur, par le lecteur du dossier
+  `revit/` (Rust, rvt-rs, environ 5 Mo de WebAssembly). Ce module n'est
+  téléchargé qu'au premier fichier Revit ouvert, et tourne dans un worker : l'interface reste libre
+  pendant la lecture. Le menu « Exemples… » propose une maquette Revit 2023.
+  - *Ce qui est lu.* La géométrie avec les couleurs des matériaux de Revit, et les propriétés de
+    chaque élément : catégorie, famille, type, niveau, phase, matériaux, puis tous les paramètres
+    d'instance et de type, regroupés comme dans Revit. Les valeurs sont en unités SI, avec l'unité
+    dans le nom : longueurs, surfaces, volumes et angles, mais aussi débits (L/s), vitesses (m/s),
+    pressions (Pa), températures (°C), puissances (W, VA), tensions (V), courants (A), éclairements
+    (lx), masses, efforts… Une grandeur dont l'unité interne n'est pas établie reste telle quelle,
+    sans unité dans le nom. Tout est en lecture seule, comme pour un IFC. Chaque élément est
+    relié à son JSON par le GlobalId IFC que calcule l'export IFC de Revit : un JSON écrit pour un
+    export IFC du même modèle s'applique donc aussi au `.rvt`. La position sur Terre est reprise
+    quand le fichier la donne : latitude, longitude, altitude, nord vrai et décalage de l'origine du
+    site par rapport à celle du projet.
+  - *D'où vient chaque forme.* La propriété « Source de la géométrie » le dit, avec quatre
+    valeurs, essayées dans cet ordre et jamais une boîte en silence. « Forme Revit » est la forme
+    d'affichage enregistrée par Revit. « Forme Revit partielle » est la même, avec quelques faces
+    que le lecteur n'a pas su tracer. « Forme reconstruite » est refaite à partir des données de
+    l'élément (murs, dalles, toits, poteaux, poutres, escaliers, tuyaux…). « Inconnue (boîte
+    englobante) » n'a que sa boîte englobante, dessinée telle quelle. Pour retrouver les formes
+    approchées, choisissez « Source de la géométrie » dans « Grouper par ». La carte qui suit la
+    lecture compte les éléments de chaque sorte.
+  - *Versions.* Revit 2012 à 2027 : lecture complète, par les enregistrements natifs du fichier :
+    formes enregistrées par Revit, couleurs, paramètres et unités (y compris les paramètres de
+    famille de 2012 à 2020, dont l'unité est un ancien numéro `UnitType`). Avant 2015, Revit écrit
+    les définitions des familles chargées parmi les éléments du projet : elles sont écartées, comme
+    Revit 2015 et après les range à part. Avant Revit 2012 : le fichier est refusé, avec un message
+    qui le dit. Si la lecture native échoue, les éléments sont
+    reconstruits par l'export IFC de rvt-rs et la carte signale une lecture expérimentale. Une copie
+    locale d'un modèle partagé (workshared, ou celle du cache de BIM 360) se lit aussi par ses
+    enregistrements natifs : voir « Limites ».
+  - *Familles (.rfa).* Une famille s'ouvre comme un projet et montre ce que montre la vue 3D de son
+    éditeur : ses formes (extrusions, balayages, mélanges, formes volumiques, masses conceptuelles)
+    et les familles chargées dedans. Une famille sans forme ne contient rien à afficher.
+  - *Ce qui n'est pas dessiné*, comme dans une vue 3D de Revit : pièces, surfaces, espaces,
+    niveaux, axes, plans de référence, caméras, boîtes de coupe et annotations. Un élément sans
+    aucune géométrie est compté dans la carte.
+  - *Limites.* Plus de limite de taille : le fichier reste hors du module (lu par tranches) et le
+    modèle part par morceaux pendant la lecture, qui s'affiche au fur et à mesure (on peut déjà
+    tourner autour ou le visiter : la vue n'est recadrée à la fin que si on n'y a pas touché, et un
+    .json de métadonnées déposé pendant la lecture est gardé pour la fin). La mémoire du
+    lecteur vaut de 4 à 15 fois la taille du fichier sur les fichiers d'essai (jusqu'à 72 avant), et ce
+    qui grandit encore est le nombre d'éléments (refus au-delà de 4 millions d'éléments indexés) ; la
+    reconstruction par l'export IFC (lecture native échouée, ou année postérieure à 2027) lit encore tout le fichier : refusée au-delà
+    de 150 Mo. Un manque de mémoire en cours de route est dit comme tel. Le modèle est borné par un
+    budget de triangles réglé sur la mémoire de l'appareil (2,5 millions par Go, entre 2 et 20 millions) :
+    au-delà, les formes qui ne tiennent plus sont remplacées par leur boîte englobante, avec un
+    avertissement. Si une erreur interne du
+    lecteur interrompt la lecture, le fichier est relu une fois en mode prudent (formes de rvt-rs
+    seules) et la carte le signale : des formes peuvent alors être incomplètes. Une copie locale d'un
+    modèle partagé est lue telle que son utilisateur l'a enregistrée, sans les synchronisations
+    ultérieures des autres utilisateurs (la carte le dit) : pour le modèle à jour, ouvrez le central,
+    ou resynchronisez la copie dans Revit et enregistrez-la. Les modèles liés ne
+    sont pas suivis : ouvrez chaque fichier à part. Les phases et les vues 3D enregistrées sont
+    reprises (voir ci-dessous) ; les filtres de vue et les remplacements graphiques par catégorie ne le
+    sont pas. Voir la feuille de route dans [docs/lecture-revit.md](docs/lecture-revit.md).
+  - *Phases.* Le lecteur écrit la liste ordonnée des phases du projet, ses filtres de phase (« Tout
+    afficher », « Afficher nouveau »… : par état, masqué, tel quel ou remplacé) et la couleur de remplacement
+    de chaque état. En tête de « Couleurs et filtres », « Phase » et « Filtre de phase » montrent le
+    modèle comme une vue de Revit : l'élément créé dans la phase est nouveau, celui d'une phase
+    antérieure existant, celui démoli dans la phase démoli ; les états que le filtre masque
+    disparaissent, ceux qu'il remplace prennent leur couleur (gris, rouge translucide…). Les règles
+    d'apparence restent prioritaires.
+  - *Vues enregistrées.* Les vues 3D nommées du projet apparaissent dans le bouton « Vues » : un clic
+    glisse la caméra (perspective avec son champ, ou parallèle), pose la boîte de coupe de la vue (six
+    plans, case dans « Coupes »), masque ses éléments et catégories masqués, et choisit sa phase et son
+    filtre. « Vue par défaut » rétablit l'affichage normal et la caméra d'avant. Le détail de ce qui est
+    repris ou ignoré est dans [docs/lecture-revit.md](docs/lecture-revit.md), § 4 bis.
 - **Affichage** de fichiers GLB et de dossiers glTF (avec `.bin` et textures en sous-dossier),
   y compris compressés (Draco, Meshopt), et de fichiers USD (`.usdz`, `.usda`) : ceux du
   convertisseur, avec leurs métadonnées embarquées, ou des scènes USD simples venues d'ailleurs.
@@ -117,6 +193,26 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   (déplacement et zoom seulement), avec les vues Face, Arrière, Gauche, Droite, Haut et Bas
   sous la barre. Combinée à une coupe, la vue de dessus donne un plan d'étage, une vue de côté
   une coupe d'élévation. La carte, qui pilote une caméra en perspective, la suspend.
+- **Phases et vues enregistrées** : pour un fichier qui décrit des phases et des vues (la section
+  `phases` et `views` du JSON, écrite par le lecteur Revit ; voir
+  [docs/contrat-metadonnees.md](docs/contrat-metadonnees.md)), « Couleurs et filtres » propose la phase
+  et son filtre, et la barre un bouton « Vues ». Le viewer ne connaît aucun nom de propriété : le
+  fichier désigne lui-même la propriété de création et de démolition des éléments, et celle de leur
+  catégorie. La phase et les masquages d'une vue écrivent la visibilité des éléments (comme l'arbre) :
+  « Tout afficher » les lève.
+- **Mode visite** : le bouton « Visite » (ou `V`) pose la caméra à 1,70 m au-dessus du sol sous le
+  point de pivot de l'orbite, à l'horizontale dans le sens de la vue, et la fait marcher dans la
+  maquette, comme la marche de Revit ou de Navisworks. `Z Q S D`, `W A S D` ou les flèches avancent
+  (par position de touche : identique sur AZERTY et QWERTY), `Maj` court (×3 ; 1,4 m/s en marchant),
+  un glissement regarde autour, la molette règle la vitesse (affichée un instant), un double-clic
+  se place à l'endroit touché. `Échap` ou le bouton quitte et rend l'orbite, autour de ce que l'on
+  regardait. Avec la **gravité** (par défaut), les yeux suivent le sol, une marche de moins de 0,4 m
+  se monte et une chute est progressive ; sans elle, vol libre (`E` ou Espace monte, `C` descend).
+  Avec les **collisions**, on s'arrête à 0,3 m d'un mur que l'on longe (une porte fermée est un
+  mur : masquez-la ou décochez). Le sol et les murs viennent du lancer de rayon du picking : les
+  éléments masqués ou isolés ne comptent pas, ni ce qu'un plan de coupe retire. Une carte d'aide
+  rappelle les touches et se ferme. Perspective seulement : la vue 2D, la carte, « Cadrer » ou
+  l'ouverture d'un autre modèle terminent la visite.
 - **Mesures** : un menu de la barre d'outils réunit les outils. **Distance** entre deux points
   (avec accroche aux sommets), **Surface** d'une face plane, **Volume** et surface totale d'un
   élément : chaque résultat dans la vue porte une croix pour le supprimer, ses détails sont
@@ -134,7 +230,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   et recadre le modèle entier.
 - **Téléchargement** : « GLB ↓ » / « USD ↓ » et « JSON ↓ » incluent les métadonnées courantes.
   Quand le GLB source est disponible, ses métadonnées sont actualisées sans réécrire les buffers
-  de géométrie et de textures. Les autres sources nécessitent une réécriture en couleurs par sommet.
+  de géométrie et de textures. Les autres sources (un `.rvt`, par exemple) nécessitent une réécriture
+  en couleurs par sommet, depuis le modèle affiché.
   Les règles de présentation ne modifient pas la géométrie ni les matériaux des fichiers exportés.
 - **Aperçu Apple** : « Voir sur Apple » ouvre Quick Look dans Safari sur iPhone et iPad.
   Sur Mac avec Safari 27 ou ultérieur, il affiche le USDZ dans un aperçu natif intégré à la page
@@ -162,7 +259,7 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   par `AI_ALLOWED_ENDPOINTS` côté relais ; voir [worker/README.md](worker/README.md).
 
 Raccourcis : `F` cadrer, `H` masquer ou démasquer, `I` isoler ou ne plus isoler, `A` tout
-afficher, `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.
+afficher, `V` visiter (marcher dans la maquette), `Échap` annuler puis désélectionner. Double-clic sur un élément pour le cadrer.
 
 Le viewer ne propose pas de création, déplacement, duplication ou suppression d’objets 3D,
 ni d’export IFC d’auteur. L’édition porte uniquement sur les métadonnées via les contrôles manuels.
@@ -185,10 +282,12 @@ src/
   data/      métadonnées : lecture du JSON, index des propriétés, regroupements, palette
   engine/    moteur 3D : chargement, fusion de la géométrie, rendu, picking, coupes, mesures
   ifc/       lancement du convertisseur IFC dans le navigateur (fil d'exécution séparé)
+  revit/     lecture des .rvt dans le navigateur : worker, module WebAssembly livré dans pkg/, rapport
   usd/       lecture des fichiers USD (usda, usdz)
   assistant/ outils, message système et dialogue avec le worker de l'assistant
   ui/        interface : barre d'outils et panneaux, en DOM natif
 pipeline/    convertisseur IFC → GLB ou USD + JSON (Python, IfcOpenShell) et ses tests
+revit/       lecteur de fichiers Revit (Rust, rvt-rs) compilé en WebAssembly, ses tests et ses échantillons
 worker/      service de l'assistant (Cloudflare Workers) : relais vers le modèle de langage
 tests/       tests des modules de données et du moteur
 scripts/     générateur du modèle de démonstration
@@ -219,6 +318,21 @@ coûte un appel de dessin par élément et fait chuter la fluidité. Le viewer p
 6. **Rendu à la demande**. Une image n'est calculée que si la caméra bouge ou si l'état change.
 7. **Interface paresseuse**. L'arbre ne construit un groupe qu'à son ouverture et pagine les
    listes d'éléments par 200.
+8. **Revit sans GLB intermédiaire** (`revit/`, `src/revit/`, `engine/buildModel.ts`). Le lecteur
+   tourne dans un worker, lit le fichier par tranches sans le copier, et rend des tableaux typés
+   par morceaux de 250 000 triangles pendant le maillage : positions, normales, indices, matériaux.
+   Ils passent au fil principal par transfert, sans copie, puis `ModelBuilder` les fusionne dans les
+   lots avec le même code que pour un glTF, et le modèle grandit à l'écran morceau par morceau.
+   Aucun GLB n'est écrit puis relu, et aucun objet three.js n'est créé par élément. Un GLB
+   n'existe que si l'utilisateur clique sur « GLB ↓ ».
+9. **Visite à coût borné** (`engine/WalkControls.ts`, `engine/walkMath.ts`). La caméra seule
+   bouge : les lots fusionnés se dessinent comme en orbite. Le sol et les murs viennent du lancer
+   de rayon du picking, limité en portée (`maxDistance`, les éléments trop loin ne sont même pas
+   triés) : un rayon vers le bas toutes les 100 ms ou tous les 0,2 m, deux rayons horizontaux par
+   image seulement pendant que l'on avance contre des collisions. Un rayon coûte de 0,02 à 0,12 ms
+   sur la tour de 22 561 éléments comme sur un modèle Revit de 2,2 millions de triangles ; le
+   calcul de la visite pèse environ 0,3 ms par image en marchant avec les collisions, 0,05 ms
+   sans, et presque rien à l'arrêt (un rayon toutes les 250 ms).
 
 Mesures relevées sur un Apple M4 Pro :
 
@@ -283,6 +397,8 @@ supplémentaires sont libérés après la conversion et le dernier après 30 sec
   Sketchfab, s'affiche, se coupe et se mesure, mais ses morceaux ne correspondent à aucun objet réel.
 
 - Les mesures supposent des modèles en mètres, comme l'impose glTF.
+- Fichiers Revit : limite de taille, refus avant Revit 2012, formes approchées
+  signalées par « Source de la géométrie », copie locale d'un modèle partagé lue telle qu'enregistrée. Liste complète dans [docs/lecture-revit.md](docs/lecture-revit.md).
 - Le volume est calculé à partir du maillage. Si celui-ci n'est pas un solide fermé, la valeur
   est signalée comme indicative.
 - Le remplissage des coupes ne s'applique qu'aux éléments opaques dont le maillage est fermé.

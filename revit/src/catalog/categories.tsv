@@ -1,0 +1,1066 @@
+# Catégories de Revit (Rhino.Inside.Revit c8e2c5c3b6e70f89a3c66d71ee0015c3702d420f, MIT), générées par scripts/gen-revit-catalog.mjs.
+# id  nom OST_  libellé français  M modèle A annotation I interne N analytique  années  origine
+-2000010	OST_IOSRegenerationFailure	Échec de régénération	I	17-27	r
+-2000011	OST_Walls	Murs	M	17-27	m
+-2000014	OST_Windows	Fenêtres	M	17-27	m
+-2000016	OST_WindowsGlassProjection	Projection de verre de fenêtres	M	17-27	r
+-2000018	OST_WindowsFrameMullionProjection	Projection de meneau de cadre de fenêtres	M	17-27	r
+-2000020	OST_WindowsSillHeadProjection	Projection de tête de seuil de fenêtres	M	17-27	r
+-2000022	OST_WindowsOpeningProjection	Projection d'ouverture de fenêtres	M	17-27	r
+-2000023	OST_Doors	Portes	M	17-27	m
+-2000025	OST_DoorsPanelProjection	Projection de panneau de portes	M	17-27	r
+-2000027	OST_DoorsOpeningProjection	Projection d'ouverture de portes	M	17-27	r
+-2000029	OST_DoorsFrameMullionProjection	Projection de meneau de cadre de portes	M	17-27	r
+-2000031	OST_DoorsGlassProjection	Projection de verre de portes	M	17-27	r
+-2000032	OST_Floors	Sols	M	17-27	m
+-2000035	OST_Roofs	Toitures	M	17-27	m
+-2000038	OST_Ceilings	Plafonds	M	17-27	m
+-2000042	OST_CurvesThinLines	Lignes minces de courbes	M	17-27	r
+-2000043	OST_CurvesMediumLines	Lignes moyennes de courbes	M	17-27	r
+-2000044	OST_CurvesWideLines	Lignes larges de courbes	M	17-27	r
+-2000045	OST_SketchLines	Lignes d'esquisse	M	17-27	r
+-2000046	OST_IOSRegeneratedElements	Éléments régénérés	I	17-27	r
+-2000047	OST_IOSBackedUpElements	Éléments doublés hauts	I	17-27	r
+-2000048	OST_IOSAligningLine	Ligne d'aligning	I	17-27	r
+-2000051	OST_Lines	Lignes	M	17-27	m
+-2000052	OST_IOSDatumPlane	Plan de repère de référence	I	17-27	r
+-2000054	OST_IOSSuspendedSketch_obsolete	Esquisse suspendue obsolète	I	17-27	r
+-2000055	OST_IOSSketchGrid	Grille d'esquisse	I	17-27	r
+-2000056	OST_IOSFlipControl	Contrôle	I	17-27	r
+-2000057	OST_IOSThinPixel	Pixel mince	I	17-27	r
+-2000059	OST_IOS	Ios	I	17-27	r
+-2000061	OST_IOSThinPixel_Dot	Point de pixel mince	I	17-27	r
+-2000062	OST_IOSThinPixel_Dash	Tiret de pixel mince	I	17-27	r
+-2000063	OST_IOSThinPixel_DashDot	Point de tiret de pixel mince	I	17-27	r
+-2000064	OST_InvisibleLines	Lignes invisibles	I	17-27	r
+-2000065	OST_AxisOfRotation	Rotation d'axe	M	17-27	r
+-2000066	OST_RoomSeparationLines	Lignes de séparation de pièce	M	17-27	r
+-2000067	OST_StairsSketchBoundaryLines	Lignes de limite d'esquisse d'escalier	M	17-27	r
+-2000068	OST_StairsSketchRiserLines	Lignes de contremarche d'esquisse d'escalier	M	17-27	r
+-2000069	OST_StairsSketchRunLines	Lignes de volée d'esquisse d'escalier	M	17-27	r
+-2000070	OST_StairsSketchLandingCenterLines	Lignes de centre de palier d'esquisse d'escalier	M	17-27	r
+-2000071	OST_IOSGhost	Ghost	I	17-27	r
+-2000072	OST_IOSGroups	Groupes	I	17-27	r
+-2000073	OST_IOSCrashGraphics	Graphismes de crash	I	17-27	r
+-2000074	OST_IOSCuttingGeometry	Géométrie coupante	I	17-27	r
+-2000075	OST_IOSRoomPerimeterLines	Lignes de périmètre de pièce	I	17-27	r
+-2000077	OST_InsulationLines	Lignes d'isolation	M	17-27	r
+-2000078	OST_GenericLines	Lignes génériques	M	17-27	r
+-2000079	OST_AreaSchemeLines	Lignes de schéma de surface	M	17-27	r
+-2000080	OST_Furniture	Mobilier	M	17-27	m
+-2000081	OST_FillPatterns	Motifs de remplissage	I	17-27	r
+-2000082	OST_IOSNotSilhouette	Silhouette	I	17-27	r
+-2000083	OST_ReferenceLines	Lignes de référence	A	17-27	r
+-2000084	OST_IOSSlabShapeEditorExplitCrease	Pli d'explit d'éditeur de forme de dalle	I	17-27	r
+-2000085	OST_IOSSlabShapeEditorAutoCrease	Pli automatique d'éditeur de forme de dalle	I	17-27	r
+-2000086	OST_IOSSlabShapeEditorBoundary	Limite d'éditeur de forme de dalle	I	17-27	r
+-2000087	OST_IOSSlabShapeEditorPointBoundary	Limite de point d'éditeur de forme de dalle	I	17-27	r
+-2000088	OST_IOSSlabShapeEditorPointInterior	Point intérieur d'éditeur de forme de dalle	I	17-27	r
+-2000089	OST_IOSBBoxScreenSize	Taille d'écran de boîte d'iosb	I	17-27	r
+-2000090	OST_Curtain_Systems	Systèmes de mur-rideau	I	17-27	r
+-2000091	OST_IOSArrays	Arrays	I	17-27	r
+-2000092	OST_IOSMeasureLine	Ligne de mesure	I	17-27	r
+-2000093	OST_IOSWallCoreBoundary	Limite de noyau de mur	I	17-27	r
+-2000094	OST_IOSSuspendedSketch	Esquisse suspendue	I	17-27	r
+-2000095	OST_IOSModelGroups	Groupes de modèle	I	17-27	r
+-2000096	OST_IOSDetailGroups	Groupes de détail	I	17-27	r
+-2000097	OST_IOSAttachedDetailGroups	Groupes de détail attaché	I	17-27	r
+-2000098	OST_IOSRoomTagToRoomLines	Lignes de pièce d'étiquette de pièce	I	17-27	r
+-2000099	OST_IOSRebarSystemSpanSymbolCtrl	Contrôle de symbole de portée de système d'armature	I	17-27	r
+-2000100	OST_Columns	Poteaux	M	17-27	m
+-2000101	OST_IOSMeasureLineScreenSize	Taille d'écran de ligne de mesure	I	17-27	r
+-2000102	OST_EPS_Existing	Polystyrène expansé existant	I	17-27	r
+-2000103	OST_EPS_Demolished	Polystyrène expansé démoli	I	17-27	r
+-2000104	OST_EPS_New	Polystyrène expansé nouveau	I	17-27	r
+-2000105	OST_EPS_Temporary	Polystyrène expansé temporaire	I	17-27	r
+-2000106	OST_EPS_Future	Polystyrène expansé futur	I	17-27	r
+-2000107	OST_GuideGrid	Grilles de guidage	A	17-27	m
+-2000109	OST_IOSFabricReinSpanSymbolCtrl	Contrôle de symbole de portée de ferraillage de treillis	I	17-27	r
+-2000110	OST_IOS_GeoLocations	Positions géographiques	I	17-27	r
+-2000111	OST_IOS_GeoSite	Site géographique	I	17-27	r
+-2000112	OST_Phases	Phases	I	17-27	r
+-2000113	OST_IOSDragBox	Boîte de traînée	I	17-27	r
+-2000114	OST_IOSDragBoxInverted	Boîte inversée de traînée	I	17-27	r
+-2000115	OST_IOSRoomUpperLowerLines	Lignes supérieures inférieures de pièce	I	17-27	r
+-2000116	OST_IOSRoomComputationHeight	Hauteur de calcul de pièce	I	17-27	r
+-2000117	OST_IOSNavWheelPivotBall	Ball de pivot de wheel de navigation	I	17-27	r
+-2000120	OST_Stairs	Escaliers	M	17-27	m
+-2000123	OST_StairsStringerCarriage	Limons d'escalier	M	17-27	m
+-2000124	OST_StairsSupportsAboveCut	Coupe au-dessus de supports d'escalier	M	17-27	r
+-2000125	OST_StairsUpText	Texte haut d'escalier	A	17-27	r
+-2000126	OST_StairsRailing	Garde-corps	M	17-27	m
+-2000127	OST_StairsRailingBaluster	Balustres de garde-corps	M	17-27	m
+-2000128	OST_StairsRailingRail	Lisses de garde-corps	M	17-27	m
+-2000129	OST_StairsDownText	Texte bas d'escalier	A	17-27	r
+-2000130	OST_StairsUpArrows	Flèches hautes d'escalier	A	17-27	r
+-2000131	OST_StairsDownArrows	Flèches basses d'escalier	A	17-27	r
+-2000132	OST_StairsRailingAboveCut	Coupe au-dessus de garde-corps d'escalier	M	17-27	r
+-2000133	OST_StairsRailingTags	Étiquettes de garde-corps d'escalier	A	17-27	r
+-2000150	OST_GenericAnnotation	Annotation générique	A	17-27	r
+-2000151	OST_GenericModel	Modèles génériques	M	17-27	m
+-2000160	OST_Rooms	Pièces	M	17-27	m
+-2000161	OST_RoomInteriorFillVisibility	Visibilité de remplissage intérieur de pièce	M	17-27	r
+-2000162	OST_RoomReferenceVisibility	Visibilité de référence de pièce	M	17-27	r
+-2000163	OST_AreaInteriorFillVisibility	Visibilité de remplissage intérieur de surface	M	17-27	r
+-2000164	OST_AreaReferenceVisibility	Visibilité de référence de surface	M	17-27	r
+-2000165	OST_AreaColorFill	Remplissage de couleur de surface	M	17-27	r
+-2000166	OST_RoomInteriorFill	Remplissage intérieur de pièce	M	17-27	r
+-2000167	OST_RoomReference	Référence de pièce	M	17-27	r
+-2000168	OST_AreaInteriorFill	Remplissage intérieur de surface	M	17-27	r
+-2000169	OST_AreaReference	Référence de surface	M	17-27	r
+-2000170	OST_CurtainWallPanels	Panneaux de mur-rideau	M	17-27	m
+-2000171	OST_CurtainWallMullions	Meneaux de mur-rideau	M	17-27	m
+-2000173	OST_CurtainGrids	Grilles de mur-rideau	M	17-27	m
+-2000180	OST_Ramps	Rampes	M	17-27	m
+-2000181	OST_Cornices	Corniches	M	17-27	m
+-2000182	OST_Reveals	Feuillures	M	17-27	m
+-2000185	OST_Massing	Volumétrie	M	17-27	m
+-2000190	OST_FilledRegion	Région remplie	M	17-27	r
+-2000191	OST_PlanRegion	Région de plan	A	17-27	r
+-2000192	OST_FaceSplitter	Diviseur de face	I	17-27	r
+-2000193	OST_Matchline	Ligne de raccord	A	17-27	r
+-2000194	OST_MaskingRegion	Région de masquage	M	17-27	r
+-2000196	OST_ImportObjectStyles	Styles d'objet d'importation	M	17-27	r
+-2000197	OST_ReferenceViewerSymbol	Symbole de visualiseur de référence	A	17-27	r
+-2000198	OST_ReferenceViewer	Visualiseur de référence	A	17-27	r
+-2000200	OST_Sections	Sections	A	17-27	r
+-2000201	OST_SectionLine	Ligne de section	A	17-27	r
+-2000202	OST_BrokenSectionLine	Ligne de section de broken	A	17-27	r
+-2000220	OST_Grids	Grilles	A	17-27	m
+-2000221	OST_GridChains	Chaînes de grille	A	17-27	r
+-2000222	OST_DisplacementElements	Éléments de déplacement	A	17-27	r
+-2000223	OST_DisplacementPath	Chemin de déplacement	A	17-27	r
+-2000240	OST_Levels	Niveaux	A	17-27	m
+-2000260	OST_Dimensions	Cotes	A	17-27	r
+-2000261	OST_WeakDims	Dims faible	A	17-27	r
+-2000262	OST_Constraints	Contraintes	A	17-27	r
+-2000263	OST_SpotElevations	Altitudes ponctuelles	A	17-27	r
+-2000264	OST_SpotCoordinates	Coordinates ponctuel	A	17-27	r
+-2000265	OST_SpotSlopes	Pentes ponctuelles	A	17-27	r
+-2000266	OST_RoofTags	Étiquettes de toiture	A	17-27	r
+-2000267	OST_Assemblies	Assemblages	I	17-27	r
+-2000268	OST_AssemblyTags	Étiquettes d'assemblage	A	17-27	r
+-2000269	OST_Parts	Parties	M	17-27	m
+-2000270	OST_PartTags	Étiquettes de partie	A	17-27	r
+-2000271	OST_PartHiddenLines	Lignes masquées de partie	M	17-27	r
+-2000278	OST_Viewers	Visualiseurs	I	17-27	r
+-2000279	OST_Views	Vues	I	17-27	r
+-2000280	OST_TitleBlocks	Blocs de titre	A	17-27	r
+-2000281	OST_TitleBlockThinLines	Lignes minces de bloc de titre	A	17-27	r
+-2000282	OST_TitleBlockMediumLines	Lignes moyennes de bloc de titre	A	17-27	r
+-2000283	OST_TitleBlockWideLines	Lignes larges de bloc de titre	A	17-27	r
+-2000284	OST_OverheadLines	Lignes en hauteurs	M	17-27	r
+-2000285	OST_DemolishedLines	Lignes démolies	M	17-27	r
+-2000286	OST_HiddenLines	Lignes masquées	M	17-27	r
+-2000287	OST_LinesBeyond	Beyond de lignes	M	17-27	r
+-2000288	OST_CenterLines	Lignes de centre	M	17-27	r
+-2000291	OST_Divisions	Divisions	M	17-27	m
+-2000300	OST_TextNotes	Notes de texte	A	17-27	r
+-2000301	OST_SectionBox	Boîte de section	A	17-27	r
+-2000302	OST_RenderRegions	Régions de rendu	A	17-27	r
+-2000303	OST_AnalysisResults	Résultats d'analyse	M	17-27	r
+-2000304	OST_AnalysisDisplayStyle	Style d'affichage d'analyse	M	17-27	r
+-2000320	OST_CurtainGridsRoof	Toiture de grilles de mur-rideau	M	17-27	r
+-2000321	OST_CurtainGridsWall	Mur de grilles de mur-rideau	M	17-27	r
+-2000322	OST_CurtainGridsSystem	Système de grilles de mur-rideau	I	17-27	r
+-2000323	OST_CurtainGridsCurtaSystem	Système de système de grilles de mur-rideau	M	17-27	r
+-2000325	OST_AreaReport_Triangle	Triangle de rapport de surface	I	17-27	r
+-2000326	OST_AreaReport_Boundary	Limite de rapport de surface	I	17-27	r
+-2000327	OST_AreaReport_Arc_Plus	Arc de rapport de surface	I	17-27	r
+-2000328	OST_AreaReport_Arc_Minus	Arc de rapport de surface	I	17-27	r
+-2000340	OST_CurtaSystem	Systèmes de mur-rideau	M	17-27	m
+-2000341	OST_CurtaSystemFaceManager	Gestionnaire de face de système de système	M	17-27	r
+-2000350	OST_ContourLabels	Étiquettes de courbe de niveau	A	17-27	r
+-2000400	OST_SectionHeads	Têtes de section	A	17-27	r
+-2000401	OST_SectionHeadThinLines	Lignes minces de tête de section	A	17-27	r
+-2000403	OST_SectionHeadMediumLines	Lignes moyennes de tête de section	A	17-27	r
+-2000404	OST_SectionHeadWideLines	Lignes larges de tête de section	A	17-27	r
+-2000450	OST_WindowTags	Étiquettes de fenêtre	A	17-27	r
+-2000460	OST_DoorTags	Étiquettes de porte	A	17-27	r
+-2000480	OST_RoomTags	Étiquettes de pièce	A	17-27	r
+-2000485	OST_MEPSpaceTags	Étiquettes d'espace de MEP	A	17-27	r
+-2000500	OST_Cameras	Caméras	M	17-27	m
+-2000501	OST_Camera_Lines	Lignes de caméra	A	17-27	r
+-2000510	OST_Viewports	Zones de vue	A	17-27	r
+-2000515	OST_ViewportLabel	Étiquette de zone de vue	A	17-27	r
+-2000520	OST_Lights	Lumières	M	17-27	m
+-2000530	OST_CLines	Lignes de c	A	17-27	r
+-2000531	OST_AxisX	X d'axe	I	17-27	r
+-2000532	OST_AxisY	Y d'axe	I	17-27	r
+-2000533	OST_AxisZ	Z d'axe	I	17-27	r
+-2000535	OST_Elev	Altitude	A	17-27	r
+-2000536	OST_CropBoundary	Limite de cadrage	A	17-27	r
+-2000537	OST_Callouts	Détails de repère	A	17-27	r
+-2000538	OST_CalloutHeads	Têtes de détail de repère	A	17-27	r
+-2000539	OST_CalloutBoundary	Limite de détail de repère	A	17-27	r
+-2000540	OST_WallsSurfacePattern	Motif de surface de murs	M	17-27	r
+-2000541	OST_FloorsSurfacePattern	Motif de surface de sols	M	17-27	r
+-2000542	OST_RoofsSurfacePattern	Motif de surface de toitures	M	17-27	r
+-2000543	OST_CeilingsSurfacePattern	Motif de surface de plafonds	M	17-27	r
+-2000544	OST_CalloutLeaderLine	Ligne de ligne de repère de détail de repère	A	17-27	r
+-2000545	OST_WallsAnalyticalGeometry	Géométrie analytique de murs	M	17-27	r
+-2000546	OST_FloorsAnalyticalGeometry	Géométrie analytique de sols	M	17-27	r
+-2000547	OST_AnnotationCrop	Cadrage d'annotation	A	17-27	r
+-2000548	OST_CropBoundarySpecial	Limite spéciale de cadrage	A	17-27	r
+-2000549	OST_AnnotationCropSpecial	Cadrage spécial d'annotation	A	17-27	r
+-2000550	OST_ColorFillLegends	Légendes de remplissage de couleur	A	17-27	r
+-2000551	OST_RoomColorFill	Remplissage de couleur de pièce	M	17-27	r
+-2000552	OST_ColorFillSchema	Schéma de remplissage de couleur	A	17-27	r
+-2000560	OST_RasterImages	Images	M	17-27	m
+-2000570	OST_ScheduleGraphics	Graphismes de nomenclature	A	17-27	r
+-2000573	OST_Schedules	Nomenclatures	I	18-27	r
+-2000575	OST_LegendComponents	Composants de légende	M	17-27	r
+-2000576	OST_PreviewLegendComponents	Composants de légende d'aperçu	M	17-27	r
+-2000580	OST_WallsMembrane	Membrane de murs	M	17-27	m
+-2000581	OST_WallsStructure	Structure de murs	M	17-27	m
+-2000582	OST_WallsInsulation	Isolation de murs	M	17-27	m
+-2000583	OST_WallsSubstrate	Support de murs	M	17-27	m
+-2000584	OST_WallsFinish1	Finition 1 de murs	M	17-27	m
+-2000585	OST_WallsFinish2	Finition 2 de murs	M	17-27	m
+-2000586	OST_WallsDefault	Murs par défauts	M	17-27	r
+-2000587	OST_HiddenWallLines	Lignes de mur masqué	M	17-27	r
+-2000588	OST_WallsCutPattern	Motif de coupe de murs	M	17-27	r
+-2000590	OST_RoofsMembrane	Membrane de toitures	M	17-27	m
+-2000591	OST_RoofsStructure	Structure de toitures	M	17-27	m
+-2000592	OST_RoofsInsulation	Isolation de toitures	M	17-27	m
+-2000593	OST_RoofsSubstrate	Support de toitures	M	17-27	m
+-2000594	OST_RoofsFinish1	Finition 1 de toitures	M	17-27	m
+-2000595	OST_RoofsFinish2	Finition 2 de toitures	M	17-27	m
+-2000596	OST_RoofsDefault	Toitures par défauts	M	17-27	r
+-2000597	OST_RoofsCutPattern	Motif de coupe de toitures	M	17-27	r
+-2000598	OST_RoofsInteriorEdges	Bords intérieurs de toitures	M	17-27	r
+-2000600	OST_FloorsMembrane	Membrane de sols	M	17-27	m
+-2000601	OST_FloorsStructure	Structure de sols	M	17-27	m
+-2000602	OST_FloorsInsulation	Isolation de sols	M	17-27	m
+-2000603	OST_FloorsSubstrate	Support de sols	M	17-27	m
+-2000604	OST_FloorsFinish1	Finition 1 de sols	M	17-27	m
+-2000605	OST_FloorsFinish2	Finition 2 de sols	M	17-27	m
+-2000606	OST_FloorsDefault	Sols par défauts	M	17-27	r
+-2000607	OST_HiddenFloorLines	Lignes de sol masqué	M	17-27	r
+-2000608	OST_FloorsCutPattern	Motif de coupe de sols	M	17-27	r
+-2000609	OST_FloorsInteriorEdges	Bords intérieurs de sols	M	17-27	r
+-2000610	OST_CeilingsMembrane	Membrane de plafonds	M	17-27	m
+-2000611	OST_CeilingsStructure	Structure de plafonds	M	17-27	m
+-2000612	OST_CeilingsInsulation	Isolation de plafonds	M	17-27	m
+-2000613	OST_CeilingsSubstrate	Support de plafonds	M	17-27	m
+-2000614	OST_CeilingsFinish1	Finition 1 de plafonds	M	17-27	m
+-2000615	OST_CeilingsFinish2	Finition 2 de plafonds	M	17-27	m
+-2000616	OST_CeilingsDefault	Plafonds par défauts	M	17-27	r
+-2000617	OST_CeilingsCutPattern	Motif de coupe de plafonds	M	17-27	r
+-2000700	OST_Materials	Matériaux	M	17-27	m
+-2000710	OST_ReferencePoints	Points de référence	A	17-27	r
+-2000711	OST_ReferencePoints_Points	Points de points de référence	A	17-27	r
+-2000712	OST_ReferencePoints_Planes	Plans de points de référence	A	17-27	r
+-2000713	OST_ReferencePoints_Lines	Lignes de points de référence	A	17-27	r
+-2000715	OST_XRayProfileEdge	Bord de profil de rayon de X	I	17-27	r
+-2000716	OST_XRaySideEdge	Bord de côté de rayon de X	I	17-27	r
+-2000717	OST_XRayPathCurve	Courbe de chemin de rayon de X	I	17-27	r
+-2000718	OST_XRayPathPoint	Point de chemin de rayon de X	I	17-27	r
+-2000719	OST_XRayImplicitPathCurve	Courbe de chemin implicite de rayon de X	I	17-27	r
+-2000720	OST_XRayConstrainedProfileEdge	Bord de profil contraint de rayon de X	I	17-27	r
+-2000721	OST_ControlAxisX	X d'axe de contrôle	I	17-27	r
+-2000772	OST_ControlAxisY	Y d'axe de contrôle	I	17-27	r
+-2000773	OST_ControlAxisZ	Z d'axe de contrôle	I	17-27	r
+-2000774	OST_ControlLocal	Contrôle local	I	17-27	r
+-2000800	OST_IOSTilePatternGrid	Grille de motif de carreau	I	17-27	r
+-2000810	OST_IOSOpening	Ouverture	I	17-27	r
+-2000827	OST_RemovedGridSeg	Segment de grille supprimée	I	17-27	r
+-2000828	OST_InstanceDrivenLineStyle	Style de ligne pilotée d'instance	I	17-27	r
+-2000829	OST_RoomPolylines	Polylines de pièce	M	17-27	r
+-2000830	OST_AreaPolylines	Polylines de surface	M	17-27	r
+-2000831	OST_MEPSpaceSeparationLines	Lignes de séparation d'espace de MEP	M	17-27	r
+-2000832	OST_DimLockControlLeader	Ligne de repère de contrôle de cote	M	17-27	r
+-2000833	OST_PathOfTravelLines	Lignes de déplacement de chemin	M	20-27	r
+-2000834	OST_PathOfTravelTags	Étiquettes de déplacement de chemin	A	20-27	r
+-2000880	OST_StructLocationLineControl	Contrôle de ligne de position structurelle	I	17-27	r
+-2000896	OST_WallRefPlanes	Plans de référence de mur	I	17-27	r
+-2000897	OST_RoofOpening	Ouverture de toiture	M	17-27	r
+-2000898	OST_FloorOpening	Ouverture de sol	M	17-27	r
+-2000899	OST_CeilingOpening	Ouverture de plafond	M	17-27	r
+-2000900	OST_AdaptivePoints	Points adaptatifs	A	17-27	r
+-2000901	OST_AdaptivePoints_Points	Points de points adaptatifs	A	17-27	r
+-2000902	OST_AdaptivePoints_Planes	Plans de points adaptatifs	A	17-27	r
+-2000903	OST_AdaptivePoints_Lines	Lignes de points adaptatifs	A	17-27	r
+-2000906	OST_RailingSystemSegment	Segments de garde-corps	M	17-27	m
+-2000907	OST_RailingSystemPost	Poteaux de garde-corps	M	17-27	m
+-2000909	OST_RailingSystemPanel	Panneaux de garde-corps	M	17-27	m
+-2000910	OST_RailingSystemHardware	Quincaillerie de garde-corps	M	17-27	m
+-2000919	OST_StairsRuns	Volées d'escalier	M	17-27	m
+-2000920	OST_StairsLandings	Paliers d'escalier	M	17-27	m
+-2000921	OST_StairsTrisers	Contremarches d'escalier	M	17-27	m
+-2000924	OST_PropertySet	Jeu de propriété	M	17-27	r
+-2000925	OST_IOSRoomCalculationPoint	Point de calcul de pièce	I	17-27	r
+-2000926	OST_DividedPath	Chemin divisé	I	17-27	r
+-2000927	OST_ComponentRepeater	Répéteur de composant	I	17-27	r
+-2000928	OST_ComponentRepeaterSlot	Fente de répéteur de composant	I	17-27	r
+-2000930	OST_StairsCutMarks	Repères de coupe d'escalier	M	17-27	r
+-2000931	OST_StairsCutMarksAboveCut	Coupe au-dessus de repères de coupe d'escalier	M	17-27	r
+-2000932	OST_StairsNosingLines	Lignes de nez de marche d'escalier	M	17-27	r
+-2000933	OST_StairsNosingLinesAboveCut	Coupe au-dessus de lignes de nez de marche d'escalier	M	17-27	r
+-2000934	OST_StairsOutlines	Contours d'escalier	M	17-27	r
+-2000935	OST_StairsOutlinesAboveCut	Coupe au-dessus de contours d'escalier	M	17-27	r
+-2000936	OST_StairsRiserLines	Lignes de contremarche d'escalier	M	17-27	r
+-2000937	OST_StairsRiserLinesAboveCut	Coupe au-dessus de lignes de contremarche d'escalier	M	17-27	r
+-2000938	OST_StairsPaths	Chemins d'escalier	A	17-27	r
+-2000939	OST_StairsPathsAboveCut	Coupe au-dessus de chemins d'escalier	A	17-27	r
+-2000940	OST_StairsRunTags	Étiquettes de volée d'escalier	A	17-27	r
+-2000941	OST_StairsLandingTags	Étiquettes de palier d'escalier	A	17-27	r
+-2000942	OST_StairsSupportTags	Étiquettes de support d'escalier	A	17-27	r
+-2000944	OST_StairsTriserNumbers	Numéros de contremarche d'escalier	A	17-27	r
+-2000945	OST_StairsSketchPathLines	Lignes de chemin d'esquisse d'escalier	M	17-27	r
+-2000946	OST_RailingTopRail	Lisses hautes de garde-corps	M	17-27	m
+-2000947	OST_RailingHandRail	Mains courantes de garde-corps	M	17-27	m
+-2000948	OST_RailingSupport	Supports de garde-corps	M	17-27	m
+-2000949	OST_RailingTermination	Terminaisons de garde-corps	M	17-27	m
+-2000950	OST_RailingTopRailAboveCut	Coupe au-dessus de lisse supérieur de garde-corps	M	17-27	r
+-2000951	OST_RailingHandRailAboveCut	Coupe au-dessus de lisse de main de garde-corps	M	17-27	r
+-2000952	OST_StairsSupports	Supports d'escalier	M	17-27	m
+-2000953	OST_RailingRailPathLines	Lignes de chemin de lisse de garde-corps	M	17-27	r
+-2000954	OST_RailingRailPathExtensionLines	Lignes de prolongation de chemin de lisse de garde-corps	M	17-27	r
+-2000955	OST_LinkAnalyticalTags	Étiquettes analytiques de lien	A	17-27	r
+-2000956	OST_NodeAnalyticalTags	Étiquettes analytiques de nœud	A	17-27	r
+-2000957	OST_AnalyticalPanelTags	Étiquettes de panneau analytique	A	23-27	r
+-2000958	OST_AnalyticalOpeningTags	Étiquettes d'ouverture analytique	A	23-27	r
+-2000970	OST_MultiReferenceAnnotations	Annotations de référence multiple	A	17-27	r
+-2000971	OST_BeamLocalCoordSys	Système de coordonnée locale de poutre	N	17-27	r
+-2000972	OST_ColumnLocalCoordSys	Système de coordonnée locale de poteau	N	17-27	r
+-2000973	OST_BraceLocalCoordSys	Système de coordonnée locale de contreventement	N	17-27	r
+-2000974	OST_WallLocalCoordSys	Système de coordonnée locale de mur	N	17-27	r
+-2000975	OST_FloorLocalCoordSys	Système de coordonnée locale de sol	N	17-27	r
+-2000976	OST_FndSlabLocalCoordSys	Système de coordonnée locale de dalle de fnd	N	17-27	r
+-2000977	OST_CoordinateSystem	Système de coordonnée	N	17-27	r
+-2000980	OST_MultistoryStairs	Escaliers multi-niveaux	M	17-27	m
+-2000982	OST_Coordination_Model	Modèle de coordination	M	18-27	r
+-2000983	OST_AnalyticalPipeConnections	Connexions de tuyau analytique	N	18-27	r
+-2000984	OST_AnalyticalPipeConnectionLineSymbol	Symbole de ligne de connexion de tuyau analytique	N	18-27	r
+-2000985	OST_MechanicalEquipmentSet	Jeu d'équipement mécanique	M	19-27	r
+-2000986	OST_MechanicalEquipmentSetTags	Étiquettes de jeu d'équipement mécanique	A	19-27	r
+-2000987	OST_MechanicalEquipmentSetBoundaryLines	Lignes de limite de jeu d'équipement mécanique	A	19-27	r
+-2000988	OST_PipeHydronicSeparationSymbols	Symboles de séparation hydronique de tuyau	M	19-27	r
+-2000989	OST_RiseDropSymbols	Symboles de descente de montée	M	19-27	r
+-2000994	OST_ColumnOpening	Ouverture de poteau	M	17-27	r
+-2000995	OST_StructuralFramingOpening	Ouverture d'ossature structurelle	M	17-27	r
+-2000996	OST_ShaftOpening	Ouverture de trémie	M	17-27	r
+-2000997	OST_SWallRectOpening	Ouverture de rect de mur de S	M	17-27	r
+-2000998	OST_DormerOpeningIncomplete	Ouverture incomplète de dormer	M	17-27	r
+-2000999	OST_ArcWallRectOpening	Ouverture de rect de mur d'arc	M	17-27	r
+-2001000	OST_Casework	Mobilier fixe	M	17-27	m
+-2001001	OST_MEPSystemZone	Zone de système de MEP	N	20-27	r
+-2001007	OST_MEPSystemZoneTags	Étiquettes de zone de système de MEP	A	20-27	r
+-2001008	OST_MEPAnalyticalAirLoop	Boucle d'air analytique de MEP	M	20-27	r
+-2001009	OST_MEPAnalyticalWaterLoop	Boucle d'eau analytique de MEP	M	20-27	r
+-2001010	OST_ZoneEquipment	Équipement de zone	M	20-27	r
+-2001011	OST_ElectricalCircuitNaming	Nommage de circuit électrique	M	21-27	r
+-2001012	OST_Alignments	Alignements	A	21-27	r
+-2001015	OST_AlignmentsTags	Étiquettes d'alignements	A	21-27	r
+-2001016	OST_AlignmentStationLabelSets	Jeux d'étiquette de station d'alignement	A	21-27	r
+-2001017	OST_AlignmentStationLabels	Étiquettes de station d'alignement	A	21-27	r
+-2001018	OST_ElectricalZoneEquipment	Équipement de zone électrique	M	22	r
+-2001019	OST_ElectricalLoadZoneType	Type de zone de charge électrique	M	22-27	r
+-2001020	OST_ElectricalLoadZoneInstance	Instance de zone de charge électrique	N	22-27	r
+-2001021	OST_MEPAnalyticalBus	Bus analytique de MEP	M	22-27	r
+-2001022	OST_OBSOLETE_MEPAnalyticalElectricalBranch	Branche analytique électrique de MEP obsolète	M	22-27	r
+-2001023	OST_MEPAnalyticalTransferSwitch	Interrupteur de transfert analytique de MEP	M	22-27	r
+-2001024	OST_MEPLoadAreas	Surfaces de charge de MEP	N	22-27	r
+-2001025	OST_MEPLoadAreaTags	Étiquettes de surface de charge de MEP	A	22	r
+-2001026	OST_ElectricalPowerSource	Source de puissance électrique	M	22-27	r
+-2001027	OST_MEPLoadAreaColorFill	Remplissage de couleur de surface de charge de MEP	N	22-27	r
+-2001028	OST_MEPLoadAreaInteriorFill	Remplissage intérieur de surface de charge de MEP	N	22-27	r
+-2001029	OST_MEPLoadAreaReference	Référence de surface de charge de MEP	N	22-27	r
+-2001030	OST_MEPLoadAreaInteriorFillVisibility	Visibilité de remplissage intérieur de surface de charge de MEP	N	22-27	r
+-2001031	OST_MEPLoadAreaReferenceVisibility	Visibilité de référence de surface de charge de MEP	N	22-27	r
+-2001033	OST_MEPLoadAreaSeparationLines	Lignes de séparation de surface de charge de MEP	M	22-27	r
+-2001034	OST_WallNonCoreLayer	Couche de noyau non de mur	M	22-27	r
+-2001035	OST_WallCoreLayer	Couche de noyau de mur	M	22	r
+-2001036	OST_Hardscape	Aménagements minéraux	M	22-27	m
+-2001037	OST_HardscapeHiddenLines	Lignes masquées d'aménagement minéral	M	22-27	r
+-2001038	OST_HardscapeTags	Étiquettes d'aménagement minéral	A	22-27	r
+-2001039	OST_TemporaryStructure	Structure temporaire	M	22-27	r
+-2001040	OST_ElectricalEquipment	Équipements électriques	M	17-27	m
+-2001041	OST_TemporaryStructureHiddenLines	Lignes masquées de structure temporaire	M	22-27	r
+-2001042	OST_TemporaryStructureTags	Étiquettes de structure temporaire	A	22-27	r
+-2001043	OST_FoodServiceEquipment	Équipements de restauration	M	22-27	m
+-2001044	OST_FoodServiceEquipmentHiddenLines	Lignes masquées d'équipement de service de restauration	M	22-27	r
+-2001045	OST_FoodServiceEquipmentTags	Étiquettes d'équipement de service de restauration	A	22-27	r
+-2001046	OST_MedicalEquipment	Équipements médicaux	M	22-27	m
+-2001047	OST_MedicalEquipmentHiddenLines	Lignes masquées d'équipement médical	M	22-27	r
+-2001048	OST_MedicalEquipmentTags	Étiquettes d'équipement médical	A	22-27	r
+-2001049	OST_FireProtection	Protection incendie	M	22-27	m
+-2001050	OST_FireProtectionHiddenLines	Lignes masquées de protection de feu	M	22-27	r
+-2001051	OST_FireProtectionTags	Étiquettes de protection de feu	A	22-27	r
+-2001052	OST_VerticalCirculation	Circulations verticales	M	22-27	m
+-2001053	OST_VerticalCirculationHiddenLines	Lignes masquées de circulation verticale	M	22-27	r
+-2001054	OST_VerticalCirculationTags	Étiquettes de circulation verticale	A	22-27	r
+-2001055	OST_AudioVisualDevices	Appareils audiovisuels	M	22-27	m
+-2001056	OST_AudioVisualDevicesHiddenLines	Lignes masquées de dispositifs audios visuels	M	22-27	r
+-2001057	OST_AudioVisualDeviceTags	Étiquettes de dispositif audio visuel	A	22-27	r
+-2001058	OST_Signage	Signalétique	M	22-27	m
+-2001059	OST_SignageHiddenLines	Lignes masquées de signalétique	M	22-27	r
+-2001060	OST_ElectricalFixtures	Appareils électriques	M	17-27	m
+-2001061	OST_SignageTags	Étiquettes de signalétique	A	22-27	r
+-2001062	OST_FasciaTags	Étiquettes de bandeau	A	23-27	r
+-2001063	OST_ColumnTags	Étiquettes de poteau	A	23-27	r
+-2001064	OST_EntourageTags	Étiquettes d'environnement	A	23-27	r
+-2001065	OST_GutterTags	Étiquettes de gouttière	A	23-27	r
+-2001066	OST_HandrailTags	Étiquettes de main courante	A	23-27	r
+-2001067	OST_PadTags	Étiquettes de plateforme	A	23-27	r
+-2001068	OST_RampTags	Étiquettes de rampe	A	23-27	r
+-2001069	OST_RoofSoffitTags	Étiquettes de sous-face de toiture	A	23-27	r
+-2001070	OST_SlabEdgeTags	Étiquettes de bord de dalle	A	23-27	r
+-2001071	OST_TopRailTags	Étiquettes de lisse supérieur	A	23-27	r
+-2001072	OST_WallSweepTags	Étiquettes de balayage de mur	A	23-27	r
+-2001073	OST_ModelGroupTags	Étiquettes de groupe de modèle	A	23-27	r
+-2001074	OST_RvtLinksTags	Étiquettes de liens	A	23-27	r
+-2001075	OST_AnalyticalMemberCrossSection	Section transversale d'élément analytique	N	23-27	r
+-2001076	OST_FloorsSplitLines	Lignes de sols	M	23-27	r
+-2001077	OST_ElectricalAnalyticalTransformer	Transformateur électrique analytique	M	23-27	r
+-2001078	OST_ELECTRICAL_AreaBasedLoads_Tags	Étiquettes de charges basées de surface électrique	A	23-27	r
+-2001079	OST_Toposolid	Toposolides	M	23-27	m
+-2001080	OST_ToposolidHiddenLines	Lignes masquées de solide topographique	M	23-27	r
+-2001081	OST_ToposolidContours	Courbes de niveau de solide topographique	M	23-27	r
+-2001082	OST_ToposolidSecondaryContours	Courbes de niveau secondaires de solide topographique	M	23-27	r
+-2001083	OST_ToposolidFoldingLines	Lignes de folding de solide topographique	M	23-27	r
+-2001084	OST_ToposolidSplitLines	Lignes de solide topographique	M	23-27	r
+-2001085	OST_ToposolidDefault	Solide topographique par défaut	M	23-27	r
+-2001086	OST_ToposolidCutPattern	Motif de coupe de solide topographique	M	23-27	r
+-2001087	OST_ToposolidMembrane	Membrane de solide topographique	M	23-27	r
+-2001088	OST_ToposolidStructure	Structure de solide topographique	M	23-27	r
+-2001089	OST_ToposolidSubstrate	Substrate de solide topographique	M	23-27	r
+-2001090	OST_ToposolidFinish1	Finish1 de solide topographique	M	23-27	r
+-2001091	OST_ToposolidFinish2	Finish2 de solide topographique	M	23-27	r
+-2001092	OST_ToposolidSurfacePattern	Motif de surface de solide topographique	M	23-27	r
+-2001093	OST_ToposolidInsulation	Isolation de solide topographique	M	23-27	r
+-2001094	OST_ToposolidTags	Étiquettes de solide topographique	A	23-27	r
+-2001095	OST_ToposolidOpening	Ouverture de solide topographique	M	23-27	r
+-2001096	OST_ElectricalAnalyticalFeeder	Câble d'alimentation électrique analytique	M	23-27	r
+-2001097	OST_ToposolidLink	Lien de solide topographique	M	23-27	r
+-2001098	OST_ElectricalLoadSet	Jeu de charge électrique	M	23-27	r
+-2001099	OST_ElectricalLoadCase	Cas de charge électrique	M	24-27	r
+-2001100	OST_FurnitureSystems	Systèmes de mobilier	M	17-27	m
+-2001101	OST_ElectricalConnector	Connecteur électrique	M	24-27	r
+-2001102	OST_ElectricalConnectorTags	Étiquettes de connecteur électrique	A	24-27	r
+-2001103	OST_ToposolidLinkTags	Étiquettes de lien de solide topographique	A	24-27	r
+-2001104	OST_RebarBendingDetails	Détails de pliage d'armature	A	24-27	r
+-2001105	OST_WallLayers	Couches de mur	M	24-27	r
+-2001106	OST_FloorLayers	Couches de sol	M	24-27	r
+-2001107	OST_DataExchanges	Exchanges de données	M	24-27	r
+-2001120	OST_LightingFixtures	Appareils d'éclairage	M	17-27	m
+-2001121	OST_LightingFixtureSource	Source d'appareil d'éclairage	M	17-27	r
+-2001140	OST_MechanicalEquipment	Équipements mécaniques	M	17-27	m
+-2001160	OST_PlumbingFixtures	Appareils sanitaires	M	17-27	m
+-2001180	OST_Parking	Stationnement	M	17-27	m
+-2001220	OST_Roads	Routes	M	17-27	m
+-2001221	OST_RoadTags	Étiquettes de route	A	22-27	r
+-2001260	OST_Site	Site	M	17-27	m
+-2001262	OST_SitePoint	Points de site	M	17-27	m
+-2001263	OST_BuildingPad	Terrassements de bâtiment	M	17-27	m
+-2001265	OST_SiteProperty	Propriété de site	M	17-27	r
+-2001266	OST_SitePointBoundary	Limite de point de site	M	17-27	r
+-2001267	OST_SitePropertyTags	Étiquettes de propriété de site	A	17-27	r
+-2001268	OST_SitePropertyLineSegment	Segment de ligne de propriété de site	I	17-27	r
+-2001269	OST_SitePropertyLineSegmentTags	Étiquettes de segment de ligne de propriété de site	A	17-27	r
+-2001271	OST_ProjectBasePoint	Point de base du projet	M	17-27	m
+-2001272	OST_SharedBasePoint	Point de relevé	M	17-27	m
+-2001273	OST_BasePointAxisX	X d'axe de point de base	M	17-27	r
+-2001274	OST_BasePointAxisY	Y d'axe de point de base	M	17-27	r
+-2001275	OST_BasePointAxisZ	Z d'axe de point de base	M	17-27	r
+-2001276	OST_LinkBasePoint	Point de base de lien	M	21-27	r
+-2001300	OST_StructuralFoundation	Fondations porteuses	M	17-27	m
+-2001302	OST_HiddenStructuralFoundationLines	Lignes de fondation masquée structurelle	M	17-27	r
+-2001320	OST_StructuralFraming	Ossature porteuse	M	17-27	m
+-2001321	OST_StructuralFramingOther	Ossature porteuse (autre)	M	17-27	m
+-2001322	OST_Girder	Poutres maîtresses	M	17-27	m
+-2001323	OST_Joist	Solives	M	17-27	m
+-2001324	OST_Purlin	Pannes	M	17-27	m
+-2001325	OST_HorizontalBracing	Contreventement horizontal	M	17-27	m
+-2001326	OST_VerticalBracing	Contreventement vertical	M	17-27	m
+-2001327	OST_StructuralFramingSystem	Système d'ossature structurelle	M	17-27	r
+-2001328	OST_KickerBracing	Contreventement d'about	M	17-27	m
+-2001329	OST_HiddenStructuralFramingLines	Lignes d'ossature masquée structurelle	M	17-27	r
+-2001330	OST_StructuralColumns	Poteaux porteurs	M	17-27	m
+-2001331	OST_FramingAnalyticalGeometry	Géométrie analytique d'ossature	M	17-27	r
+-2001332	OST_ColumnAnalyticalGeometry	Géométrie analytique de poteau	M	17-27	r
+-2001333	OST_AnalyticalRigidLinks	Liens analytiques rigides	M	17-27	r
+-2001334	OST_HiddenStructuralColumnLines	Lignes de poteau masqué structurel	M	17-27	r
+-2001335	OST_StructuralColumnStickSymbols	Symboles de bâton de poteau structurel	M	17-27	r
+-2001336	OST_StructuralTruss	Fermes porteuses	M	17-27	m
+-2001339	OST_TopographyLink	Lien de topographie	M	19-27	r
+-2001340	OST_Topography	Topographie	M	17-27	m
+-2001341	OST_TopographySurface	Surface de topographie	M	17-27	r
+-2001342	OST_TopographyContours	Courbes de niveau de topographie	M	17-27	r
+-2001343	OST_SecondaryTopographyContours	Courbes de niveau de topographie secondaire	M	17-27	r
+-2001344	OST_ColumnAnalyticalRigidLinks	Liens analytiques rigides de poteau	M	17-27	r
+-2001350	OST_SpecialityEquipment	Équipements spéciaux	M	17-27	m
+-2001352	OST_RvtLinks	Liaisons Revit	M	17-27	m
+-2001353	OST_FootingAnalyticalGeometry	Géométrie analytique de semelle de fondation	M	17-27	r
+-2001354	OST_StructuralStiffener	Raidisseurs	M	17-27	m
+-2001355	OST_StructuralStiffenerTags	Étiquettes de raidisseur structurel	A	17-27	r
+-2001356	OST_StructuralFramingLocationLine	Ligne de position d'ossature structurelle	M	17-27	r
+-2001357	OST_StructuralColumnLocationLine	Ligne de position de poteau structurel	M	17-27	r
+-2001358	OST_StructuralStiffenerHiddenLines	Lignes masquées de raidisseur structurel	M	17-27	r
+-2001359	OST_Blocks	Blocs	M	17-27	m
+-2001360	OST_Planting	Végétation	M	17-27	m
+-2001370	OST_Entourage	Environnement	M	17-27	m
+-2001390	OST_Fascia	Bandeaux	M	17-27	m
+-2001391	OST_Gutter	Gouttières	M	17-27	m
+-2001392	OST_EdgeSlab	Nez de dalle	M	17-27	m
+-2001393	OST_RoofSoffit	Sous-faces de toiture	M	17-27	m
+-2002000	OST_DetailComponents	Composants de détail	M	17-27	m
+-2003000	OST_ProfileFamilies	Familles de profils	M	17-27	m
+-2003100	OST_Sheets	Feuilles	M	17-27	m
+-2003101	OST_ProjectInformation	Informations du projet	M	17-27	m
+-2003200	OST_Areas	Surfaces	M	17-27	m
+-2003201	OST_AreaSchemes	Schémas de surface	I	17-27	r
+-2003225	OST_ZoneSchemes	Schémas de zone	I	17-27	r
+-2003302	OST_RampsAboveCut	Coupe au-dessus de rampes	M	17-27	r
+-2003303	OST_RampsStringer	Limon de rampes	M	17-27	r
+-2003304	OST_RampsStringerAboveCut	Coupe au-dessus de limon de rampes	M	17-27	r
+-2003305	OST_RampsUpText	Texte haut de rampes	M	17-27	r
+-2003306	OST_RampsDownText	Texte bas de rampes	M	17-27	r
+-2003307	OST_RampsUpArrow	Flèche haute de rampes	M	17-27	r
+-2003308	OST_RampsDownArrow	Flèche basse de rampes	M	17-27	r
+-2003323	OST_DividedSurface	Surface divisée	I	17-27	r
+-2003324	OST_DividedSurface_Nodes	Nœuds de surface divisée	M	17-27	r
+-2003325	OST_DividedSurface_Gridlines	Lignes de grille de surface divisée	M	17-27	r
+-2003326	OST_DividedSurface_PatternLines	Lignes de motif de surface divisée	M	17-27	r
+-2003327	OST_DividedSurface_PatternFill	Remplissage de motif de surface divisée	M	17-27	r
+-2003328	OST_DividedSurface_PreDividedSurface	Surface divisée de surface divisée	I	17-27	r
+-2003329	OST_DividedSurface_TransparentFace	Face transparente de surface divisée	I	17-27	r
+-2003330	OST_AlwaysExcludedInAllViews	Vues exclues toutes	M	17-27	r
+-2003331	OST_TilePatterns	Motifs de carreau	I	17-27	r
+-2003332	OST_DividedSurfaceBelt	Ceinture de surface divisée	I	17-27	r
+-2003333	OST_DividedSurface_DiscardedDivisionLines	Lignes de division écartée de surface divisée	M	17-27	r
+-2003400	OST_Mass	Masses	M	17-27	m
+-2003403	OST_MassFloor	Sols de masse	M	17-27	m
+-2003404	OST_MassForm	Formes de masse	M	17-27	m
+-2003405	OST_MassTags	Étiquettes de masse	A	17-27	r
+-2003406	OST_ZoningEnvelope	Enveloppe de zonage	M	17-27	r
+-2003407	OST_MassCutter	Découpeur de masse	M	17-27	r
+-2003408	OST_MassFaceSplitter	Diviseur de face de masse	M	17-27	r
+-2003409	OST_HostTemplate	Gabarit d'hôte	M	17-27	r
+-2003410	OST_MassAreaFaceTags	Étiquettes de face de surface de masse	A	17-27	r
+-2003411	OST_MassZone	Zones de masse	M	17-27	m
+-2003412	OST_MassInteriorWall	Mur intérieur de masse	M	17-27	r
+-2003413	OST_MassExteriorWall	Mur extérieur de masse	M	17-27	r
+-2003414	OST_MassRoof	Toiture de masse	M	17-27	r
+-2003415	OST_MassGlazing	Vitrage de masse	M	17-27	r
+-2003416	OST_MassSkylights	Lanterneaux de masse	M	17-27	r
+-2003417	OST_MassOpening	Ouverture de masse	M	17-27	r
+-2003418	OST_MassShade	Ombrage de masse	M	17-27	r
+-2003419	OST_MassSlab	Dalle de masse	M	17-27	r
+-2003420	OST_MassExteriorWallUnderground	Mur extérieur souterrain de masse	M	17-27	r
+-2003421	OST_MassWallsAll	Murs touts de masse	M	17-27	r
+-2003422	OST_MassFloorsAll	Sols touts de masse	M	17-27	r
+-2003423	OST_MassGlazingAll	Vitrage tout de masse	M	17-27	r
+-2003500	OST_StackedWalls	Murs empilés	M	17-27	m
+-2003600	OST_MEPSpaces	Espaces	M	17-27	m
+-2003601	OST_MEPSpaceInteriorFillVisibility	Visibilité de remplissage intérieur d'espace de MEP	M	17-27	r
+-2003602	OST_MEPSpaceReferenceVisibility	Visibilité de référence d'espace de MEP	M	17-27	r
+-2003603	OST_MEPSpaceInteriorFill	Remplissage intérieur d'espace de MEP	M	17-27	r
+-2003604	OST_MEPSpaceReference	Référence d'espace de MEP	M	17-27	r
+-2003605	OST_MEPSpaceColorFill	Remplissage de couleur d'espace de MEP	M	17-27	r
+-2005001	OST_CaseworkTags	Étiquettes de mobilier fixe	A	17-27	r
+-2005002	OST_CeilingTags	Étiquettes de plafond	A	17-27	r
+-2005003	OST_ElectricalEquipmentTags	Étiquettes d'équipement électrique	A	17-27	r
+-2005004	OST_ElectricalFixtureTags	Étiquettes d'appareil électrique	A	17-27	r
+-2005006	OST_FurnitureTags	Étiquettes de mobilier	A	17-27	r
+-2005007	OST_FurnitureSystemTags	Étiquettes de système de mobilier	A	17-27	r
+-2005008	OST_LightingFixtureTags	Étiquettes d'appareil d'éclairage	A	17-27	r
+-2005009	OST_MechanicalEquipmentTags	Étiquettes d'équipement mécanique	A	17-27	r
+-2005010	OST_PlumbingFixtureTags	Étiquettes d'appareil de plomberie	A	17-27	r
+-2005011	OST_WallTags	Étiquettes de mur	A	17-27	r
+-2005012	OST_CurtainWallPanelTags	Étiquettes de panneau de mur de mur-rideau	A	17-27	r
+-2005013	OST_GenericModelTags	Étiquettes de modèle générique	A	17-27	r
+-2005014	OST_SpecialityEquipmentTags	Étiquettes d'équipement de speciality	A	17-27	r
+-2005015	OST_StructuralFramingTags	Étiquettes d'ossature structurelle	A	17-27	r
+-2005016	OST_SiteTags	Étiquettes de site	A	17-27	r
+-2005017	OST_ParkingTags	Étiquettes de stationnement	A	17-27	r
+-2005018	OST_StructuralColumnTags	Étiquettes de poteau structurel	A	17-27	r
+-2005019	OST_StructuralFoundationTags	Étiquettes de fondation structurelle	A	17-27	r
+-2005020	OST_AreaTags	Étiquettes de surface	A	17-27	r
+-2005021	OST_PlantingTags	Étiquettes de plantation	A	17-27	r
+-2005022	OST_MultiCategoryTags	Étiquettes de catégorie multiple	A	17-27	r
+-2005023	OST_StairsTags	Étiquettes d'escalier	A	17-27	r
+-2005025	OST_CurtaSystemTags	Étiquettes de système de système	A	17-27	r
+-2005026	OST_FloorTags	Étiquettes de sol	A	17-27	r
+-2005027	OST_MaterialTags	Étiquettes de matériau	A	17-27	r
+-2005028	OST_DetailComponentTags	Étiquettes de composant de détail	A	17-27	r
+-2005029	OST_KeynoteTags	Étiquettes de note-clé	A	17-27	r
+-2005030	OST_TrussTags	Étiquettes de ferme	A	17-27	r
+-2005032	OST_CurtainWallMullionTags	Étiquettes de meneau de mur de mur-rideau	A	22-27	r
+-2005033	OST_MultiLeaderTag	Étiquette de ligne de repère multiple	A	22-27	r
+-2005100	OST_SpotElevSymbols	Symboles d'altitude ponctuelle	A	17-27	r
+-2005110	OST_SpanDirectionSymbol	Symbole de direction de portée	A	17-27	r
+-2005111	OST_FootingSpanDirectionSymbol	Symbole de direction de portée de semelle de fondation	A	17-27	r
+-2005130	OST_BeamSystemTags	Étiquettes de système de poutre	A	17-27	r
+-2005200	OST_Loads	Charges	N	17-27	r
+-2005201	OST_PointLoads	Charges de point	N	17-27	r
+-2005202	OST_LineLoads	Charges de ligne	N	17-27	r
+-2005203	OST_AreaLoads	Charges de surface	N	17-27	r
+-2005204	OST_InternalLoads	Charges internes	N	17-27	r
+-2005205	OST_InternalPointLoads	Charges de point interne	N	17-27	r
+-2005206	OST_InternalLineLoads	Charges de ligne interne	N	17-27	r
+-2005207	OST_InternalAreaLoads	Charges de surface interne	N	17-27	r
+-2005210	OST_LoadCases	Cas de charge	N	17-27	r
+-2005211	OST_LoadCasesDead	Cas permanents de charge	N	17-27	r
+-2005212	OST_LoadCasesLive	Cas variables de charge	N	17-27	r
+-2005213	OST_LoadCasesWind	Vent de cas de charge	N	17-27	r
+-2005214	OST_LoadCasesSnow	Neige de cas de charge	N	17-27	r
+-2005215	OST_LoadCasesRoofLive	Toiture variable de cas de charge	N	17-27	r
+-2005216	OST_LoadCasesAccidental	Cas accidentels de charge	N	17-27	r
+-2005217	OST_LoadCasesTemperature	Température de cas de charge	N	17-27	r
+-2005218	OST_LoadCasesSeismic	Seismic de cas de charge	N	17-27	r
+-2005250	OST_PointLoadTags	Étiquettes de charge de point	A	17-27	r
+-2005251	OST_LineLoadTags	Étiquettes de charge de ligne	A	17-27	r
+-2005252	OST_AreaLoadTags	Étiquettes de charge de surface	A	17-27	r
+-2005253	OST_InternalPointLoadTags	Étiquettes de charge de point interne	A	17-27	r
+-2005254	OST_InternalLineLoadTags	Étiquettes de charge de ligne interne	A	17-27	r
+-2005255	OST_InternalAreaLoadTags	Étiquettes de charge de surface interne	A	17-27	r
+-2005301	OST_BoundaryConditions	Conditions de limite	N	17-27	r
+-2006000	OST_VolumeOfInterest	Intérêt de volume	A	17-27	r
+-2006020	OST_LevelHeads	Têtes de niveau	A	17-27	r
+-2006040	OST_GridHeads	Têtes de grille	A	17-27	r
+-2006045	OST_ElevationMarks	Repères d'altitude	A	17-27	r
+-2006050	OST_EditCutProfile	Profil de coupe	I	17-27	r
+-2006060	OST_RevisionClouds	Nuages de révision	A	17-27	r
+-2006070	OST_Revisions	Révisions	I	17-27	r
+-2006071	OST_RevisionNumberingSequences	Séquences de numérotation de révision	I	22-27	r
+-2006080	OST_RevisionCloudTags	Étiquettes de nuage de révision	A	17-27	r
+-2006090	OST_StructuralAnnotations	Annotations structurelles	A	17-27	r
+-2006100	OST_StructConnectionSymbols	Symboles de connexion structurelle	A	17-27	r
+-2006110	OST_StructuralBracePlanReps	Représentations de plan de contreventement structurel	A	17-27	r
+-2006112	OST_DesignOptionSets	Jeux d'option de conception	I	17-27	r
+-2006114	OST_DesignOptions	Options de conception	I	17-27	r
+-2006130	OST_BridgeAbutments	Culées de pont	M	18-27	m
+-2006131	OST_BridgePiers	Piles de pont	M	18-27	m
+-2006132	OST_BridgeTowers	Pylônes de pont	M	18-27	m
+-2006133	OST_BridgeCables	Câbles de pont	M	18-27	m
+-2006134	OST_BridgeArches	Arches de pont	M	18-27	m
+-2006135	OST_BridgeDecks	Tabliers de pont	M	18-27	m
+-2006136	OST_BridgeFoundations	Fondations de pont	M	18-27	m
+-2006137	OST_BridgeGirders	Poutres de pont	M	18-27	m
+-2006138	OST_BridgeBearings	Appareils d'appui de pont	M	18-27	m
+-2006150	OST_BridgeAbutmentHiddenLines	Lignes masquées de culée de pont	M	18-27	r
+-2006151	OST_BridgePierHiddenLines	Lignes masquées de pile de pont	M	18-27	r
+-2006152	OST_BridgeTowerHiddenLines	Lignes masquées de tour de pont	M	18-27	r
+-2006153	OST_BridgeCableHiddenLines	Lignes masquées de câble de pont	M	18-27	r
+-2006154	OST_BridgeArchHiddenLines	Lignes masquées d'arche de pont	M	18-27	r
+-2006155	OST_BridgeDeckHiddenLines	Lignes masquées de tablier de pont	M	18-27	r
+-2006156	OST_BridgeFoundationHiddenLines	Lignes masquées de fondation de pont	M	18-27	r
+-2006157	OST_BridgeGirderHiddenLines	Lignes masquées de poutre maîtresse de pont	M	18-27	r
+-2006158	OST_BridgeBearingHiddenLines	Lignes masquées d'appui de pont	M	18-27	r
+-2006170	OST_BridgeAbutmentTags	Étiquettes de culée de pont	A	18-27	r
+-2006171	OST_BridgePierTags	Étiquettes de pile de pont	A	18-27	r
+-2006172	OST_BridgeTowerTags	Étiquettes de tour de pont	A	18-27	r
+-2006173	OST_BridgeCableTags	Étiquettes de câble de pont	A	18-27	r
+-2006174	OST_BridgeArchTags	Étiquettes d'arche de pont	A	18-27	r
+-2006175	OST_BridgeDeckTags	Étiquettes de tablier de pont	A	18-27	r
+-2006176	OST_BridgeFoundationTags	Étiquettes de fondation de pont	A	18-27	r
+-2006177	OST_BridgeGirderTags	Étiquettes de poutre maîtresse de pont	A	18-27	r
+-2006178	OST_BridgeBearingTags	Étiquettes d'appui de pont	A	18-27	r
+-2006202	OST_AbutmentFoundations	Fondations de culée	M	21-27	r
+-2006203	OST_AbutmentPiles	Pieux de culée	M	21-27	r
+-2006204	OST_AbutmentWalls	Murs de culée	M	21-27	r
+-2006205	OST_ApproachSlabs	Dalles d'approach	M	21-27	r
+-2006208	OST_AbutmentFoundationTags	Étiquettes de fondation de culée	A	21-27	r
+-2006209	OST_AbutmentPileTags	Étiquettes de pieu de culée	A	21-27	r
+-2006210	OST_AbutmentWallTags	Étiquettes de mur de culée	A	21-27	r
+-2006211	OST_ApproachSlabTags	Étiquettes de dalle d'approach	A	21-27	r
+-2006219	OST_PierCaps	Chapeaux de pile	M	21-27	r
+-2006220	OST_PierCapTags	Étiquettes de chapeau de pile	A	21-27	r
+-2006221	OST_PierColumns	Poteaux de pile	M	21-27	r
+-2006222	OST_PierColumnTags	Étiquettes de poteau de pile	A	21-27	r
+-2006225	OST_PierPiles	Pieux de pile	M	21-27	r
+-2006226	OST_PierPileTags	Étiquettes de pieu de pile	A	21-27	r
+-2006229	OST_PierWalls	Murs de pile	M	21-27	r
+-2006230	OST_PierWallTags	Étiquettes de mur de pile	A	21-27	r
+-2006241	OST_BridgeFraming	Ossature de pont	M	21-27	r
+-2006242	OST_BridgeFramingHiddenLines	Lignes masquées d'ossature de pont	M	21-27	r
+-2006243	OST_BridgeFramingTags	Étiquettes d'ossature de pont	A	21-27	r
+-2006245	OST_BridgeFramingCrossBracing	Bracing transversal d'ossature de pont	M	21-27	r
+-2006246	OST_BridgeFramingDiaphragms	Diaphragmes d'ossature de pont	M	21-27	r
+-2006248	OST_BridgeFramingTrusses	Fermes d'ossature de pont	M	21-27	r
+-2006261	OST_VibrationManagement	Gestion de vibration	M	21-27	r
+-2006262	OST_VibrationManagementHiddenLines	Lignes masquées de gestion de vibration	M	21-27	r
+-2006263	OST_VibrationDampers	Clapets de vibration	M	21-27	r
+-2006264	OST_VibrationDamperTags	Étiquettes de clapet de vibration	A	21-27	r
+-2006265	OST_VibrationIsolators	Isolateurs de vibration	M	21-27	r
+-2006266	OST_VibrationIsolatorTags	Étiquettes d'isolateur de vibration	A	21-27	r
+-2006271	OST_ExpansionJoints	Joints de dilatation	M	21-27	r
+-2006272	OST_ExpansionJointHiddenLines	Lignes masquées de joint de dilatation	M	21-27	r
+-2006273	OST_ExpansionJointTags	Étiquettes de joint de dilatation	A	21-27	r
+-2006274	OST_StructuralTendons	Câbles de précontrainte structurels	M	21-27	r
+-2006275	OST_StructuralTendonHiddenLines	Lignes masquées de câble de précontrainte structurel	M	21-27	r
+-2006276	OST_StructuralTendonTags	Étiquettes de câble de précontrainte structurel	A	21-27	r
+-2006278	OST_BridgeFramingCrossBracingTags	Étiquettes de bracing transversal d'ossature de pont	A	23-27	r
+-2006279	OST_BridgeFramingDiaphragmTags	Étiquettes de diaphragme d'ossature de pont	A	23-27	r
+-2006281	OST_BridgeFramingTrussTags	Étiquettes de ferme d'ossature de pont	A	23-27	r
+-2006282	OST_VibrationManagementTags	Étiquettes de gestion de vibration	A	23-27	r
+-2007000	OST_ConnectorElem	Connecteur	M	17-27	r
+-2007001	OST_ConnectorElemXAxis	Axe de X de connecteur	M	17-27	r
+-2007002	OST_ConnectorElemYAxis	Axe d'Y de connecteur	M	17-27	r
+-2007003	OST_ConnectorElemZAxis	Axe de Z de connecteur	M	17-27	r
+-2007004	OST_DuctColorFillLegends	Légendes de remplissage de couleur de gaine	A	17-27	r
+-2008000	OST_DuctCurves	Gaines	M	17-27	m
+-2008001	OST_DuctCurvesCenterLine	Ligne de centre de courbes de gaine	M	17-27	r
+-2008002	OST_DuctCurvesContour	Courbe de niveau de courbes de gaine	M	17-27	r
+-2008003	OST_DuctTags	Étiquettes de gaine	A	17-27	r
+-2008004	OST_FlexDuctTags	Étiquettes de gaine flexible	A	17-27	r
+-2008005	OST_DuctColorFills	Remplissages de couleur de gaine	A	17-27	r
+-2008010	OST_DuctFitting	Raccords de gaine	M	17-27	m
+-2008013	OST_DuctTerminal	Bouches d'air	M	17-27	m
+-2008014	OST_DuctTerminalTags	Étiquettes de terminal de gaine	A	17-27	r
+-2008015	OST_DuctSystem	Systèmes de gaines	M	17-27	m
+-2008016	OST_DuctAccessory	Accessoires de gaine	M	17-27	m
+-2008017	OST_DuctAccessoryTags	Étiquettes d'accessoire de gaine	A	17-27	r
+-2008020	OST_FlexDuctCurves	Gaines souples	M	17-27	m
+-2008021	OST_FlexDuctCurvesCenterLine	Ligne de centre de courbes de gaine flexible	M	17-27	r
+-2008022	OST_FlexDuctCurvesContour	Courbe de niveau de courbes de gaine flexible	M	17-27	r
+-2008023	OST_FlexDuctCurvesPattern	Motif de courbes de gaine flexible	M	17-27	r
+-2008036	OST_DuctCurvesRiseDrop	Descente de montée de courbes de gaine	M	17-27	r
+-2008037	OST_ElectricalCircuit	Circuits électriques	M	17-27	m
+-2008039	OST_Wire	Fils	M	17-27	m
+-2008040	OST_ElectricalVoltage	Tension électrique	M	17-27	r
+-2008041	OST_ElecDistributionSys	Système de distribution électrique	M	17-27	r
+-2008042	OST_ElectricalDemandFactor	Facteur de demande électrique	M	17-27	r
+-2008043	OST_PipingSystem	Systèmes de tuyauterie	M	17-27	m
+-2008044	OST_PipeCurves	Tuyaux	M	17-27	m
+-2008045	OST_PipeCurvesCenterLine	Ligne de centre de courbes de tuyau	M	17-27	r
+-2008046	OST_PipeCurvesContour	Courbe de niveau de courbes de tuyau	M	17-27	r
+-2008047	OST_PipeTags	Étiquettes de tuyau	A	17-27	r
+-2008048	OST_FlexPipeTags	Étiquettes de tuyau flexible	A	17-27	r
+-2008049	OST_PipeFitting	Raccords de tuyauterie	M	17-27	m
+-2008050	OST_FlexPipeCurves	Tuyaux flexibles	M	17-27	m
+-2008051	OST_FlexPipeCurvesCenterLine	Ligne de centre de courbes de tuyau flexible	M	17-27	r
+-2008052	OST_FlexPipeCurvesContour	Courbe de niveau de courbes de tuyau flexible	M	17-27	r
+-2008053	OST_FlexPipeCurvesPattern	Motif de courbes de tuyau flexible	M	17-27	r
+-2008054	OST_PipeCurvesRiseDrop	Descente de montée de courbes de tuyau	M	17-27	r
+-2008055	OST_PipeAccessory	Accessoires de tuyauterie	M	17-27	m
+-2008056	OST_PipeAccessoryTags	Étiquettes d'accessoire de tuyau	A	17-27	r
+-2008057	OST_WireTags	Étiquettes de fil	A	17-27	r
+-2008058	OST_PipeColorFillLegends	Légendes de remplissage de couleur de tuyau	A	17-27	r
+-2008059	OST_PipeColorFills	Remplissages de couleur de tuyau	A	17-27	r
+-2008060	OST_PipeFittingTags	Étiquettes de raccord de tuyau	A	17-27	r
+-2008061	OST_DuctFittingTags	Étiquettes de raccord de gaine	A	17-27	r
+-2008062	OST_DuctCurvesDrop	Descente de courbes de gaine	M	17-27	r
+-2008063	OST_DuctCurvesInsulation	Isolation de courbes de gaine	M	17-27	r
+-2008064	OST_DuctCurvesLining	Revêtement de courbes de gaine	M	17-27	r
+-2008065	OST_FlexDuctCurvesInsulation	Isolation de courbes de gaine flexible	M	17-27	r
+-2008066	OST_DuctFittingCenterLine	Ligne de centre de raccord de gaine	M	17-27	r
+-2008067	OST_DuctFittingInsulation	Isolation de raccord de gaine	M	17-27	r
+-2008068	OST_DuctFittingLining	Revêtement de raccord de gaine	M	17-27	r
+-2008069	OST_PipeCurvesDrop	Descente de courbes de tuyau	M	17-27	r
+-2008070	OST_PipeCurvesInsulation	Isolation de courbes de tuyau	M	17-27	r
+-2008071	OST_FlexPipeCurvesInsulation	Isolation de courbes de tuyau flexible	M	17-27	r
+-2008072	OST_PipeFittingCenterLine	Ligne de centre de raccord de tuyau	M	17-27	r
+-2008073	OST_PipeFittingInsulation	Isolation de raccord de tuyau	M	17-27	r
+-2008074	OST_WireTickMarks	Repères de repère de fil	A	17-27	r
+-2008075	OST_TelephoneDevices	Appareils téléphoniques	M	17-27	m
+-2008076	OST_TelephoneDeviceTags	Étiquettes de dispositif de téléphone	A	17-27	r
+-2008077	OST_NurseCallDevices	Appareils d'appel infirmière	M	17-27	m
+-2008078	OST_NurseCallDeviceTags	Étiquettes de dispositif d'appel d'infirmière	A	17-27	r
+-2008079	OST_SecurityDevices	Appareils de sécurité	M	17-27	m
+-2008080	OST_SecurityDeviceTags	Étiquettes de dispositif de sécurité	A	17-27	r
+-2008081	OST_CommunicationDevices	Appareils de communication	M	17-27	m
+-2008082	OST_CommunicationDeviceTags	Étiquettes de dispositif de communication	A	17-27	r
+-2008083	OST_DataDevices	Appareils de données	M	17-27	m
+-2008084	OST_DataDeviceTags	Étiquettes de dispositif de données	A	17-27	r
+-2008085	OST_FireAlarmDevices	Appareils d'alarme incendie	M	17-27	m
+-2008086	OST_FireAlarmDeviceTags	Étiquettes de dispositif d'alarme de feu	A	17-27	r
+-2008087	OST_LightingDevices	Dispositifs d'éclairage	M	17-27	m
+-2008088	OST_LightingDeviceTags	Étiquettes de dispositif d'éclairage	A	17-27	r
+-2008089	OST_WireHomeRunArrows	Flèches de volée d'accueil de fil	M	17-27	r
+-2008090	OST_GbXMLFaces	Faces	N	17-27	r
+-2008091	OST_GbXML_SType_Interior	Type intérieur de S	N	17-27	r
+-2008092	OST_GbXML_SType_Exterior	Type extérieur de S	N	17-27	r
+-2008093	OST_GbXML_SType_Shade	Ombrage de type de S	N	17-27	r
+-2008094	OST_GbXML_SType_Underground	Type souterrain de S	N	17-27	r
+-2008095	OST_GbXML_Opening	Ouverture	N	17-27	r
+-2008096	OST_RouteCurve	Courbe d'itinéraire	M	17-27	r
+-2008097	OST_RouteCurveMain	Courbe principale d'itinéraire	M	17-27	r
+-2008098	OST_RouteCurveBranch	Branche de courbe d'itinéraire	M	17-27	r
+-2008099	OST_Sprinklers	Sprinklers	M	17-27	m
+-2008100	OST_SprinklerTags	Étiquettes de sprinkler	A	17-27	r
+-2008101	OST_SwitchSystem	Système d'interrupteur	M	17-27	r
+-2008102	OST_EAConstructions	Constructions	M	17-27	r
+-2008103	OST_PipeConnections	Connexions de tuyau	M	17-27	r
+-2008104	OST_PipeMaterials	Matériaux de tuyau	M	17-27	r
+-2008105	OST_PipeSchedules	Nomenclatures de tuyau	M	17-27	r
+-2008106	OST_Fluids	Fluides	M	17-27	r
+-2008107	OST_HVAC_Zones	Zones	M	17-27	r
+-2008108	OST_HVAC_Zones_Boundary	Limite de zones	M	17-27	r
+-2008109	OST_HVAC_Zones_InteriorFill	Remplissage intérieur de zones	M	17-27	r
+-2008110	OST_HVAC_Zones_Reference	Référence de zones	M	17-27	r
+-2008111	OST_WireMaterials	Matériaux de fil	M	17-27	r
+-2008112	OST_WireInsulations	Isolations de fil	M	17-27	r
+-2008113	OST_WireTemperatureRatings	Classements de température de fil	M	17-27	r
+-2008114	OST_LayoutPath_Bases	Bases de chemin de disposition	M	17-27	r
+-2008115	OST_ZoneTags	Étiquettes de zone	A	17-27	r
+-2008116	OST_HVAC_Zones_ColorFill	Remplissage de couleur de zones	M	17-27	r
+-2008117	OST_HVAC_Zones_InteriorFill_Visibility	Visibilité de remplissage intérieur de zones	M	17-27	r
+-2008118	OST_HVAC_Zones_Reference_Visibility	Visibilité de référence de zones	M	17-27	r
+-2008119	OST_HVAC_Load_Space_Types	Types d'espace de charge	I	17-27	r
+-2008120	OST_HVAC_Load_Building_Types	Types de bâtiment de charge	I	17-27	r
+-2008121	OST_HVAC_Load_Schedules	Nomenclatures de charge	I	17-27	r
+-2008122	OST_PipeInsulations	Isolations de tuyau	M	17-27	r
+-2008123	OST_DuctInsulations	Isolations de gaine	M	17-27	r
+-2008124	OST_DuctLinings	Revêtements de gaine	M	17-27	r
+-2008125	OST_RoutingPreferences	Préférences de cheminement	M	17-27	r
+-2008126	OST_CableTrayFitting	Raccords de chemin de câbles	M	17-27	m
+-2008127	OST_CableTrayFittingTags	Étiquettes de raccord de chemin de câble	A	17-27	r
+-2008128	OST_ConduitFitting	Raccords de conduit	M	17-27	m
+-2008129	OST_ConduitFittingTags	Étiquettes de raccord de conduit	A	17-27	r
+-2008130	OST_CableTray	Chemins de câbles	M	17-27	m
+-2008131	OST_CableTrayTags	Étiquettes de chemin de câble	A	17-27	r
+-2008132	OST_Conduit	Conduits	M	17-27	m
+-2008133	OST_ConduitTags	Étiquettes de conduit	A	17-27	r
+-2008134	OST_CableTrayRiseDrop	Descente de montée de chemin de câble	M	17-27	r
+-2008135	OST_CableTrayDrop	Descente de chemin de câble	M	17-27	r
+-2008136	OST_CableTrayCenterLine	Ligne de centre de chemin de câble	M	17-27	r
+-2008137	OST_ConduitRiseDrop	Descente de montée de conduit	M	17-27	r
+-2008138	OST_ConduitDrop	Descente de conduit	M	17-27	r
+-2008139	OST_ConduitCenterLine	Ligne de centre de conduit	M	17-27	r
+-2008140	OST_CableTrayFittingCenterLine	Ligne de centre de raccord de chemin de câble	M	17-27	r
+-2008141	OST_ConduitFittingCenterLine	Ligne de centre de raccord de conduit	M	17-27	r
+-2008142	OST_ElectricalDemandFactorDefinitions	Définitions de facteur de demande électrique	I	17-27	r
+-2008143	OST_ElectricalLoadClassifications	Classifications de charge électrique	I	17-27	r
+-2008144	OST_ConduitStandards	Normes de conduit	M	17-27	r
+-2008145	OST_BranchPanelScheduleTemplates	Gabarits de nomenclature de panneau de branche	I	17-27	r
+-2008146	OST_SwitchboardScheduleTemplates	Gabarits de nomenclature de switchboard	I	17-27	r
+-2008147	OST_DataPanelScheduleTemplates	Gabarits de nomenclature de panneau de données	I	17-27	r
+-2008148	OST_ParamElemElectricalLoadClassification	Classification de charge électrique	I	17-27	r
+-2008149	OST_ConduitRun	Volée de conduit	M	17-27	r
+-2008150	OST_CableTrayRun	Volée de chemin de câble	M	17-27	r
+-2008151	OST_PanelScheduleGraphics	Graphismes de nomenclature de panneau	A	17-27	r
+-2008152	OST_ElectricalInternalCircuits	Circuits électriques internes	M	17-25	r
+-2008153	OST_DuctInsulationsTags	Étiquettes d'isolations de gaine	A	17-27	r
+-2008154	OST_DuctLiningsTags	Étiquettes de revêtements de gaine	A	17-27	r
+-2008155	OST_PipeInsulationsTags	Étiquettes d'isolations de tuyau	A	17-27	r
+-2008156	OST_DuctSystem_Reference	Référence de système de gaine	M	17-27	r
+-2008157	OST_DuctSystem_Reference_Visibility	Visibilité de référence de système de gaine	M	17-27	r
+-2008158	OST_PipingSystem_Reference	Référence de système de tuyauterie	M	17-27	r
+-2008159	OST_PipingSystem_Reference_Visibility	Visibilité de référence de système de tuyauterie	M	17-27	r
+-2008160	OST_PlaceHolderDucts	Gaines provisoires	M	17-27	m
+-2008161	OST_PlaceHolderPipes	Tuyaux provisoires	M	17-27	m
+-2008162	OST_GraphicalWarning_OpenConnector	Connecteur ouvert d'avertissement graphique	A	17-27	r
+-2008163	OST_PipeSegments	Segments de tuyau	M	17-27	r
+-2008165	OST_DivisionProfile	Profil de division	M	17-27	r
+-2008167	OST_gbXML_ExteriorWall	Mur extérieur	N	17-27	r
+-2008168	OST_gbXML_Roof	Toiture	N	17-27	r
+-2008169	OST_gbXML_RaisedFloor	Sol surélevé	N	17-27	r
+-2008170	OST_gbXML_SlabOnGrade	Pente de dalle	N	17-27	r
+-2008171	OST_gbXML_InteriorWall	Mur intérieur	N	17-27	r
+-2008172	OST_gbXML_InteriorFloor	Sol intérieur	N	17-27	r
+-2008173	OST_gbXML_Ceiling	Plafond	N	17-27	r
+-2008174	OST_gbXML_SurfaceAir	Air de surface	N	17-27	r
+-2008175	OST_gbXML_UndergroundWall	Mur souterrain	N	17-27	r
+-2008176	OST_gbXML_UndergroundSlab	Dalle souterraine	N	17-27	r
+-2008177	OST_gbXML_UndergroundCeiling	Plafond souterrain	N	17-27	r
+-2008178	OST_gbXML_FixedWindow	Fenêtre fixe	N	17-27	r
+-2008179	OST_gbXML_OperableWindow	Fenêtre ouvrante	N	17-27	r
+-2008180	OST_gbXML_FixedSkylight	Lanterneau fixe	N	17-27	r
+-2008181	OST_gbXML_OperableSkylight	Lanterneau ouvrant	N	17-27	r
+-2008182	OST_gbXML_SlidingDoor	Porte coulissante	N	17-27	r
+-2008183	OST_gbXML_NonSlidingDoor	Porte non coulissante	N	17-27	r
+-2008184	OST_gbXML_OpeningAir	Air d'ouverture	N	17-27	r
+-2008185	OST_AnalyticSpaces	Espaces analytiques	N	17-27	r
+-2008186	OST_AnalyticSurfaces	Surfaces analytiques	N	17-27	r
+-2008187	OST_gbXML_Shade	Ombrage	N	17-27	r
+-2008190	OST_DivisionRules	Règles de division	M	17-27	r
+-2008192	OST_LayoutPathBase_Pipings	Pipings de base de chemin de disposition	M	17-27	r
+-2008193	OST_FabricationDuctwork	Réseaux de gaines (fabrication)	M	17-27	m
+-2008194	OST_FabricationDuctworkTags	Étiquettes de réseau de gaines de fabrication	A	17-27	r
+-2008196	OST_FabricationDuctworkCenterLine	Ligne de centre de réseau de gaines de fabrication	M	17-27	r
+-2008197	OST_LayoutNodes	Nœuds de disposition	M	17-27	r
+-2008198	OST_FabricationDuctworkInsulation	Isolation de réseau de gaines de fabrication	M	17-27	r
+-2008199	OST_FabricationPartsTmpGraphicEnd	Extrémité temporaire graphique de parties de fabrication	M	17-27	r
+-2008200	OST_OBSOLETE_FabricationPartsTmpGraphicDrop	Descente temporaire graphique de parties de fabrication obsolète	M	17-27	r
+-2008201	OST_FabricationPartsTmpGraphicDrag	Traînée temporaire graphique de parties de fabrication	M	17-27	r
+-2008202	OST_OBSOLETE_FabricationPartsTmpGraphicDropDrag	Traînée de descente temporaire graphique de parties de fabrication obsolète	M	17-27	r
+-2008203	OST_FabricationHangers	Suspentes (fabrication)	M	17-27	m
+-2008204	OST_FabricationHangerTags	Étiquettes de suspente de fabrication	A	17-27	r
+-2008205	OST_FabricationDuctworkRise	Montée de réseau de gaines de fabrication	M	17-27	r
+-2008206	OST_FabricationDuctworkDrop	Descente de réseau de gaines de fabrication	M	17-27	r
+-2008207	OST_FabricationDuctworkSymbology	Symbologie de réseau de gaines de fabrication	M	17-27	r
+-2008208	OST_FabricationPipework	Tuyauteries (fabrication)	M	17-27	m
+-2008209	OST_FabricationPipeworkTags	Étiquettes de tuyauterie de fabrication	A	17-27	r
+-2008210	OST_FabricationPipeworkCenterLine	Ligne de centre de tuyauterie de fabrication	M	17-27	r
+-2008211	OST_FabricationPipeworkSymbology	Symbologie de tuyauterie de fabrication	M	17-27	r
+-2008212	OST_FabricationContainment	Conduits de câbles (fabrication)	M	17-27	m
+-2008213	OST_FabricationContainmentTags	Étiquettes de confinement de fabrication	A	17-27	r
+-2008214	OST_FabricationContainmentCenterLine	Ligne de centre de confinement de fabrication	M	17-27	r
+-2008215	OST_FabricationContainmentSymbology	Symbologie de confinement de fabrication	M	17-27	r
+-2008216	OST_FabricationPipeworkRise	Montée de tuyauterie de fabrication	M	17-27	r
+-2008217	OST_FabricationPipeworkDrop	Descente de tuyauterie de fabrication	M	17-27	r
+-2008218	OST_FabricationContainmentRise	Montée de confinement de fabrication	M	17-27	r
+-2008219	OST_FabricationContainmentDrop	Descente de confinement de fabrication	M	17-27	r
+-2008220	OST_FabricationDuctworkLining	Revêtement de réseau de gaines de fabrication	M	17-27	r
+-2008221	OST_FabricationPipeworkInsulation	Isolation de tuyauterie de fabrication	M	17-27	r
+-2008222	OST_ELECTRICAL_AreaBasedLoads_Boundary	Limite de charges basées de surface électrique	N	23-27	r
+-2008223	OST_ELECTRICAL_AreaBasedLoads_InteriorFill	Remplissage intérieur de charges basées de surface électrique	N	23-27	r
+-2008224	OST_ELECTRICAL_AreaBasedLoads_Reference	Référence de charges basées de surface électrique	N	23-27	r
+-2008226	OST_ELECTRICAL_AreaBasedLoads_InteriorFill_Visibility	Visibilité de remplissage intérieur de charges basées de surface électrique	N	23-27	r
+-2008227	OST_ELECTRICAL_AreaBasedLoads_Reference_Visibility	Visibilité de référence de charges basées de surface électrique	N	23-27	r
+-2008228	OST_FabricationDuctworkStiffeners	Raidisseurs de réseau de gaines de fabrication	M	23-27	r
+-2008229	OST_FabricationDuctworkStiffenerTags	Étiquettes de raidisseur de réseau de gaines de fabrication	A	23-27	r
+-2008231	OST_MEPAncillaryFraming	Ossature d'ancillary de MEP	M	23-27	r
+-2008232	OST_MechanicalControlDevices	Dispositifs de contrôle mécanique	M	23-27	m
+-2008233	OST_MechanicalControlDeviceTags	Étiquettes de dispositif de contrôle mécanique	A	23-27	r
+-2008234	OST_PlumbingEquipment	Équipements de plomberie	M	23-27	m
+-2008235	OST_PlumbingEquipmentTags	Étiquettes d'équipement de plomberie	A	23-27	r
+-2008236	OST_MEPAncillaryFramingTags	Étiquettes d'ossature d'ancillary de MEP	A	23-27	r
+-2009000	OST_Rebar	Armatures	M	17-27	m
+-2009001	OST_RebarSketchLines	Lignes d'esquisse d'armature	M	17-27	r
+-2009002	OST_RebarLines	Lignes d'armature	M	17-27	r
+-2009003	OST_AreaRein	Armatures surfaciques	M	17-27	m
+-2009004	OST_AreaReinSketchOverride	Surcharge d'esquisse de ferraillage de surface	M	17-27	r
+-2009005	OST_AreaReinSpanSymbol	Symbole de portée de ferraillage de surface	A	17-27	r
+-2009006	OST_AreaReinBoundary	Limite de ferraillage de surface	M	17-27	r
+-2009007	OST_AreaReinXVisibility	Visibilité de X de ferraillage de surface	M	17-27	r
+-2009008	OST_Cage	Cage	M	17-27	r
+-2009009	OST_PathRein	Ferraillage de chemin	M	17-27	r
+-2009010	OST_PathReinSpanSymbol	Symbole de portée de ferraillage de chemin	A	17-27	r
+-2009011	OST_PathReinTags	Étiquettes de ferraillage de chemin	A	17-27	r
+-2009012	OST_PathReinBoundary	Limite de ferraillage de chemin	M	17-27	r
+-2009013	OST_RebarShape	Forme d'armature	M	17-27	r
+-2009014	OST_CoverType	Type d'enrobage	M	17-27	r
+-2009015	OST_RebarCover	Enrobage d'armature	A	17-27	r
+-2009016	OST_FabricReinforcement	Treillis soudés	M	17-27	m
+-2009017	OST_FabricAreas	Surfaces de treillis	M	17-27	r
+-2009018	OST_FabricAreaSketchEnvelopeLines	Lignes d'enveloppe d'esquisse de surface de treillis	M	17-27	r
+-2009019	OST_FabricAreaSketchSheetsLines	Lignes de feuilles d'esquisse de surface de treillis	M	17-27	r
+-2009020	OST_RebarTags	Étiquettes d'armature	A	17-27	r
+-2009021	OST_AreaReinTags	Étiquettes de ferraillage de surface	A	17-27	r
+-2009022	OST_FabricReinforcementTags	Étiquettes de ferraillage de treillis	A	17-27	r
+-2009023	OST_FabricAreaTags	Étiquettes de surface de treillis	A	17-27	r
+-2009025	OST_RebarSetToggle	Jeu d'armature	A	17-27	r
+-2009026	OST_FabricReinforcementBoundary	Limite de ferraillage de treillis	M	17-27	r
+-2009027	OST_FabricReinforcementWire	Fil de ferraillage de treillis	M	17-27	r
+-2009028	OST_FabricReinSpanSymbol	Symbole de portée de ferraillage de treillis	A	17-27	r
+-2009029	OST_FabricAreaBoundary	Limite de surface de treillis	M	17-27	r
+-2009030	OST_StructConnections	Assemblages structurels	M	17-27	m
+-2009031	OST_StructWeldLines	Lignes de soudure structurelle	M	17-27	r
+-2009032	OST_StructConnectionHiddenLines	Lignes masquées de connexion structurelle	M	17-27	r
+-2009033	OST_StructConnectionSymbol	Symbole de connexion structurelle	M	17-27	r
+-2009034	OST_StructConnectionStale	Stale de connexion structurelle	M	17-27	r
+-2009035	OST_StructConnectionFailed	Connexion structurelle en échec	M	17-27	r
+-2009036	OST_StructConnectionReference	Référence de connexion structurelle	M	17-27	r
+-2009037	OST_StructConnectionProfiles	Profils de connexion structurelle	M	17-27	r
+-2009038	OST_StructConnectionPlates	Plaques de connexion structurelle	M	17-27	r
+-2009039	OST_StructConnectionAnchors	Ancrages de connexion structurelle	M	17-27	r
+-2009040	OST_StructConnectionTags	Étiquettes de connexion structurelle	A	17-27	r
+-2009041	OST_StructConnectionBolts	Boulons de connexion structurelle	M	17-27	r
+-2009042	OST_StructConnectionOthers	Autres de connexion structurelle	M	17-27	r
+-2009043	OST_StructConnectionNobleWarning	Avertissement noble de connexion structurelle	M	18-27	r
+-2009044	OST_StructConnectionShearStuds	Goujons de cisaillement de connexion structurelle	M	19-27	r
+-2009045	OST_StructConnectionHoles	Trous de connexion structurelle	M	19-27	r
+-2009046	OST_StructConnectionWelds	Soudures de connexion structurelle	M	19-27	r
+-2009047	OST_StructConnectionModifiers	Modifiers de connexion structurelle	M	19-27	r
+-2009049	OST_StructSubConnections	Connexions structurelles sous-s	M	19-27	r
+-2009050	OST_RebarHiddenLines	Lignes masquées d'armature	M	17-27	r
+-2009055	OST_StructConnectionPlateTags	Étiquettes de plaque de connexion structurelle	A	19-27	r
+-2009056	OST_StructConnectionBoltTags	Étiquettes de boulon de connexion structurelle	A	19-27	r
+-2009057	OST_StructConnectionAnchorTags	Étiquettes d'ancrage de connexion structurelle	A	19-27	r
+-2009058	OST_StructConnectionShearStudTags	Étiquettes de goujon de cisaillement de connexion structurelle	A	19-27	r
+-2009059	OST_StructConnectionWeldTags	Étiquettes de soudure de connexion structurelle	A	19-27	r
+-2009060	OST_Coupler	Manchons	M	17-27	m
+-2009061	OST_CouplerTags	Étiquettes de manchon	A	17-27	r
+-2009062	OST_CouplerHiddenLines	Lignes masquées de manchon	M	17-27	r
+-2009063	OST_StructConnectionHoleTags	Étiquettes de trou de connexion structurelle	A	19-27	r
+-2009064	OST_StructConnectionProfilesTags	Étiquettes de profils de connexion structurelle	A	19-27	r
+-2009500	OST_WindowsHiddenLines	Lignes masquées de fenêtres	M	17-27	r
+-2009501	OST_DoorsHiddenLines	Lignes masquées de portes	M	17-27	r
+-2009502	OST_RoofsHiddenLines	Lignes masquées de toitures	M	17-27	r
+-2009503	OST_CeilingsHiddenLines	Lignes masquées de plafonds	M	17-27	r
+-2009504	OST_LinesHiddenLines	Lignes masquées de lignes	M	17-27	r
+-2009505	OST_FurnitureHiddenLines	Lignes masquées de mobilier	M	17-27	r
+-2009506	OST_ColumnsHiddenLines	Lignes masquées de poteaux	M	17-27	r
+-2009507	OST_StairsHiddenLines	Lignes masquées d'escalier	M	17-27	r
+-2009508	OST_StairsRailingHiddenLines	Lignes masquées de garde-corps d'escalier	M	17-27	r
+-2009509	OST_RampsHiddenLines	Lignes masquées de rampes	M	17-27	r
+-2009510	OST_CurtainWallPanelsHiddenLines	Lignes masquées de panneaux de mur de mur-rideau	M	17-27	r
+-2009511	OST_CurtainWallMullionsHiddenLines	Lignes masquées de meneaux de mur de mur-rideau	M	17-27	r
+-2009512	OST_GenericModelHiddenLines	Lignes masquées de modèle générique	M	17-27	r
+-2009513	OST_ShaftOpeningHiddenLines	Lignes masquées d'ouverture de trémie	M	17-27	r
+-2009514	OST_DetailComponentsHiddenLines	Lignes masquées de composants de détail	M	17-27	r
+-2009515	OST_CaseworkHiddenLines	Lignes masquées de mobilier fixe	M	17-27	r
+-2009516	OST_ElectricalEquipmentHiddenLines	Lignes masquées d'équipement électrique	M	17-27	r
+-2009517	OST_ElectricalFixturesHiddenLines	Lignes masquées d'appareils électriques	M	17-27	r
+-2009518	OST_FurnitureSystemsHiddenLines	Lignes masquées de systèmes de mobilier	M	17-27	r
+-2009519	OST_LightingFixturesHiddenLines	Lignes masquées d'appareils d'éclairage	M	17-27	r
+-2009520	OST_MechanicalEquipmentHiddenLines	Lignes masquées d'équipement mécanique	M	17-27	r
+-2009521	OST_PlumbingFixturesHiddenLines	Lignes masquées d'appareils de plomberie	M	17-27	r
+-2009522	OST_ParkingHiddenLines	Lignes masquées de stationnement	M	17-27	r
+-2009523	OST_RoadsHiddenLines	Lignes masquées de routes	M	17-27	r
+-2009524	OST_SiteHiddenLines	Lignes masquées de site	M	17-27	r
+-2009526	OST_TopographyHiddenLines	Lignes masquées de topographie	M	17-27	r
+-2009527	OST_SpecialityEquipmentHiddenLines	Lignes masquées d'équipement de speciality	M	17-27	r
+-2009528	OST_PlantingHiddenLines	Lignes masquées de plantation	M	17-27	r
+-2009529	OST_EntourageHiddenLines	Lignes masquées d'environnement	M	17-27	r
+-2009531	OST_CurtaSystemHiddenLines	Lignes masquées de système de système	M	17-27	r
+-2009532	OST_MassHiddenLines	Lignes masquées de masse	M	17-27	r
+-2009550	OST_MechanicalControlDevicesHiddenLines	Lignes masquées de dispositifs de contrôle mécanique	M	23-27	r
+-2009551	OST_PlumbingEquipmentHiddenLines	Lignes masquées d'équipement de plomberie	M	23-27	r
+-2009600	OST_Truss	Fermes	M	17-27	m
+-2009601	OST_TrussDiagWebCurve	Courbe d'âme diagonale de ferme	M	17-27	r
+-2009602	OST_TrussVertWebCurve	Courbe d'âme verticale de ferme	M	17-27	r
+-2009603	OST_TrussTopChordCurve	Courbe de membrure supérieure de ferme	M	17-27	r
+-2009604	OST_TrussBottomChordCurve	Courbe de membrure inférieure de ferme	M	17-27	r
+-2009605	OST_TrussWeb	Âme de ferme	M	17-27	r
+-2009606	OST_TrussChord	Membrure de ferme	M	17-27	r
+-2009608	OST_StructuralTrussStickSymbols	Symboles de bâton de ferme structurelle	A	17-27	r
+-2009609	OST_SunStudy	Étude de soleil	M	17-27	r
+-2009610	OST_Sun	Soleil	M	17-27	r
+-2009611	OST_SunPath1	Chemin 1 de soleil	M	17-27	r
+-2009612	OST_SunPath2	Chemin 2 de soleil	M	17-27	r
+-2009613	OST_CompassInner	Compas intérieur	M	17-27	r
+-2009614	OST_SunriseText	Texte de lever du soleil	M	17-27	r
+-2009615	OST_CompassOuter	Compas extérieur	M	17-27	r
+-2009616	OST_CompassSection	Section de compas	M	17-27	r
+-2009617	OST_SunsetText	Texte de coucher du soleil	M	17-27	r
+-2009618	OST_Analemma	Analemme	M	17-27	r
+-2009619	OST_SunSurface	Surface de soleil	M	17-27	r
+-2009620	OST_MultiSurface	Surface multiple	M	17-27	r
+-2009621	OST_LightLine	Ligne de lumière	M	17-27	r
+-2009622	OST_CompassSectionFilled	Section remplie de compas	M	17-27	r
+-2009623	OST_CompassPrimaryMonth	Mois principal de compas	M	17-27	r
+-2009624	OST_CompassSecondaryMonth	Mois secondaire de compas	M	17-27	r
+-2009630	OST_BeamAnalytical	Poutre analytique	N	17-27	r
+-2009631	OST_BeamStartSegment	Segment de début de poutre	N	17-27	r
+-2009632	OST_BeamEndSegment	Segment d'extrémité de poutre	N	17-27	r
+-2009633	OST_BraceAnalytical	Contreventement analytique	N	17-27	r
+-2009634	OST_BraceStartSegment	Segment de début de contreventement	N	17-27	r
+-2009635	OST_BraceEndSegment	Segment d'extrémité de contreventement	N	17-27	r
+-2009636	OST_ColumnAnalytical	Poteau analytique	N	17-27	r
+-2009637	OST_ColumnStartSegment	Segment de début de poteau	N	17-27	r
+-2009638	OST_ColumnEndSegment	Segment d'extrémité de poteau	N	17-27	r
+-2009639	OST_FloorAnalytical	Sol analytique	N	17-27	r
+-2009640	OST_WallAnalytical	Mur analytique	N	17-27	r
+-2009641	OST_IsolatedFoundationAnalytical	Fondation isolée analytique	N	17-27	r
+-2009642	OST_WallFoundationAnalytical	Fondation analytique de mur	N	17-27	r
+-2009643	OST_FoundationSlabAnalytical	Dalle analytique de fondation	N	17-27	r
+-2009644	OST_RigidLinksAnalytical	Liens rigides analytiques	N	17-27	r
+-2009645	OST_AnalyticalNodes	Nœuds analytiques	N	17-27	r
+-2009646	OST_AnalyticalNodes_Points	Points de nœuds analytiques	N	17-27	r
+-2009647	OST_AnalyticalNodes_Planes	Plans de nœuds analytiques	N	17-27	r
+-2009648	OST_AnalyticalNodes_Lines	Lignes de nœuds analytiques	N	17-27	r
+-2009649	OST_BeamAnalyticalTags	Étiquettes analytiques de poutre	A	17-27	r
+-2009650	OST_BraceAnalyticalTags	Étiquettes analytiques de contreventement	A	17-27	r
+-2009651	OST_ColumnAnalyticalTags	Étiquettes analytiques de poteau	A	17-27	r
+-2009652	OST_FloorAnalyticalTags	Étiquettes analytiques de sol	A	17-27	r
+-2009653	OST_WallAnalyticalTags	Étiquettes analytiques de mur	A	17-27	r
+-2009654	OST_IsolatedFoundationAnalyticalTags	Étiquettes analytiques de fondation isolée	A	17-27	r
+-2009655	OST_WallFoundationAnalyticalTags	Étiquettes analytiques de fondation de mur	A	17-27	r
+-2009656	OST_FoundationSlabAnalyticalTags	Étiquettes analytiques de dalle de fondation	A	17-27	r
+-2009657	OST_LinksAnalytical	Liens analytiques	N	17-27	r
+-2009658	OST_AssemblyOrigin	Origine d'assemblage	A	17-27	r
+-2009659	OST_AssemblyOrigin_Points	Points d'origine d'assemblage	A	17-27	r
+-2009660	OST_AssemblyOrigin_Planes	Plans d'origine d'assemblage	A	17-27	r
+-2009661	OST_AssemblyOrigin_Lines	Lignes d'origine d'assemblage	A	17-27	r
+-2009662	OST_AnalyticalMember	Éléments analytiques	N	22-27	m
+-2009663	OST_AnalyticalMemberTags	Étiquettes d'élément analytique	A	22-27	r
+-2009664	OST_AnalyticalPanel	Panneaux analytiques	N	23-27	m
+-2009665	OST_AnalyticalOpening	Ouverture analytique	N	23-27	r
+-2009666	OST_AnalyticalMemberLocalCoordSys	Système de coordonnée locale d'élément analytique	N	23-27	r
+-2009667	OST_AnalyticalPanelLocalCoordSys	Système de coordonnée locale de panneau analytique	N	23-27	r
+-2010001	OST_PointClouds	Nuages de points	M	17-27	m

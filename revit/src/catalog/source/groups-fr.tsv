@@ -1,0 +1,123 @@
+# Libellés français des groupes de paramètres de Revit : ForgeTypeId sans version, libellé.
+# Écrits pour ce projet (vocabulaire de l'interface française de Revit quand il existe). La clé « dimensions » n'est pas dans Rhino.Inside.Revit mais les fichiers l'emploient.
+autodesk.parameter.group:identityData	Données d'identification
+autodesk.parameter.group:geometry	Cotes
+autodesk.parameter.group:construction	Construction
+autodesk.parameter.group:graphics	Graphismes
+autodesk.parameter.group:materials	Matériaux et finitions
+autodesk.revit.group:underlay	Sous-jacent
+autodesk.revit.group:stairTreads	Girons d'escalier
+autodesk.revit.group:stairRisers	Contremarches d'escalier
+autodesk.revit.group:stairStringers	Limons d'escalier
+autodesk.parameter.group:electricalEngineering	Électricité - Ingénierie
+autodesk.parameter.group:plumbing	Plomberie
+autodesk.parameter.group:structural	Structure
+autodesk.parameter.group:mechanical	Mécanique
+autodesk.parameter.group:phasing	Phase de construction
+autodesk.parameter.group:constraints	Contraintes
+autodesk.revit.group:pattern	Motif
+autodesk.revit.group:viewExtents	Étendues
+autodesk.revit.group:viewCamera	Caméra
+autodesk.parameter.group:text	Texte
+autodesk.parameter.group:electricalLighting	Électricité - Éclairage
+autodesk.parameter.group:electricalLoads	Électricité - Charges
+autodesk.parameter.group:mechanicalLoads	Mécanique - Charges
+autodesk.parameter.group:mechanicalAirflow	Mécanique - Débit d'air
+autodesk.parameter.group:structuralAnalysis	Analyse structurelle
+autodesk.parameter.group:energyAnalysis	Analyse énergétique
+autodesk.parameter.group:electrical	Électricité
+autodesk.parameter.group:ifc	Paramètres IFC
+autodesk.revit.group:curtainGridVert	Grille verticale de mur-rideau
+autodesk.revit.group:curtainGridn1	Grille 1 de mur-rideau
+autodesk.revit.group:curtainGridHoriz	Grille horizontale de mur-rideau
+autodesk.revit.group:curtainGridn2	Grille 2 de mur-rideau
+autodesk.revit.group:curtainMullionVert	Meneaux verticaux de mur-rideau
+autodesk.revit.group:curtainMullionn1	Meneau 1 de mur-rideau
+autodesk.revit.group:curtainMullionHoriz	Meneaux horizontaux de mur-rideau
+autodesk.revit.group:curtainMullionn2	Meneau 2 de mur-rideau
+autodesk.revit.group:curtainGrid	Grille de mur-rideau
+autodesk.parameter.group:rebarSystemLayers	Couches du système d'armatures
+autodesk.parameter.group:rebarArray	Réseau d'armatures
+autodesk.parameter.group:analyticalModel	Modèle analytique
+autodesk.revit.group:translationIn	Translation selon
+autodesk.revit.group:rotationAbout	Rotation autour de
+autodesk.parameter.group:fireProtection	Protection incendie
+autodesk.parameter.group:title	Titre
+autodesk.revit.group:trussFamilyVertWeb	Montants de ferme
+autodesk.revit.group:trussFamilyDiagWeb	Diagonales de ferme
+autodesk.revit.group:trussFamilyTopChord	Membrure supérieure de ferme
+autodesk.revit.group:trussFamilyBottomChord	Membrure inférieure de ferme
+autodesk.revit.group:profile	Profil
+autodesk.revit.group:profilen1	Profil 1
+autodesk.revit.group:profilen2	Profil 2
+autodesk.parameter.group:greenBuilding	Propriétés du bâtiment écologique
+autodesk.revit.group:patternApplication	Application du motif
+autodesk.parameter.group:lightPhotometrics	Photométrie
+autodesk.parameter.group:slabShapeEdit	Modification de forme de dalle
+autodesk.parameter.group:analysisResults	Résultats d'analyse
+autodesk.revit.group:display	Affichage
+autodesk.revit.group:curtainGridU	Grille U de mur-rideau
+autodesk.revit.group:curtainGridV	Grille V de mur-rideau
+autodesk.parameter.group:adskModelProperties	Propriétés du modèle
+autodesk.revit.group:area	Surface
+autodesk.revit.group:conceptualEnergyData	Données d'énergie conceptuelle
+autodesk.revit.group:fitting	Raccord
+autodesk.revit.group:energyAnalysisDetailedAndConceptualModels	Modèles détaillé et conceptuel (analyse énergétique)
+autodesk.revit.group:energyAnalysisDetailedModel	Modèle détaillé (analyse énergétique)
+autodesk.revit.group:energyAnalysisConceptualModel	Modèle conceptuel (analyse énergétique)
+autodesk.revit.group:flexible	Flexible
+autodesk.parameter.group:general	Général
+autodesk.parameter.group:electricalCircuiting	Électricité - Circuits
+autodesk.parameter.group:data	Données
+autodesk.revit.group:conceptualEnergyDataBuildingServices	Services du bâtiment (énergie conceptuelle)
+autodesk.revit.group:railingSystemFamilyTopRail	Lisse haute de garde-corps
+autodesk.revit.group:railingSystemFamilyHandrails	Mains courantes de garde-corps
+autodesk.revit.group:railingSystemFamilySegmentPattern	Motif de segment de garde-corps
+autodesk.revit.group:railingSystemSegmentPatternRepeat	Répétition du motif du segment de garde-corps
+autodesk.revit.group:railingSystemSegmentPatternRemainder	Reste du motif du segment de garde-corps
+autodesk.revit.group:railingSystemSegmentPosts	Poteaux du segment de garde-corps
+autodesk.revit.group:railingSystemSegmentUGrid	Grille U du segment de garde-corps
+autodesk.revit.group:railingSystemSegmentVGrid	Grille V du segment de garde-corps
+autodesk.revit.group:support	Support
+autodesk.parameter.group:visibility	Visibilité
+autodesk.parameter.group:overallLegend	Légende globale
+autodesk.revit.group:insulation	Isolation
+autodesk.revit.group:lining	Doublage
+autodesk.revit.group:systemtypeRisedrop	Montée et descente du type de système
+autodesk.parameter.group:analyticalAlignment	Alignement analytique
+autodesk.revit.group:analyticalProperties	Propriétés analytiques
+autodesk.revit.group:nodes	Nœuds
+autodesk.revit.group:length	Longueur
+autodesk.revit.group:splitProfileDimensions	Cotes du profil divisé
+autodesk.revit.group:stairsCalculatorRules	Règles du calculateur d'escalier
+autodesk.revit.group:stairsTreadsRisers	Girons et contremarches
+autodesk.revit.group:termination	Terminaison
+autodesk.revit.group:railingSystemSecondaryFamilyHandrails	Mains courantes secondaires de garde-corps
+autodesk.revit.group:stairsOpenEndConnection	Connexion de fin ouverte d'escalier
+autodesk.revit.group:stairsSupports	Supports d'escalier
+autodesk.revit.group:stairsWinders	Marches balancées d'escalier
+autodesk.revit.group:continuousrailBeginBottomExtension	Prolongation inférieure de début de main courante
+autodesk.revit.group:continuousrailEndTopExtension	Prolongation supérieure de fin de main courante
+autodesk.parameter.group:segmentsFittings	Segments et raccords
+autodesk.parameter.group:divisionGeometry	Géométrie de division
+autodesk.revit.group:geometryPositioning	Positionnement de la géométrie
+autodesk.revit.group:reference	Référence
+autodesk.revit.group:fabricationProductData	Données produit de fabrication
+autodesk.parameter.group:forces	Efforts
+autodesk.parameter.group:moments	Moments
+autodesk.parameter.group:primaryEnd	Extrémité principale
+autodesk.parameter.group:secondaryEnd	Extrémité secondaire
+autodesk.parameter.group:releasesMemberForces	Libérations et efforts de l'élément
+autodesk.revit.group:energyAnalysisAdvanced	Analyse énergétique avancée
+autodesk.parameter.group:couplerArray	Réseau de manchons
+autodesk.revit.group:energyAnalysisBuildingData	Données du bâtiment (analyse énergétique)
+autodesk.revit.group:energyAnalysisRoomSpaceData	Données de pièce et d'espace (analyse énergétique)
+autodesk.revit.group:energyAnalysisBldgConsMtlThermalProps	Propriétés thermiques des matériaux de construction
+autodesk.revit.group:structuralSectionGeometry	Géométrie de section structurelle
+autodesk.revit.group:geoLocation	Géolocalisation
+autodesk.revit.group:routeAnalysis	Analyse d'itinéraire
+autodesk.revit.group:wallCrossSectionDefinition	Définition de la coupe de mur
+autodesk.revit.group:primaryUnits	Unités principales
+autodesk.revit.group:alternateUnits	Unités secondaires
+autodesk.parameter.group:electricalAnalysis	Analyse électrique
+autodesk.parameter.group:dimensions	Cotes

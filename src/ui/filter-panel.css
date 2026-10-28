@@ -32,3 +32,39 @@
   width: 30px;
   height: 21px;
 }
+
+/* Phases : en tête du panneau, deux listes l'une sous l'autre et le bilan. */
+.filter-panel .phase-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-panel .phase-section[hidden] {
+  display: none;
+}
+
+.filter-panel .phase-section h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.filter-panel .phase-section .hint {
+  padding: 0;
+}
+
+.filter-panel .phase-fields {
+  display: grid;
+  gap: 4px;
+}
+
+.filter-panel .phase-fields select {
+  width: 100%;
+  min-width: 0;
+}
+
+.filter-panel .phase-summary {
+  font-size: 11px;
+}
