@@ -69,7 +69,8 @@ pub struct Output {
     /// Pas de 6 : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices,
     /// matériau.
     pub primitives: Vec<u32>,
-    /// Pas de 6 : r, g, b, a (octets sRGB), transparent (0/1), double face (0/1).
+    /// Pas de 7 (`geometry::pack::MATERIAL_STRIDE`) : r, g, b, a (octets sRGB), transparent (0/1), double face (0/1),
+    /// surcouche (0/1 : les triangles se dessinent par-dessus les surfaces coplanaires, ceux de l'image d'un contenu RPC).
     pub materials: Vec<u8>,
     /// JSON du contrat `docs/contrat-metadonnees.md` (version 1). Quand la lecture est émise par morceaux
     /// (`read_streaming`), le squelette rendu à la fin le porte en entier, avec `names` : les fiches ne sont lues

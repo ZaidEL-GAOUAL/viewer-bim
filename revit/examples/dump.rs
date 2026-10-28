@@ -33,6 +33,10 @@ fn main() -> anyhow::Result<()> {
         ] {
             let _ = writeln!(text, "{label} {} {:016x}", array.len(), hash(&array));
         }
+        // Les triangles de surcouche (septième octet des matériaux : l'image d'un contenu RPC, voir `geometry::pack::MATERIAL_STRIDE`).
+        let stride = revit::geometry::pack::MATERIAL_STRIDE;
+        let overlay: Vec<&[u32]> = output.primitives.chunks_exact(6).filter(|p| output.materials[p[5] as usize * stride + 6] != 0).collect();
+        let _ = writeln!(text, "surcouche {} triangles dans {} primitives", overlay.iter().map(|p| p[4] as usize / 3).sum::<usize>(), overlay.len());
         for warning in &output.report.warnings {
             let _ = writeln!(text, "avertissement : {warning}");
         }

@@ -14,6 +14,7 @@
 
 use std::collections::BTreeSet;
 
+use revit::geometry::saved::GEOMETRY_GRAPH_LIMIT;
 use revit::native::{self as native_document, Options};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::pointer;
@@ -117,7 +118,7 @@ fn census(paths: &[String]) {
         if !file.basic_file_info().ok().is_some_and(|info| native_document::SUPPORTED_RELEASES.contains(&info.version)) {
             continue;
         }
-        let options = Options { channels: BTreeSet::from([103]), max_graph_values: 1_000_000, max_graph_objects: 1_000_000, ..Default::default() };
+        let options = Options { channels: BTreeSet::from([103]), max_graph_values: GEOMETRY_GRAPH_LIMIT, max_graph_objects: GEOMETRY_GRAPH_LIMIT, ..Default::default() };
         let mut surfaces: BTreeMap<u64, bool> = BTreeMap::new();
         let mut placed: Vec<(u64, u8, u64, u64)> = Vec::new();
         let _ = native_document::extract_graphs(&mut file, &options, |record| {
@@ -304,7 +305,7 @@ fn main() {
     let mut done: BTreeSet<u64> = BTreeSet::new();
     while !todo.is_empty() {
         let batch = std::mem::take(&mut todo);
-        let options = Options { channels: BTreeSet::from([103]), selected_ids: batch.clone(), max_graph_values: 1_000_000, max_graph_objects: 1_000_000, ..Default::default() };
+        let options = Options { channels: BTreeSet::from([103]), selected_ids: batch.clone(), max_graph_values: GEOMETRY_GRAPH_LIMIT, max_graph_objects: GEOMETRY_GRAPH_LIMIT, ..Default::default() };
         let mut symbols = BTreeSet::new();
         native_document::extract_graphs(&mut file, &options, |record| {
             let id = record.identity.element_id;

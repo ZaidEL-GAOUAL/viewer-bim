@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use revit::Context;
+use revit::geometry::pack::MATERIAL_STRIDE;
 use revit::geometry::{self, Geometry};
 
 fn sample(name: &str) -> Option<PathBuf> {
@@ -34,12 +35,12 @@ fn build(path: &PathBuf) -> Geometry {
 /// Les couleurs (octets sRGB et alpha) des primitives de l'élément Revit `id`.
 fn paints_of(geometry: &Geometry, id: u64) -> BTreeSet<[u8; 4]> {
     let element = geometry.element_ids.iter().position(|element| *element == id).unwrap_or_else(|| panic!("l'élément {id} n'est pas dessiné"));
-    geometry.primitives.chunks_exact(6).filter(|row| row[0] as usize == element).map(|row| geometry.materials[row[5] as usize * 6..][..4].try_into().expect("quatre octets")).collect()
+    geometry.primitives.chunks_exact(6).filter(|row| row[0] as usize == element).map(|row| geometry.materials[row[5] as usize * MATERIAL_STRIDE..][..4].try_into().expect("quatre octets")).collect()
 }
 
 /// Les couleurs RVB de toutes les primitives.
 fn all_paints(geometry: &Geometry) -> BTreeSet<[u8; 3]> {
-    geometry.materials.chunks_exact(6).map(|row| [row[0], row[1], row[2]]).collect()
+    geometry.materials.chunks_exact(MATERIAL_STRIDE).map(|row| [row[0], row[1], row[2]]).collect()
 }
 
 #[test]

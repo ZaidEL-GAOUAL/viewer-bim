@@ -18,6 +18,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
+use revit::geometry::pack::MATERIAL_STRIDE;
 use revit::geometry::{self, classes};
 use revit::native::{self, YearOrigin, elemtable, schema};
 use revit::{Context, Options, Output, read};
@@ -430,7 +431,7 @@ fn triangles_of(output: &Output) -> Vec<usize> {
 fn colours_of(output: &Output) -> Vec<BTreeSet<[u8; 4]>> {
     let mut colours = vec![BTreeSet::new(); output.keys.len()];
     for row in output.primitives.chunks_exact(6) {
-        colours[row[0] as usize].insert(output.materials[row[5] as usize * 6..][..4].try_into().expect("quatre octets"));
+        colours[row[0] as usize].insert(output.materials[row[5] as usize * MATERIAL_STRIDE..][..4].try_into().expect("quatre octets"));
     }
     colours
 }

@@ -115,7 +115,7 @@ pub fn build(file: &mut rvt::RevitFile, context: &mut Context) -> Result<Output>
     let elements: Vec<Rebuilt> = elements
         .into_iter()
         .filter_map(|(id, element)| {
-            let faces: Vec<Face<'_>> = element.faces.iter().map(|face| Face { vertices: &face.vertices, normals: None, triangles: &face.triangles, paint: face.paint }).collect();
+            let faces: Vec<Face<'_>> = element.faces.iter().map(|face| Face { vertices: &face.vertices, normals: None, triangles: &face.triangles, paint: face.paint, overlay: false }).collect();
             let mut mesh = ElementMesh::build(&faces);
             if mesh.is_empty() {
                 return None;

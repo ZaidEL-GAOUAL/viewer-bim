@@ -207,6 +207,12 @@ pub struct Meshes {
     pub primitives: Vec<Primitive>,
     /// Pour chaque primitive : vrai si elle vient de ce module (rvt-rs avait refusé la face).
     pub ours: Vec<bool>,
+    /// Pour chaque primitive : vrai si c'est le `GPolyMesh` voisin d'un `GImposter` (l'image d'un contenu RPC), à dessiner
+    /// par-dessus les surfaces coplanaires (`select::Selected::overlay`).
+    pub overlay: Vec<bool>,
+    /// Pour chaque primitive : le `GStyleElem` du calque d'un `GPolyMesh` (`select::Selected::layer`), `-1` sinon : de quoi lui
+    /// trouver un matériau quand il n'en a pas (`geometry::materials::Resolver::resolve_in_layer`).
+    pub layers: Vec<i64>,
     /// Problèmes de parcours, de transformation ou de GPolyMesh (pas de faces) : ceux du parcours d'abord, puis ceux
     /// des nœuds (`node_diagnostics` derniers).
     pub diagnostics: Vec<String>,
@@ -254,11 +260,14 @@ pub struct Settings<'c> {
     /// Laisser pour plus tard les instances d'un symbole pas encore lu (`Meshes::pending`), au lieu d'un
     /// diagnostic : la lecture les achève après avoir lu les symboles (`complete`).
     pub defer: bool,
+    /// Placer les instances à échelle uniforme (`m_bHasScale` vrai : voir `select`). Faux pour un import CAD du projet
+    /// (`ImportInstance`), dont les blocs à échelle restent non lus en attendant qu'on décide de dessiner ces imports.
+    pub uniform_scales: bool,
 }
 
 /// Mailler les graphiques d'un élément, sans cache, au niveau de détail `detail_level`.
 pub fn graphics<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, detail_level: i64) -> Meshes {
-    graphics_with(root, resolver, &Settings { detail_level, prudent: false, cache: None, defer: false })
+    graphics_with(root, resolver, &Settings { detail_level, prudent: false, cache: None, defer: false, uniform_scales: true })
 }
 
 /// Mailler les graphiques d'un élément : mêmes transformations et mêmes primitives que
@@ -273,7 +282,7 @@ pub fn graphics_with<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option
         None => Arc::new(select::edge_index(graph)),
     };
     let shapes_of = |owner: u64| settings.cache.and_then(|cache| cache.shape(owner));
-    let selection = select::select_deferring(root, resolver, &edges_of, &shapes_of, settings.detail_level, settings.defer);
+    let selection = select::select_deferring(root, resolver, &edges_of, &shapes_of, settings.detail_level, settings.defer, settings.uniform_scales);
     mesh_selection(selection, root, resolver, settings)
 }
 
@@ -304,6 +313,8 @@ pub fn complete<'a>(meshes: &mut Meshes, resolver: &dyn Fn(u64) -> Option<&'a Ob
         let count = placed.primitives.len();
         meshes.primitives.splice(at..at, placed.primitives);
         meshes.ours.splice(at..at, placed.ours);
+        meshes.overlay.splice(at..at, placed.overlay);
+        meshes.layers.splice(at..at, placed.layers);
         d_primitives += count;
         let placed_walk = placed.diagnostics.len() - placed.node_diagnostics;
         let (walk_part, node_part) = placed.diagnostics.split_at(placed_walk);
@@ -382,6 +393,8 @@ fn mesh_selection<'a>(selection: select::Selection, root: &'a ObjectGraph, resol
                 for (primitive, own) in primitives {
                     out.primitives.push(primitive);
                     out.ours.push(own);
+                    out.overlay.push(selected.overlay);
+                    out.layers.push(selected.layer);
                 }
                 out.unbounded_faces += node.unbounded;
                 out.reference_faces += node.references;
@@ -404,6 +417,8 @@ fn rvt_only<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a Obje
     let meshes = graphics_with_resolver_at_detail(root, resolver, detail_level);
     Meshes {
         ours: vec![false; meshes.primitives.len()],
+        overlay: vec![false; meshes.primitives.len()],
+        layers: vec![-1; meshes.primitives.len()],
         primitives: meshes.primitives,
         node_diagnostics: 0,
         diagnostics: meshes.diagnostics,

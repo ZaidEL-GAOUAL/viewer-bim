@@ -11,6 +11,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use revit::geometry::pack::MATERIAL_STRIDE;
 use revit::geometry::{self, Emitted, Geometry};
 use revit::{CHUNK_TRIANGLES, Chunk, Context, Options, read, read_streaming};
 
@@ -61,7 +62,7 @@ fn les_morceaux_mis_bout_a_bout_redonnent_la_sortie_d_un_bloc() {
             // Les indices d'élément sont locaux au morceau ; la table des matériaux prolonge la précédente.
             for primitive in chunk.primitives.chunks_exact(6) {
                 assert!((primitive[0] as usize) < chunk.keys.len(), "{name} : indice d'élément hors du morceau");
-                assert!((primitive[5] as usize) < chunk.materials.len() / 6, "{name} : matériau hors de la table du morceau");
+                assert!((primitive[5] as usize) < chunk.materials.len() / MATERIAL_STRIDE, "{name} : matériau hors de la table du morceau");
             }
             assert!(chunk.materials.starts_with(&materials), "{name} : la table des matériaux ne prolonge pas la précédente");
             materials = chunk.materials.clone();

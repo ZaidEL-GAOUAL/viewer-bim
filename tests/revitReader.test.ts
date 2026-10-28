@@ -29,7 +29,7 @@ test('le lecteur Revit rend des tableaux typés cohérents entre eux', () => {
   assert.equal(output.positions.length % 3, 0);
   assert.equal(output.indices.length % 3, 0);
   assert.equal(output.primitives.length % 6, 0);
-  assert.equal(output.materials.length % 6, 0);
+  assert.equal(output.materials.length % 7, 0);
 });
 
 test('le rapport donne l’année de Revit et des compteurs cohérents', () => {

@@ -52,7 +52,10 @@ export interface RevitOutput {
   indices: Uint32Array;
   /** Pas de 6 : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. */
   primitives: Uint32Array;
-  /** Pas de 6 : r, g, b, a (octets sRGB), transparent (0/1), double face (0/1). */
+  /**
+   * Pas de 7 : r, g, b, a (octets sRGB), transparent (0/1), double face (0/1), surcouche (0/1 : triangles que le
+   * viewer dessine par-dessus les surfaces coplanaires, l'image d'un contenu RPC posée sur le sol).
+   */
   materials: Uint8Array;
   /** JSON du contrat docs/contrat-metadonnees.md (version 1). Vide quand la sortie est partie par morceaux. */
   metadata: string;

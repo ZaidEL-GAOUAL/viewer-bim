@@ -1438,6 +1438,310 @@ fn un_ggtag_se_visite_comme_un_groupe() {
     assert!(meshes.diagnostics.iter().any(|message| message.contains("GInconnu")), "{:?}", meshes.diagnostics);
 }
 
+/// Un `GFilter` sans condition, et ses enfants.
+fn filter_node(builder: &mut Builder, children: &[usize]) -> usize {
+    let filter = builder.add("GFilter", 3300, json!({ "m_GInfo": { "m_flags": 557060, "m_tag": -1 }, "m_bIsNestedDetailFamily": false, "m_oConditions": [], "m_subNodes": [] }));
+    link_children(builder, filter, children);
+    filter
+}
+
+/// Un `GGroup` de catégorie `category` (un `GStyleElem` : le style d'un calque d'import), et ses enfants.
+fn group_node(builder: &mut Builder, category: i64, children: &[usize]) -> usize {
+    let group = builder.add("GGroup", 3302, json!({ "m_GInfo": { "m_flags": 557060, "m_tag": -1, "m_categoryId": { "m_id": { "m_id64": category } } }, "m_subNodes": [] }));
+    link_children(builder, group, children);
+    group
+}
+
+/// Un `GImposter` à actif nul : l'image d'un contenu RPC.
+fn imposter_node(builder: &mut Builder) -> usize {
+    builder.add("GImposter", 3101, json!({ "m_GInfo": { "m_flags": 557060, "m_tag": -1 }, "m_oAsset": { "class_tag": 413, "offset": 9, "pointer_token": 4294967295u64 }, "m_trf": { "m_3x3": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "m_or": [0.0, 0.0, 0.0] } }))
+}
+
+/// Le `GPolyMesh` voisin d'un `GImposter` (le contenu 3D d'un symbole RPC : silhouette et empreinte au sol) est une surcouche, et
+/// lui seul : un `GPolyMesh` d'un autre groupe, d'un autre filtre ou sans imposteur voisin se dessine comme avant. L'imposteur
+/// n'est toujours pas une surface ni un diagnostic.
+#[test]
+fn le_poly_mesh_voisin_d_un_imposteur_est_une_surcouche() {
+    let (points, facets) = tetrahedron();
+    let normals = facet_normals(&points, &facets);
+    let mut builder = Builder::new();
+    let root = element_node(&mut builder);
+    // Le filtre du symbole RPC : un imposteur, son maillage voisin, et un nœud `Geometry` vide.
+    let imposter = imposter_node(&mut builder);
+    let stand_in = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    let filter = filter_node(&mut builder, &[imposter, stand_in]);
+    // Un autre maillage, dans un groupe sans imposteur ; et un maillage à la racine.
+    let ordinary = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    let group = group_node(&mut builder, -1, &[ordinary]);
+    let bare = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    link_children(&mut builder, root, &[filter, group, bare]);
+    let meshes = graphics_of(builder);
+    assert!(meshes.diagnostics.is_empty(), "{:?}", meshes.diagnostics);
+    assert_eq!(meshes.primitives.len(), 3);
+    assert_eq!(meshes.overlay, vec![true, false, false]);
+    // Chaque primitive a son indicateur, comme son indicateur « module » (`ours`).
+    assert_eq!(meshes.overlay.len(), meshes.ours.len());
+}
+
+/// La surcouche est la même quand le symbole est parcouru pour lui-même (sa forme gardée, puis rejouée pour chaque instance) et
+/// quand l'instance le parcourt à travers son graphe.
+#[test]
+fn la_surcouche_d_un_symbole_rpc_passe_par_sa_forme_et_par_son_graphe() {
+    let (points, facets) = tetrahedron();
+    let normals = facet_normals(&points, &facets);
+    let symbol = symbol_graph(&|builder| {
+        let imposter = imposter_node(builder);
+        let stand_in = poly_mesh_node(builder, "FacetedTopology0", &points, &normals, &facets, 2);
+        let filter = filter_node(builder, &[imposter, stand_in]);
+        let solid = poly_mesh_node(builder, "FacetedTopology0", &points, &normals, &facets, 2);
+        vec![filter, solid]
+    });
+    // Par le graphe : une instance du symbole.
+    let placed = place_symbol(&symbol, 0, false, VISIBLE);
+    assert!(placed.diagnostics.is_empty(), "{:?}", placed.diagnostics);
+    assert_eq!(placed.overlay, vec![true, false]);
+    // Par la forme : le parcours du symbole pour lui-même note la surcouche de chaque nœud, que `place` rejoue.
+    let edges = |_owner: u64, graph: &ObjectGraph| std::sync::Arc::new(faces::select::edge_index(graph));
+    let shape = faces::select::symbol_shape(&symbol, 777, &|_| None, &edges, &|_| None, 3).expect("forme du symbole");
+    let nodes: Vec<bool> = shape.events.iter().filter_map(|event| if let faces::select::ShapeEvent::Node { overlay, .. } = event { Some(*overlay) } else { None }).collect();
+    assert_eq!(nodes, vec![true, false]);
+}
+
+/// Le style d'un `GPolyMesh` : celui du conteneur le plus proche qui en a un, dans son graphe (le calque d'une DWG importée),
+/// `-1` sans conteneur de catégorie ; et `-1` pour un nœud qui n'est pas un `GPolyMesh`.
+#[test]
+fn un_poly_mesh_retient_le_style_de_son_calque() {
+    let (points, facets) = tetrahedron();
+    let normals = facet_normals(&points, &facets);
+    let mut builder = Builder::new();
+    let root = element_node(&mut builder);
+    let in_layer = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    let layer = group_node(&mut builder, 750250, &[in_layer]);
+    // Un groupe sans catégorie dans un groupe de catégorie : c'est la catégorie du groupe extérieur qui vaut ; la plus proche l'emporte.
+    let nested = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    let inner_plain = group_node(&mut builder, -1, &[nested]);
+    let inner_layer_mesh = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    let inner_layer = group_node(&mut builder, 750252, &[inner_layer_mesh]);
+    let outer = group_node(&mut builder, 750251, &[inner_plain, inner_layer]);
+    // Sans conteneur de catégorie.
+    let bare = poly_mesh_node(&mut builder, "FacetedTopology0", &points, &normals, &facets, 2);
+    link_children(&mut builder, root, &[layer, outer, bare]);
+    let meshes = graphics_of(builder);
+    assert!(meshes.diagnostics.is_empty(), "{:?}", meshes.diagnostics);
+    assert_eq!(meshes.layers, vec![750250, 750251, 750252, -1]);
+    assert_eq!(meshes.layers.len(), meshes.primitives.len());
+}
+
+/// Le style ne passe pas d'un graphe à l'autre : le maillage d'un symbole placé par une instance qui est dans un groupe de catégorie
+/// n'a pas le style de ce groupe, seulement les siens.
+#[test]
+fn le_style_d_un_calque_ne_traverse_pas_les_symboles() {
+    let symbol = tetrahedron_symbol();
+    let mut builder = Builder::new();
+    let root = element_node(&mut builder);
+    let instance = builder.add(
+        "GInstance",
+        3200,
+        json!({ "m_GInfo": { "m_flags": VISIBLE, "m_tag": 0 }, "m_bHasScale": false, "m_resolveSymInView": false, "m_forbiddenTarget": { "m_targets": 0 }, "m_oEmbeddedSymbolGRep": { "class_tag": null, "offset": 1, "pointer_token": 0 } }),
+    );
+    let info = builder.add(
+        "InstanceInfo",
+        3102,
+        json!({ "m_GRepId": 0, "m_cda": { "m_pDoc": { "class_tag": null, "offset": 1, "pointer_token": 1 } }, "m_symbolId": { "m_id": { "m_id64": 777 } }, "m_Trf": { "m_3x3": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]], "m_or": [0.0, 0.0, 0.0] } }),
+    );
+    let info_pointer = builder.pointer(instance, Some(info));
+    builder.set(instance, "m_instanceInfo", info_pointer);
+    let group = group_node(&mut builder, 4242, &[instance]);
+    link_children(&mut builder, root, &[group]);
+    let graph = builder.graph();
+    let meshes = faces::graphics(&graph, &|owner| (owner == 777).then_some(&symbol), 3);
+    assert!(meshes.diagnostics.is_empty(), "{:?}", meshes.diagnostics);
+    assert_eq!(meshes.layers, vec![-1]);
+}
+
+/// Un élément dont le graphique est une seule instance du symbole 777, avec la valeur donnée de `m_bHasScale` (absente : `None`) et
+/// la matrice 3 × 3 donnée (la translation est nulle). `known` : le symbole est lu avant l'élément ; sinon, avec `defer`, l'instance attend
+/// son symbole et se rejoue ensuite.
+fn place_with_scale(symbol: &ObjectGraph, scale: Option<bool>, matrix: [[f64; 3]; 3], known: bool, defer: bool) -> faces::Meshes {
+    place_with_scale_in(symbol, scale, matrix, known, defer, true)
+}
+
+/// [`place_with_scale`], avec le choix de `Settings::uniform_scales` (faux : un import CAD du projet).
+fn place_with_scale_in(symbol: &ObjectGraph, scale: Option<bool>, matrix: [[f64; 3]; 3], known: bool, defer: bool, uniform_scales: bool) -> faces::Meshes {
+    let mut builder = Builder::new();
+    let root = element_node(&mut builder);
+    let mut fields = json!({ "m_GInfo": { "m_flags": VISIBLE, "m_tag": 0 }, "m_resolveSymInView": false, "m_forbiddenTarget": { "m_targets": 0 }, "m_oEmbeddedSymbolGRep": { "class_tag": null, "offset": 1, "pointer_token": 0 } });
+    if let Some(scale) = scale {
+        fields["m_bHasScale"] = json!(scale);
+    }
+    let instance = builder.add("GInstance", 3200, fields);
+    let info = builder.add(
+        "InstanceInfo",
+        3102,
+        json!({ "m_GRepId": 0, "m_cda": { "m_pDoc": { "class_tag": null, "offset": 1, "pointer_token": 1 } }, "m_symbolId": { "m_id": { "m_id64": 777 } }, "m_Trf": { "m_3x3": matrix, "m_or": [0.0, 0.0, 0.0] } }),
+    );
+    let info_pointer = builder.pointer(instance, Some(info));
+    builder.set(instance, "m_instanceInfo", info_pointer);
+    link_children(&mut builder, root, &[instance]);
+    let graph = builder.graph();
+    let settings = faces::Settings { detail_level: 3, prudent: false, cache: None, defer, uniform_scales };
+    let mut meshes = faces::graphics_with(&graph, &|owner| (owner == 777 && known).then_some(symbol), &settings);
+    if !meshes.pending.is_empty() {
+        faces::complete(&mut meshes, &|owner| (owner == 777).then_some(symbol), &faces::Settings { defer: false, ..settings });
+    }
+    meshes
+}
+
+const NO_SCALE: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+
+/// Un symbole d'import vide, comme les calques `.AVE_RENDER` et `.AVE_GLOBAL` des DWG de `wadduwa.rvt` : un `GElement` sans enfant.
+fn empty_symbol() -> ObjectGraph {
+    symbol_graph(&|_| Vec::new())
+}
+
+/// Les échelles que les octets des fichiers d'essai montrent sont toutes uniformes (rotation ou miroir multipliés par un nombre) :
+/// l'identité des roues de la Peugeot de `wadduwa.rvt`, 0,125 des blocs de `rac_advanced`, 25,4 et 2 413,27 de blocs de `wadduwa.rvt`,
+/// 0,75 avec miroir. Une échelle non uniforme, un cisaillement ou une matrice nulle n'en sont pas.
+#[test]
+fn une_echelle_uniforme_se_reconnait_a_ses_colonnes() {
+    use faces::select::uniform_scale;
+    let matrix = |rows: [[f64; 3]; 3]| {
+        let mut m = [[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]];
+        for i in 0..3 {
+            m[i][..3].copy_from_slice(&rows[i]);
+        }
+        m
+    };
+    assert_eq!(uniform_scale(&matrix(NO_SCALE)), Some(1.0));
+    let scaled = |factor: f64| matrix([[factor, 0.0, 0.0], [0.0, factor, 0.0], [0.0, 0.0, factor]]);
+    for factor in [0.125, 25.4, 2413.2730015083343] {
+        let found = uniform_scale(&scaled(factor)).expect("échelle uniforme");
+        assert!((found - factor).abs() <= 1e-9 * factor, "{factor} : {found}");
+    }
+    // La matrice de rac_advanced : 0,125 fois une rotation de 90°, avec des 2,8e-17 là où il y a des zéros.
+    let rotated = matrix([[-2.7755575615628914e-17, 0.125, 0.0], [-0.125, -2.7755575615628914e-17, 0.0], [0.0, 0.0, 0.125]]);
+    assert!((uniform_scale(&rotated).unwrap() - 0.125).abs() < 1e-12);
+    // Un miroir à 0,75 (déterminant négatif) : une échelle uniforme aussi.
+    let mirrored = matrix([[0.6148631341540776, -0.42946865573429943, 0.0], [-0.42946865573429943, -0.6148631341540776, 0.0], [0.0, 0.0, 0.7500000000000008]]);
+    assert!((uniform_scale(&mirrored).unwrap() - 0.75).abs() < 1e-9);
+    // Pas uniformes : un étirement, un cisaillement, une matrice nulle, une échelle qui diffère de 1e-6 en valeur relative.
+    assert_eq!(uniform_scale(&matrix([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 1.0]])), None);
+    assert_eq!(uniform_scale(&matrix([[1.0, 0.5, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])), None);
+    assert_eq!(uniform_scale(&matrix([[0.0; 3]; 3])), None);
+    assert_eq!(uniform_scale(&matrix([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.000001]])), None);
+}
+
+/// Une instance à échelle (`m_bHasScale` vrai) dont la matrice est une échelle uniforme se place comme toute autre : les roues de la Peugeot
+/// de `wadduwa.rvt` (identité), les blocs à 0,125 ou 25,4. Les sommets passent par la matrice, les normales restent unitaires et sortantes,
+/// et un miroir garde ses triangles vers l'extérieur.
+#[test]
+fn une_instance_a_echelle_uniforme_se_place_comme_une_autre() {
+    // L'identité : le symbole se dessine, tel quel.
+    let plain = place_with_scale(&tetrahedron_symbol(), Some(true), NO_SCALE, true, false);
+    assert!(plain.diagnostics.is_empty() && plain.primitives.len() == 1, "{:?}", plain.diagnostics);
+    assert_eq!(plain.primitives[0].triangles.len(), 4);
+    let unscaled = place_with_scale(&tetrahedron_symbol(), Some(false), NO_SCALE, true, false);
+    assert_eq!(plain.primitives[0].vertices, unscaled.primitives[0].vertices, "l'identité à échelle vaut l'instance sans échelle");
+
+    // Deux échelles, et la même avec un miroir : les sommets sont ceux du symbole multipliés, les normales unitaires, les triangles sortants.
+    for (factor, mirror) in [(0.125, false), (25.4, false), (2413.2730015083343, false), (0.75, true)] {
+        let matrix = [[if mirror { -factor } else { factor }, 0.0, 0.0], [0.0, factor, 0.0], [0.0, 0.0, factor]];
+        let meshes = place_with_scale(&tetrahedron_symbol(), Some(true), matrix, true, false);
+        assert!(meshes.diagnostics.is_empty() && meshes.primitives.len() == 1, "{factor} : {:?}", meshes.diagnostics);
+        let primitive = &meshes.primitives[0];
+        let reference = &unscaled.primitives[0];
+        assert_eq!(primitive.vertices.len(), reference.vertices.len());
+        for (placed, origin) in primitive.vertices.iter().zip(&reference.vertices) {
+            let expected = [origin[0] * matrix[0][0], origin[1] * factor, origin[2] * factor];
+            assert!(close(*placed, expected, 1e-9 * factor.max(1.0)), "{factor} : {placed:?} ≠ {expected:?}");
+        }
+        for normal in &primitive.normals {
+            assert!((norm(*normal) - 1.0).abs() < 1e-9, "{factor} : normale non unitaire {normal:?}");
+        }
+        // Chaque triangle est tourné vers l'extérieur de la coque (le centroïde est à l'intérieur d'un tétraèdre) et d'accord avec ses normales.
+        let centroid = [0, 1, 2].map(|k| primitive.vertices.iter().map(|v| v[k]).sum::<f64>() / primitive.vertices.len() as f64);
+        for triangle in &primitive.triangles {
+            let [a, b, c] = triangle.map(|corner| primitive.vertices[corner as usize]);
+            let geometric = cross(sub(b, a), sub(c, a));
+            let middle = [0, 1, 2].map(|k| (a[k] + b[k] + c[k]) / 3.0);
+            assert!(dot(geometric, sub(middle, centroid)) > 0.0, "{factor} : triangle tourné vers l'intérieur");
+            let normal = primitive.normals[triangle[0] as usize];
+            assert!(dot(geometric, normal) > 0.0, "{factor} : triangle contre sa normale");
+        }
+    }
+}
+
+/// Une matrice qui n'est pas une échelle uniforme (étirement, cisaillement) n'a pas de lecture établie : un symbole qui porte des surfaces reste
+/// un diagnostic (« échelle non uniforme »), un symbole vide ou de lignes seulement est sauté sans rien perdre. Un drapeau absent reste refusé.
+#[test]
+fn une_instance_a_echelle_non_uniforme_garde_son_diagnostic() {
+    let stretched = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 1.0]];
+    let sheared = [[1.0, 0.5, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+    for matrix in [stretched, sheared] {
+        let refused = place_with_scale(&tetrahedron_symbol(), Some(true), matrix, true, false);
+        assert!(refused.primitives.is_empty());
+        assert!(refused.diagnostics.iter().any(|message| message.contains("non uniforme")), "{:?}", refused.diagnostics);
+        // Sans l'indicateur d'échelle, la même matrice est celle d'une instance ordinaire : rien ne change pour elle.
+        let unflagged = place_with_scale(&tetrahedron_symbol(), Some(false), matrix, true, false);
+        assert!(unflagged.diagnostics.is_empty() && unflagged.primitives.len() == 1);
+        // Calque vide, symbole de lignes : rien à dessiner, rien de perdu.
+        for symbol in [empty_symbol(), line_symbol()] {
+            let skipped = place_with_scale(&symbol, Some(true), matrix, true, false);
+            assert!(skipped.primitives.is_empty() && skipped.diagnostics.is_empty(), "{:?}", skipped.diagnostics);
+        }
+    }
+    // Un calque vide à échelle uniforme (les neuf instances du Citroën) : rien à dessiner non plus.
+    let empty = place_with_scale(&empty_symbol(), Some(true), NO_SCALE, true, false);
+    assert!(empty.primitives.is_empty() && empty.diagnostics.is_empty(), "{:?}", empty.diagnostics);
+    let missing = place_with_scale(&empty_symbol(), None, NO_SCALE, true, false);
+    assert!(missing.diagnostics.iter().any(|message| message.contains("échelle")), "{:?}", missing.diagnostics);
+}
+
+/// Un import CAD du projet (`ImportInstance`) ne place aucune échelle, même uniforme : ses blocs à échelle gardent leur ancien traitement
+/// (diagnostic « échelle non prise en charge » quand leur symbole porte des surfaces, instance sautée sinon), que le symbole soit lu avant
+/// l'élément ou après. Sans l'indicateur d'échelle, rien ne change pour lui.
+#[test]
+fn un_import_cad_du_projet_ne_place_aucune_echelle() {
+    let double = [[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]];
+    for (known, defer) in [(true, false), (false, true)] {
+        for matrix in [NO_SCALE, double] {
+            let refused = place_with_scale_in(&tetrahedron_symbol(), Some(true), matrix, known, defer, false);
+            assert!(refused.primitives.is_empty(), "symbole lu avant l'élément : {known}");
+            assert!(refused.diagnostics.iter().any(|message| message.contains("échelle non prise en charge")), "{:?}", refused.diagnostics);
+            // Le même élément, hors import : l'échelle uniforme se place.
+            let placed = place_with_scale_in(&tetrahedron_symbol(), Some(true), matrix, known, defer, true);
+            assert!(placed.diagnostics.is_empty() && placed.primitives.len() == 1, "{:?}", placed.diagnostics);
+            // Symbole vide : rien à perdre, instance sautée.
+            let skipped = place_with_scale_in(&empty_symbol(), Some(true), matrix, known, defer, false);
+            assert!(skipped.primitives.is_empty() && skipped.diagnostics.is_empty(), "{:?}", skipped.diagnostics);
+        }
+        // Sans l'indicateur d'échelle, l'instance d'un import se dessine comme toute autre.
+        let plain = place_with_scale_in(&tetrahedron_symbol(), Some(false), NO_SCALE, known, defer, false);
+        assert!(plain.diagnostics.is_empty() && plain.primitives.len() == 1, "{:?}", plain.diagnostics);
+    }
+}
+
+/// Le même choix quand le symbole n'est pas encore lu (l'instance attend, `Settings::defer`, puis se rejoue dans `complete`).
+#[test]
+fn une_instance_a_echelle_qui_attend_son_symbole_se_decide_comme_les_autres() {
+    let stretched = [[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 1.0]];
+    let double = [[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]];
+    // Non uniforme et vide : après l'achèvement, aucun diagnostic.
+    let meshes = place_with_scale(&empty_symbol(), Some(true), stretched, false, true);
+    assert!(meshes.pending.is_empty() && meshes.primitives.is_empty() && meshes.diagnostics.is_empty(), "{:?}", meshes.diagnostics);
+    // Non uniforme avec des surfaces : le diagnostic arrive à la même place.
+    let refused = place_with_scale(&tetrahedron_symbol(), Some(true), stretched, false, true);
+    assert!(refused.primitives.is_empty());
+    assert!(refused.diagnostics.iter().any(|message| message.contains("non uniforme")), "{:?}", refused.diagnostics);
+    // Uniforme (identité, ×2) : l'instance qui attendait se dessine à sa place, comme sans attente.
+    for matrix in [NO_SCALE, double] {
+        let waited = place_with_scale(&tetrahedron_symbol(), Some(true), matrix, false, true);
+        let direct = place_with_scale(&tetrahedron_symbol(), Some(true), matrix, true, false);
+        assert!(waited.diagnostics.is_empty() && waited.primitives.len() == 1, "{:?}", waited.diagnostics);
+        assert_eq!(waited.primitives[0].vertices, direct.primitives[0].vertices);
+    }
+}
+
 /// Un maillage de tétraèdre entier posé par une instance en miroir (déterminant −1) : ses triangles restent
 /// tournés vers l'extérieur et d'accord avec leurs normales, après la transformation.
 #[test]
@@ -1713,11 +2017,13 @@ fn le_cache_ne_change_pas_les_primitives() {
         let wanted = |scene: &saved::Scene, _id: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
         let work = |scene: &saved::Scene, _id: u64, graph: &ObjectGraph| {
             let plain = faces::graphics(graph, &|owner| scene.symbol(owner), saved::DETAIL_LEVEL);
-            let cached = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false });
-            let again = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false });
+            let cached = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false, uniform_scales: true });
+            let again = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: false, cache: Some(&scene.cache), defer: false, uniform_scales: true });
             let same = |a: &faces::Meshes, b: &faces::Meshes| {
                 a.primitives.len() == b.primitives.len()
                     && a.ours == b.ours
+                    && a.overlay == b.overlay
+                    && a.layers == b.layers
                     && a.diagnostics == b.diagnostics
                     && (a.unbounded_faces, a.reference_faces, a.empty_trim_faces) == (b.unbounded_faces, b.reference_faces, b.empty_trim_faces)
                     && a.primitives.iter().zip(&b.primitives).all(|(p, q)| key(p) == key(q) && p.source_owner_id == q.source_owner_id && p.material_id == q.material_id)
@@ -1738,7 +2044,7 @@ fn le_mode_prudent_est_rvt_rs_seul() {
     let mut file = open(&path);
     let wanted = |scene: &saved::Scene, _id: u64, info: &saved::Info| classes::excluded(&scene.facts(info)).is_none();
     let work = |scene: &saved::Scene, _id: u64, graph: &ObjectGraph| {
-        let prudent = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: true, cache: None, defer: false });
+        let prudent = faces::graphics_with(graph, &|owner| scene.symbol(owner), &faces::Settings { detail_level: saved::DETAIL_LEVEL, prudent: true, cache: None, defer: false, uniform_scales: true });
         let old = native_saved_mesh::graphics_with_resolver_at_detail(graph, &|owner| scene.symbol(owner), saved::DETAIL_LEVEL);
         let same = prudent.primitives.len() == old.primitives.len() && prudent.primitives.iter().zip(&old.primitives).all(|(a, b)| key(a) == key(b));
         (same, prudent.ours.iter().any(|own| *own), prudent.diagnostics == old.diagnostics, prudent.unbounded_faces == old.unbounded_faces)

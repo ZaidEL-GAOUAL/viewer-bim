@@ -84,6 +84,21 @@ const STREAM_LIMIT: u64 = 512 * 1024 * 1024;
 /// vérifie, contre rvt-rs, qu'aucun enregistrement écarté ainsi n'aurait été décodé.
 pub const OVERSIZE_BYTES_PER_VALUE: usize = 8;
 
+/// Octets d'enregistrement au plus qu'on tente de décoder, quel que soit le budget de valeurs demandé : un
+/// enregistrement plus long est refusé d'emblée, sans être décodé. C'est la borne que le budget d'un million de valeurs
+/// imposait déjà (1 000 000 × [`OVERSIZE_BYTES_PER_VALUE`]) : elle ne bouge pas quand le budget des graphiques passe à 3 millions
+/// (`geometry::saved::GEOMETRY_GRAPH_LIMIT`), parce que la mémoire d'un décodage suit les octets, pas le budget : un graphe
+/// décodé pèse 60 à 140 fois son enregistrement. Sans elle, le `DirectShapeType` de 16,5 Mo de `2024_Core_Interior`
+/// (refusé à 1 million comme à 4 millions de valeurs, mais après les avoir presque toutes décodées) ferait passer le
+/// pic de ce fichier de 274 à 1 356 Mo (mesuré avec un budget de 4 millions) sans rien changer à sa sortie.
+pub const MAX_RECORD_BYTES: usize = 1_000_000 * OVERSIZE_BYTES_PER_VALUE;
+
+/// Les octets au plus qu'un enregistrement peut avoir pour être décodé avec ce budget de valeurs : ce que le budget
+/// ne saurait contenir ([`OVERSIZE_BYTES_PER_VALUE`] octets par valeur), et jamais plus de [`MAX_RECORD_BYTES`].
+pub fn oversize_limit(max_graph_values: usize) -> usize {
+    max_graph_values.saturating_mul(OVERSIZE_BYTES_PER_VALUE).min(MAX_RECORD_BYTES)
+}
+
 /// Les flux dont le préambule se déduit entièrement.
 const PREAMBLE_STREAMS: [&str; 5] = ["Formats/Latest", "Global/History", "Global/ElemTable", "Global/DocumentIncrementTable", "Global/Latest"];
 
@@ -755,9 +770,9 @@ fn extract_ported(file: &mut RevitFile, options: &Options, mut emit: impl FnMut(
                 let limits = GraphLimits { max_values: options.max_graph_values, max_objects: options.max_graph_objects, ..Default::default() };
                 // Un enregistrement que le budget de valeurs refuserait de toute façon n'est pas décodé (voir
                 // `OVERSIZE_BYTES_PER_VALUE`) : refusé d'emblée, avec un diagnostic qui le dit.
-                let oversize = body.len() > options.max_graph_values.saturating_mul(OVERSIZE_BYTES_PER_VALUE);
+                let oversize = body.len() > oversize_limit(options.max_graph_values);
                 let decoded = if oversize {
-                    Err(anyhow::anyhow!("enregistrement de {} octets : au-delà du budget de {} valeurs, non décodé", body.len(), options.max_graph_values))
+                    Err(anyhow::anyhow!("enregistrement de {} octets : au-delà de {} octets ou du budget de {} valeurs, non décodé", body.len(), MAX_RECORD_BYTES, options.max_graph_values))
                 } else {
                     native_parameters::decode_graph_with_catalog_usage(body, registry, &limits, catalog)
                 }

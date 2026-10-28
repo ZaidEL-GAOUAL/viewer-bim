@@ -36,9 +36,24 @@ use crate::native::{self, Options, Record};
 pub use crate::native::families::{self, FamilyOwner, FamilyRule, LOADED_DEFINITIONS_FROM};
 use crate::properties::{Retained, definition_classes, is_support_class};
 
-/// Budget de décodage d'un graphe (valeurs et objets). Celui de rvt-rs par défaut (100 000)
-/// refuse les terrains et les grandes familles ; l'export `saved_meshes` de rvt-rs prend 1 million.
+/// Budget de décodage d'un graphe des enregistrements d'éléments, canal 102 (valeurs et objets). Celui de rvt-rs par défaut
+/// (100 000) refuse les terrains et les grandes familles ; l'export `saved_meshes` de rvt-rs prend 1 million. Les
+/// propriétés gardent ce budget : aucun enregistrement du canal 102 des fichiers d'essai n'en demande davantage.
 pub const GRAPH_LIMIT: usize = 1_000_000;
+
+/// Budget de décodage d'un graphe graphique, canal 103 (valeurs et objets) : celui des formes que l'on dessine. Une DWG
+/// importée dans une famille (un `MasterImportSymbol`) est un graphe de maillages de facettes (`GPolyMesh`) que le budget d'un
+/// million refusait, et la famille n'avait alors aucune surface : le « Peugeot 208.DWG » des voitures de `wadduwa.rvt` demande
+/// 1 970 695 valeurs et 198 objets (3 769 685 octets), le « Citroen C4.DWG » 1 739 483 valeurs et 451 objets (3 363 927
+/// octets) ; aucun autre enregistrement graphique des fichiers d'essai n'est refusé à 1 million, sauf le `DirectShapeType`
+/// de `2024_Core_Interior` (16,5 Mo), que la borne en octets garde refusé (`native::records::MAX_RECORD_BYTES`). Trois millions laissent
+/// une marge d'un tiers et un enregistrement de moins de 8 Mo en tient dès qu'il pèse 2,7 octets par valeur ou moins (ces
+/// deux-là : 1,9 ; le plus dense des autres fichiers : 3,2).
+pub const GEOMETRY_GRAPH_LIMIT: usize = 3_000_000;
+
+/// La classe d'un import CAD du projet (DWG ou autre importé dans le modèle, pas dans une famille) : ses blocs à échelle ne sont pas placés
+/// (`faces::Settings::uniform_scales`).
+pub const PROJECT_IMPORT_CLASS: &str = "ImportInstance";
 
 /// Niveau de détail « fin » (celui du viewport 3D par défaut).
 pub const DETAIL_LEVEL: i64 = 3;
@@ -226,9 +241,11 @@ impl Scene {
         u64::try_from(info.owner).ok().and_then(|owner| self.infos.get(&owner))
     }
 
-    /// Les réglages du maillage des graphiques de cette scène.
-    pub fn settings(&self) -> faces::Settings<'_> {
-        faces::Settings { detail_level: DETAIL_LEVEL, prudent: self.prudent, cache: Some(&self.cache), defer: self.defer }
+    /// Les réglages du maillage des graphiques de l'élément `id`. Un import CAD du projet (`ImportInstance`) ne place pas ses blocs à échelle,
+    /// comme avant l'échelle uniforme : voir l'en-tête de `faces::select`.
+    pub fn settings(&self, id: u64) -> faces::Settings<'_> {
+        let project_import = self.infos.get(&id).is_some_and(|info| info.class == PROJECT_IMPORT_CLASS);
+        faces::Settings { detail_level: DETAIL_LEVEL, prudent: self.prudent, cache: Some(&self.cache), defer: self.defer, uniform_scales: !project_import }
     }
 
     /// Une scène sans fichier, pour les essais des règles de dessin (`geometry::tests`) : `infos` donne les éléments.
@@ -282,9 +299,16 @@ pub struct Timing {
     pub retake: f64,
 }
 
-/// Les réglages de lecture d'un canal, pour les éléments `ids` (tous si `ids` est vide).
+/// Le budget de décodage d'un graphe du canal : celui des graphiques (103) ou des enregistrements d'éléments (102).
+pub fn graph_limit(channel: u64) -> usize {
+    if channel == 103 { GEOMETRY_GRAPH_LIMIT } else { GRAPH_LIMIT }
+}
+
+/// Les réglages de lecture d'un canal, pour les éléments `ids` (tous si `ids` est vide). La borne en octets d'un
+/// enregistrement (`native::records::MAX_RECORD_BYTES`) est la même pour les deux canaux.
 fn read_options(channel: u64, ids: BTreeSet<u64>) -> Options {
-    Options { channels: BTreeSet::from([channel]), selected_ids: ids, max_graph_values: GRAPH_LIMIT, max_graph_objects: GRAPH_LIMIT, ..Default::default() }
+    let limit = graph_limit(channel);
+    Options { channels: BTreeSet::from([channel]), selected_ids: ids, max_graph_values: limit, max_graph_objects: limit, ..Default::default() }
 }
 
 /// Comment se lit la passe A, celle des enregistrements d'éléments (canal 102).
@@ -1004,7 +1028,7 @@ pub fn shape(scene: &Scene, id: u64, graph: &ObjectGraph) -> Shape {
     if scene.meshed.load(Ordering::Relaxed) > scene.hard_limit {
         return Shape::capped(graphics, format!("forme non maillée : le plafond de {} triangles maillés pour le fichier est atteint", scene.hard_limit));
     }
-    let meshes = faces::graphics_with(graph, &|owner| scene.symbol(owner), &scene.settings());
+    let meshes = faces::graphics_with(graph, &|owner| scene.symbol(owner), &scene.settings(id));
     if !meshes.pending.is_empty() {
         return Shape { mesh: ElementMesh::default(), sources: BTreeSet::new(), diagnostics: Vec::new(), unbounded_faces: 0, failures: Vec::new(), graphics, too_dense: false, capped: false, draft: Some(meshes) };
     }
@@ -1021,7 +1045,7 @@ pub fn complete(scene: &Scene, id: u64, shape: &mut Shape) {
         *shape = Shape::capped(shape.graphics, format!("instance dont les symboles n'étaient pas lus, non maillée : le plafond de {} triangles maillés pour le fichier est atteint", scene.hard_limit));
         return;
     }
-    faces::complete(&mut meshes, &|owner| scene.symbol(owner), &scene.settings());
+    faces::complete(&mut meshes, &|owner| scene.symbol(owner), &scene.settings(id));
     *shape = finish_shape(scene, id, shape.graphics, meshes);
 }
 
@@ -1035,18 +1059,26 @@ fn finish_shape(scene: &Scene, id: u64, graphics: bool, meshes: faces::Meshes) -
 
     let mut sources = BTreeSet::new();
     let mut paints = Vec::with_capacity(meshes.primitives.len());
-    for primitive in &meshes.primitives {
+    for (position, primitive) in meshes.primitives.iter().enumerate() {
         if let Some(owner) = primitive.source_owner_id {
             sources.insert(owner);
         }
-        let material = scene.resolver.resolve(id, primitive.source_owner_id, primitive.face_tag, primitive.render_style_id, primitive.material_id);
+        // Un `GPolyMesh` sans matériau ni style prend le matériau de son calque, s'il en a un (voir `materials`).
+        let layer = meshes.layers.get(position).copied().unwrap_or(-1);
+        let material = scene.resolver.resolve_in_layer(id, primitive.source_owner_id, primitive.face_tag, primitive.render_style_id, primitive.material_id, layer);
         paints.push(paint(material.as_ref()));
     }
     let faces: Vec<Face<'_>> = meshes
         .primitives
         .iter()
-        .zip(&paints)
-        .map(|(primitive, paint)| Face { vertices: &primitive.vertices, normals: Some(&primitive.normals), triangles: &primitive.triangles, paint: *paint })
+        .enumerate()
+        .map(|(position, primitive)| Face {
+            vertices: &primitive.vertices,
+            normals: Some(&primitive.normals),
+            triangles: &primitive.triangles,
+            paint: paints[position],
+            overlay: meshes.overlay.get(position).copied().unwrap_or(false),
+        })
         .collect();
     let mesh = ElementMesh::build(&faces);
     Shape { mesh, sources, diagnostics: meshes.diagnostics, unbounded_faces: meshes.unbounded_faces, failures: meshes.failures, graphics, too_dense: false, capped: false, draft: None }

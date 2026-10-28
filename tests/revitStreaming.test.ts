@@ -90,7 +90,7 @@ function checkStreaming(path: URL, severalChunks: boolean): void {
     assert.equal(chunk.normals.length, chunk.positions.length);
     assert.equal(chunk.indices.length % 3, 0);
     assert.equal(chunk.primitives.length % 6, 0);
-    assert.equal(chunk.materials.length % 6, 0);
+    assert.equal(chunk.materials.length % 7, 0);
     assert.deepEqual(chunk.origin, whole.origin, `${label} : l'origine du modèle entier`);
     const vertices = chunk.positions.length / 3;
     for (let p = 0; p < chunk.primitives.length; p += 6) {
@@ -98,7 +98,7 @@ function checkStreaming(path: URL, severalChunks: boolean): void {
       assert.ok(element < chunk.keys.length, `${label} : l'élément ${element} d'une primitive est local (${chunk.keys.length} éléments)`);
       assert.ok(vertexStart + vertexCount <= vertices, `${label} : sommets de la primitive dans le morceau`);
       assert.ok(indexStart + indexCount <= chunk.indices.length, `${label} : indices de la primitive dans le morceau`);
-      assert.ok(material * 6 < chunk.materials.length, `${label} : matériau de la primitive dans sa table`);
+      assert.ok(material * 7 < chunk.materials.length, `${label} : matériau de la primitive dans sa table`);
     }
     // La table de matériaux d'un morceau prolonge celle du précédent.
     if (previousMaterials) {

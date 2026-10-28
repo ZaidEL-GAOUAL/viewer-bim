@@ -419,7 +419,9 @@ fn normalize_legacy_ne_touche_pas_m_face_flags_v9_ni_les_objets_sans_drapeau() {
 // ---------------------------------------------------------------------------------------------
 
 fn options(channel: u64) -> Options {
-    // Les mêmes plafonds que `geometry::saved::GRAPH_LIMIT`.
+    // Le budget des enregistrements d'éléments (`geometry::saved::GRAPH_LIMIT`), pour les deux canaux : la comparaison avec rvt-rs ne
+    // dépend pas du budget, et le million de valeurs évite à rvt-rs de décoder plus de 300 Mo pour le seul enregistrement refusé de
+    // Core Interior. Le budget des graphiques de la lecture (3 millions) et la borne en octets sont essayés par `tests/wadduwa.rs`.
     Options { channels: BTreeSet::from([channel]), max_graph_values: 1_000_000, max_graph_objects: 1_000_000, ..Default::default() }
 }
 

@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use revit::geometry::bounds::Bounds;
-use revit::geometry::pack::to_frame;
+use revit::geometry::pack::{MATERIAL_STRIDE, to_frame};
 use revit::geometry::{self, Geometry, classes, saved};
 use revit::{Context, Options, Output, read};
 use rvt::research::native_parameters::ObjectGraph;
@@ -274,7 +274,7 @@ fn les_coussins_etfe_adaptatifs_sont_la_forme_de_leur_symbole() {
         winding_follows_normals(&geometry, id);
         let index = geometry.element_ids.iter().position(|element| *element == id).expect("coussin") as u32;
         for row in geometry.primitives.chunks_exact(6).filter(|row| row[0] == index) {
-            assert_eq!(geometry.materials[row[5] as usize * 6 + 5], 1, "coussin {id} : face unique dessinée des deux côtés");
+            assert_eq!(geometry.materials[row[5] as usize * MATERIAL_STRIDE + 5], 1, "coussin {id} : face unique dessinée des deux côtés");
         }
     }
     assert_eq!(geometry.stats.identical, 0, "des éléments dessinent exactement les mêmes triangles");
@@ -434,7 +434,7 @@ fn triangles_of(output: &Output) -> Vec<usize> {
 fn colours_of(output: &Output) -> Vec<BTreeSet<[u8; 4]>> {
     let mut colours = vec![BTreeSet::new(); output.keys.len()];
     for row in output.primitives.chunks_exact(6) {
-        colours[row[0] as usize].insert(output.materials[row[5] as usize * 6..][..4].try_into().expect("quatre octets"));
+        colours[row[0] as usize].insert(output.materials[row[5] as usize * MATERIAL_STRIDE..][..4].try_into().expect("quatre octets"));
     }
     colours
 }

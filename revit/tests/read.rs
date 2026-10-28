@@ -1,5 +1,6 @@
 //! La lecture native du fichier d'essai (Revit 2023, licence MIT, voir tests/fixtures).
 
+use revit::geometry::pack::MATERIAL_STRIDE;
 use revit::{Options, read};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/Revit_IFC5_Einhoven.rvt");
@@ -24,9 +25,9 @@ fn lit_le_fichier_d_essai() {
     assert_eq!(output.indices.len() % 3, 0);
     assert_eq!(output.report.triangles, output.indices.len() / 3);
     assert_eq!(output.primitives.len() % 6, 0);
-    assert_eq!(output.materials.len() % 6, 0);
+    assert_eq!(output.materials.len() % MATERIAL_STRIDE, 0);
     let vertices = output.positions.len() / 3;
-    let materials = output.materials.len() / 6;
+    let materials = output.materials.len() / MATERIAL_STRIDE;
     for primitive in output.primitives.chunks_exact(6) {
         let [element, vertex_start, vertex_count, index_start, index_count, material] = primitive else { unreachable!() };
         assert!((*element as usize) < elements);

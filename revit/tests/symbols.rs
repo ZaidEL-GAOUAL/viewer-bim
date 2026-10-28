@@ -32,6 +32,8 @@ fn open(path: &PathBuf) -> rvt::RevitFile {
 struct Digest {
     fingerprint: u64,
     triangles: usize,
+    /// Les triangles de surcouche (les voisins d'un `GImposter`) : l'empreinte exacte ne les distingue pas des autres.
+    overlay: usize,
     sources: BTreeSet<u64>,
     diagnostics: Vec<String>,
     unbounded_faces: usize,
@@ -45,8 +47,8 @@ struct Digest {
 
 impl PartialEq for Digest {
     fn eq(&self, other: &Self) -> bool {
-        (self.fingerprint, self.triangles, &self.sources, &self.diagnostics, self.unbounded_faces, &self.failures, self.graphics, self.too_dense, self.capped, self.draft.is_some())
-            == (other.fingerprint, other.triangles, &other.sources, &other.diagnostics, other.unbounded_faces, &other.failures, other.graphics, other.too_dense, other.capped, other.draft.is_some())
+        (self.fingerprint, self.triangles, self.overlay, &self.sources, &self.diagnostics, self.unbounded_faces, &self.failures, self.graphics, self.too_dense, self.capped, self.draft.is_some())
+            == (other.fingerprint, other.triangles, other.overlay, &other.sources, &other.diagnostics, other.unbounded_faces, &other.failures, other.graphics, other.too_dense, other.capped, other.draft.is_some())
     }
 }
 
@@ -55,6 +57,7 @@ impl Digest {
         Digest {
             fingerprint: shape.mesh.exact_fingerprint(),
             triangles: shape.mesh.triangles(),
+            overlay: shape.mesh.groups.iter().filter(|group| group.overlay).map(|group| group.index_count as usize / 3).sum(),
             sources: shape.sources,
             diagnostics: shape.diagnostics,
             unbounded_faces: shape.unbounded_faces,

@@ -14,7 +14,31 @@
 //!   transformation : le miroir d'une instance est dans sa matrice `m_Trf`, que `transform` retourne.
 //! * `GImposter` : l'image d'un contenu RPC (arbres, personnages), dont l'actif est un pointeur nul
 //!   (`m_oAsset.pointer_token` = 0xFFFFFFFF dans les 5 nœuds d'essai) : rien à dessiner. Le contenu 3D du
-//!   même symbole est un `GPolyMesh` voisin, que Revit dessine en vue ombrée : il se dessine comme les autres.
+//!   même symbole est un `GPolyMesh` voisin, que Revit dessine en vue ombrée : il se dessine comme les autres, mais
+//!   marqué « surcouche » (`Selected::overlay`) : ce voisin est la silhouette et l'empreinte au sol de l'arbre, dont
+//!   les triangles horizontaux sont dans le plan de la face supérieure du sol (14 triangles à −6,53 m, celle de la dalle
+//!   575046 de `wadduwa.rvt`), et que Revit montre pourtant par-dessus. Le lecteur le dit au viewer (un octet de plus par
+//!   matériau) qui le dessine avec un décalage de profondeur : les deux surfaces coplanaires ne se disputent plus.
+//! * `GInstance` à `m_bHasScale` vrai : rvt-rs refuse. Le drapeau dit qu'une échelle peut s'appliquer à l'instance, et l'échelle est
+//!   dans la matrice 3 × 3 de `InstanceInfo.m_Trf` (aucun autre champ d'`InstanceInfo` n'en porte). Ce que les octets montrent : les
+//!   blocs des DWG importées de `wadduwa.rvt` (« Peugeot 208.DWG », « Citroen C4.DWG » : 17 et 9 instances, de matrice identité ; un bloc
+//!   d'un autre import à 25,4 et un à 2 413,27), des blocs à 0,125 chez `rac_advanced` et `mega_advanced`. Toutes ces matrices sont une rotation
+//!   (ou un miroir) multipliée par un nombre : colonnes orthogonales et de même longueur, à 1e-9 près ([`uniform_scale`]). Une telle
+//!   instance se place comme toute autre : le symbole est maillé dans ses unités (`faces::decode`, une fois pour toutes ses instances),
+//!   puis ses sommets passent par la matrice et ses normales par l'inverse transposée, renormalisées (`faces::transform`, comme pour un
+//!   miroir) ; une condition de direction se lit sur la direction de la matrice, sans son échelle (`direction_condition`). Une matrice qui
+//!   n'est pas une échelle uniforme (étirement, cisaillement) n'a pas de lecture établie : un symbole sans surface n'a rien à perdre et
+//!   l'instance se saute, comme une instance à cibles interdites (voir ci-dessous) ; un symbole qui porte des surfaces reste un diagnostic
+//!   (« instance à échelle non uniforme non prise en charge »). Un drapeau absent reste refusé.
+//!   **Exception : les imports CAD du projet (`ImportInstance`).** Leurs blocs à échelle ne sont pas placés, comme avant : `Settings::uniform_scales`
+//!   est faux pour eux, et un tel bloc reste refusé (« instance à échelle non prise en charge ») quand son symbole porte des surfaces. La
+//!   décision de dessiner ou non un import CAD du projet (Revit les montre en 3D selon la visibilité de leur catégorie d'import, que le
+//!   lecteur ne lit pas) est à prendre à part ; y placer les échelles ferait apparaître, sans que personne l'ait décidé, 7 éléments qui
+//!   ne l'étaient pas : les 5 plans DWG de `wadduwa.rvt` (plats, coplanaires avec le dessus des dalles), l'import de 1,5 km de
+//!   `Vignette-04-BaseFile` (308836, qui déplace de 230 m le centre du modèle) et le second import de `dynamo-nyc-site-2013` (230266).
+//! * Le style d'une surface sans matériau : un `GPolyMesh` d'une DWG importée a `m_materialID` et `m_interiorGStyleID` à −1,
+//!   et c'est le `GGroup` du calque (`GInfo.m_categoryId` : un `GStyleElem`) qui porte le style, dont le matériau donne la
+//!   couleur (`Selected::layer`). Voir `geometry::materials`.
 //! * `GComponentRef` : la référence, dans la famille hôte, à une instance imbriquée (le pieu d'une
 //!   semelle sur pieux). Cette instance est un élément à part entière du modèle, avec son propre graphique
 //!   et ses propres règles de visibilité (invisible, groupe, vue) : elle se dessine par elle-même, la
@@ -92,6 +116,17 @@ use crate::geometry::pack::FxMap;
 /// l'en-tête du module, masque 10 de 1 021 instances visibles dont les symboles sont la forme de leur élément).
 const DRAWN_TARGETS: u64 = 0b1010;
 
+/// Les refus d'une instance à cibles interdites ou à échelle dont le symbole porte des surfaces.
+const RESTRICTED_REFUSAL: &str = "instance à cibles interdites dont le symbole porte des surfaces";
+/// Le drapeau `m_bHasScale` est absent, ou la matrice de l'instance n'est pas une échelle uniforme et son symbole porte des surfaces.
+const SCALE_REFUSAL: &str = "instance à échelle non prise en charge";
+const NON_UNIFORM_REFUSAL: &str = "instance à échelle non uniforme non prise en charge";
+
+/// Le diagnostic d'une instance qui n'est pas placée (cibles interdites avant l'échelle) : `None` quand elle se place.
+fn refusal(restricted: bool, scaled: Option<&'static str>) -> Option<&'static str> {
+    if restricted { Some(RESTRICTED_REFUSAL) } else { scaled }
+}
+
 const IDENTITY: GraphicsTransform = [[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]];
 
 /// Les arêtes d'un graphe par (objet source, décalage du pointeur, jeton) ; `None` quand deux arêtes
@@ -115,6 +150,12 @@ pub struct Selected {
     /// `None` : le graphe de l'élément ; `Some` : celui du symbole de famille que l'instance place.
     pub source_owner_id: Option<u64>,
     pub world_transform: GraphicsTransform,
+    /// Le `GPolyMesh` est le voisin d'un `GImposter` (l'image d'un contenu RPC) : surcouche à dessiner par-dessus les
+    /// surfaces coplanaires (voir l'en-tête du module).
+    pub overlay: bool,
+    /// Un `GPolyMesh` : le `GStyleElem` (`GInfo.m_categoryId`) du groupe, du filtre ou du symbole le plus proche qui en a un,
+    /// dans le même graphe ; `-1` s'il n'y en a pas, et pour tout autre nœud.
+    pub layer: i64,
 }
 
 /// Ce que le parcours retient.
@@ -142,6 +183,9 @@ pub struct Pending {
     pub depth: usize,
     pub detail_family: usize,
     pub restricted: bool,
+    /// `m_bHasScale` vrai et instance non placée (matrice qui n'est pas une échelle uniforme, ou échelles non placées par ce parcours) : le
+    /// diagnostic qu'elle donne si son symbole porte des surfaces ; l'instance se saute sinon.
+    pub scaled: Option<&'static str>,
     pub view_resolved: bool,
     pub visits: usize,
     /// Où insérer, dans `selected`, `diagnostics` et `components`, ce que le placement produit.
@@ -154,9 +198,9 @@ pub struct Pending {
 #[derive(Debug, Clone)]
 pub enum ShapeEvent {
     /// Un nœud `Geometry` ou `GPolyMesh` sélectionné : le symbole dont le graphe le porte, son indice d'objet,
-    /// et les transformations d'instance traversées depuis la racine du symbole, dans l'ordre (vide pour un nœud
-    /// du symbole lui-même).
-    Node { owner: u64, object_index: usize, chain: Vec<GraphicsTransform> },
+    /// les transformations d'instance traversées depuis la racine du symbole, dans l'ordre (vide pour un nœud
+    /// du symbole lui-même), et ce que `Selected` dit de la surcouche et du style.
+    Node { owner: u64, object_index: usize, chain: Vec<GraphicsTransform>, overlay: bool, layer: i64 },
     /// Un diagnostic du parcours (indice d'objet, message).
     Diagnostic(usize, String),
 }
@@ -183,13 +227,14 @@ pub struct SymbolShape {
 /// que l'appelant peut garder d'une instance à l'autre ; `shapes(symbole)` rend la forme déjà parcourue d'un
 /// symbole ([`SymbolShape`]), qui dispense de son graphe.
 pub fn select<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64) -> Selection {
-    select_deferring(root, resolver, edges, shapes, detail_level, false)
+    select_deferring(root, resolver, edges, shapes, detail_level, false, true)
 }
 
 /// [`select`], et, si `defer` est vrai, une instance d'un symbole qu'on n'a pas encore (ni forme, ni graphe) est
 /// notée dans `Selection::pending` au lieu d'un diagnostic « graphique du symbole absent » : elle se rejouera par
-/// [`place_pending`] quand le symbole sera lu.
-pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64, defer: bool) -> Selection {
+/// [`place_pending`] quand le symbole sera lu. Si `uniform_scales` est faux, une instance à échelle (`m_bHasScale` vrai) n'est jamais
+/// placée, même d'échelle uniforme : voir l'en-tête du module (les imports CAD du projet).
+pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>, edges: &dyn Fn(u64, &ObjectGraph) -> Arc<EdgeIndex>, shapes: &dyn Fn(u64) -> Option<Arc<SymbolShape>>, detail_level: i64, defer: bool, uniform_scales: bool) -> Selection {
     let mut walk = Walker {
         view: View { graph: root, edges: Arc::new(edge_index(root)) },
         resolver,
@@ -205,6 +250,9 @@ pub fn select_deferring<'a>(root: &'a ObjectGraph, resolver: &dyn Fn(u64) -> Opt
         log: None,
         matrix_sensitive: false,
         defer,
+        uniform_scales,
+        overlay_child: None,
+        layer: -1,
     };
     if !(1..=3).contains(&detail_level) {
         walk.fail(0, "niveau de détail hors de 1 à 3");
@@ -237,8 +285,11 @@ pub fn place_pending<'a>(pending: &Pending, resolver: &dyn Fn(u64) -> Option<&'a
         log: None,
         matrix_sensitive: false,
         defer: false,
+        uniform_scales: true,
+        overlay_child: None,
+        layer: -1,
     };
-    if let Err(message) = walk.enter_symbol(pending.symbol, pending.restricted, pending.view_resolved, pending.matrix, pending.transform, pending.depth) {
+    if let Err(message) = walk.enter_symbol(pending.symbol, pending.restricted, pending.scaled, pending.view_resolved, pending.matrix, pending.transform, pending.depth) {
         walk.fail(pending.object_index, &message);
     }
     walk.result
@@ -278,6 +329,9 @@ pub fn symbol_shape<'a>(graph: &'a ObjectGraph, symbol: u64, resolver: &dyn Fn(u
         log: Some(Vec::new()),
         matrix_sensitive: false,
         defer: false,
+        uniform_scales: true,
+        overlay_child: None,
+        layer: -1,
     };
     walk.visit(0, IDENTITY, 1);
     if walk.matrix_sensitive {
@@ -336,6 +390,12 @@ struct Walker<'a, 'r> {
     matrix_sensitive: bool,
     /// Laisser pour plus tard les instances d'un symbole qu'on n'a pas encore (voir `select_deferring`).
     defer: bool,
+    /// Placer les instances à échelle uniforme (voir `select_deferring`).
+    uniform_scales: bool,
+    /// Le `GPolyMesh` que le parcours va visiter est le voisin d'un `GImposter` (voir `Selected::overlay`).
+    overlay_child: Option<usize>,
+    /// `GInfo.m_categoryId` du conteneur le plus proche qui en a un, dans le graphe visité (`-1` : aucun ; voir `Selected::layer`).
+    layer: i64,
 }
 
 impl<'a> Walker<'a, '_> {
@@ -348,9 +408,12 @@ impl<'a> Walker<'a, '_> {
 
     /// Un nœud `Geometry` ou `GPolyMesh` sélectionné, dans le repère `matrix`.
     fn keep(&mut self, index: usize, matrix: GraphicsTransform) {
-        self.result.selected.push(Selected { object_index: index, source_owner_id: self.source_owner_id, world_transform: matrix });
+        let is_poly_mesh = self.view.graph.objects[index].class_name == "GPolyMesh";
+        let overlay = is_poly_mesh && self.overlay_child == Some(index);
+        let layer = if is_poly_mesh { self.layer } else { -1 };
+        self.result.selected.push(Selected { object_index: index, source_owner_id: self.source_owner_id, world_transform: matrix, overlay, layer });
         if let Some(log) = &mut self.log {
-            log.push(ShapeEvent::Node { owner: self.source_owner_id.unwrap_or(0), object_index: index, chain: self.chain.clone() });
+            log.push(ShapeEvent::Node { owner: self.source_owner_id.unwrap_or(0), object_index: index, chain: self.chain.clone(), overlay, layer });
         }
     }
 
@@ -372,18 +435,18 @@ impl<'a> Walker<'a, '_> {
         let placed = multiply(matrix, transform);
         for event in &shape.events {
             match event {
-                ShapeEvent::Node { owner, object_index, chain } => {
+                ShapeEvent::Node { owner, object_index, chain, overlay, layer } => {
                     if self.detail_family > 0 {
                         self.fail(*object_index, "géométrie d'une famille de détail imbriquée qu'aucune condition de vue n'a écartée");
                         continue;
                     }
                     let world = chain.iter().fold(placed, |m, t| multiply(m, *t));
-                    self.result.selected.push(Selected { object_index: *object_index, source_owner_id: Some(*owner), world_transform: world });
+                    self.result.selected.push(Selected { object_index: *object_index, source_owner_id: Some(*owner), world_transform: world, overlay: *overlay, layer: *layer });
                     if let Some(log) = &mut self.log {
                         let mut full = self.chain.clone();
                         full.push(transform);
                         full.extend(chain.iter().copied());
-                        log.push(ShapeEvent::Node { owner: *owner, object_index: *object_index, chain: full });
+                        log.push(ShapeEvent::Node { owner: *owner, object_index: *object_index, chain: full, overlay: *overlay, layer: *layer });
                     }
                 }
                 ShapeEvent::Diagnostic(index, message) => self.fail(*index, message),
@@ -469,11 +532,20 @@ impl<'a> Walker<'a, '_> {
                         return Err(error);
                     }
                 }
+                // Le voisin d'un imposteur (le contenu RPC) est une surcouche ; le style du conteneur est celui des `GPolyMesh` qu'il porte.
+                let has_imposter = children.iter().any(|&child| graph.objects[child].class_name == "GImposter");
+                let previous_layer = self.layer;
+                if let Some(style) = identifier(&object.fields["m_GInfo"]["m_categoryId"]).filter(|style| *style >= 0) {
+                    self.layer = style;
+                }
                 self.detail_family += usize::from(nested);
                 for child in children {
+                    self.overlay_child = (has_imposter && graph.objects[child].class_name == "GPolyMesh").then_some(child);
                     self.visit(child, matrix, depth + 1);
                 }
+                self.overlay_child = None;
                 self.detail_family -= usize::from(nested);
+                self.layer = previous_layer;
             }
             "GComponentRef" => {
                 let info = self.view.target(index, &object.fields["m_instanceInfo"])?;
@@ -490,9 +562,11 @@ impl<'a> Walker<'a, '_> {
                 self.result.components.push(symbol);
             }
             "GInstance" => {
-                if object.fields["m_bHasScale"].as_bool() != Some(false) {
-                    return Err("instance à échelle non prise en charge".into());
-                }
+                // Une instance à échelle (`m_bHasScale` vrai) se place si sa matrice est une échelle uniforme ; sinon elle se saute quand son
+                // symbole n'a rien à dessiner (voir l'en-tête du module) ; un drapeau absent reste refusé.
+                let Some(flagged) = object.fields["m_bHasScale"].as_bool() else {
+                    return Err(SCALE_REFUSAL.into());
+                };
                 let view_resolved = match object.fields["m_resolveSymInView"].as_bool() {
                     Some(resolved) => resolved,
                     None => return Err("instance dont le symbole dépend de la vue non prise en charge".into()),
@@ -506,6 +580,16 @@ impl<'a> Walker<'a, '_> {
                     return Err("classe d'informations d'instance inattendue".into());
                 }
                 let transform = read_transform(&info.fields["m_Trf"])?;
+                // Une échelle uniforme se place, sauf quand ce parcours ne place aucune échelle (`uniform_scales` faux : un import CAD du projet).
+                let scaled = if !flagged {
+                    None
+                } else if uniform_scale(&transform).is_none() {
+                    Some(NON_UNIFORM_REFUSAL)
+                } else if !self.uniform_scales {
+                    Some(SCALE_REFUSAL)
+                } else {
+                    None
+                };
                 let embedded = &object.fields["m_oEmbeddedSymbolGRep"];
                 if embedded["pointer_token"].as_u64() == Some(0) {
                     if !plain_context(&info.fields) {
@@ -522,6 +606,7 @@ impl<'a> Walker<'a, '_> {
                             depth,
                             detail_family: self.detail_family,
                             restricted,
+                            scaled,
                             view_resolved,
                             visits: self.visits,
                             selected_at: self.result.selected.len(),
@@ -530,14 +615,11 @@ impl<'a> Walker<'a, '_> {
                         });
                         return Ok(());
                     }
-                    self.enter_symbol(symbol, restricted, view_resolved, matrix, transform, depth)?;
+                    self.enter_symbol(symbol, restricted, scaled, view_resolved, matrix, transform, depth)?;
                 } else {
                     let embedded = self.view.target(index, embedded)?;
-                    if restricted && self.bears_surface(&self.view, embedded, &mut HashSet::new(), &mut 0) {
-                        return Err("instance à cibles interdites dont le symbole porte des surfaces".into());
-                    }
-                    if restricted {
-                        return Ok(());
+                    if let Some(message) = refusal(restricted, scaled) {
+                        return if self.bears_surface(&self.view, embedded, &mut HashSet::new(), &mut 0) { Err(message.into()) } else { Ok(()) };
                     }
                     if view_resolved && self.depends_on_view(&self.view, embedded, &mut HashSet::new(), &mut 0) {
                         return Err("instance dont le symbole dépend de la vue non prise en charge".into());
@@ -567,14 +649,11 @@ impl<'a> Walker<'a, '_> {
     /// Place le symbole externe `symbol` d'une instance (nœud `GInstance` visité dans le repère `matrix`, de
     /// transformation `transform`) : par sa forme déjà parcourue, ou par son graphe. Mêmes décisions, dans le même
     /// ordre, par les deux chemins.
-    fn enter_symbol(&mut self, symbol: u64, restricted: bool, view_resolved: bool, matrix: GraphicsTransform, transform: GraphicsTransform, depth: usize) -> Result<(), String> {
+    fn enter_symbol(&mut self, symbol: u64, restricted: bool, scaled: Option<&'static str>, view_resolved: bool, matrix: GraphicsTransform, transform: GraphicsTransform, depth: usize) -> Result<(), String> {
         // La forme déjà parcourue du symbole dispense de son graphe.
         if let Some(shape) = (self.shapes)(symbol) {
-            if restricted && shape.bears_surface {
-                return Err("instance à cibles interdites dont le symbole porte des surfaces".into());
-            }
-            if restricted {
-                return Ok(());
+            if let Some(message) = refusal(restricted, scaled) {
+                return if shape.bears_surface { Err(message.into()) } else { Ok(()) };
             }
             if view_resolved {
                 if shape.depends_on_view {
@@ -587,11 +666,8 @@ impl<'a> Walker<'a, '_> {
             return Ok(());
         }
         let view = self.symbol(symbol)?;
-        if restricted && self.bears_surface(&view, 0, &mut HashSet::new(), &mut 0) {
-            return Err("instance à cibles interdites dont le symbole porte des surfaces".into());
-        }
-        if restricted {
-            return Ok(());
+        if let Some(message) = refusal(restricted, scaled) {
+            return if self.bears_surface(&view, 0, &mut HashSet::new(), &mut 0) { Err(message.into()) } else { Ok(()) };
         }
         if view_resolved {
             if self.depends_on_view(&view, 0, &mut HashSet::new(), &mut 0) {
@@ -603,11 +679,15 @@ impl<'a> Walker<'a, '_> {
             return Ok(());
         }
         let (previous_view, previous_owner) = (std::mem::replace(&mut self.view, view), self.source_owner_id.replace(symbol));
+        // Le style et la surcouche ne passent pas d'un graphe à l'autre : le symbole a les siens.
+        let (previous_layer, previous_overlay) = (std::mem::replace(&mut self.layer, -1), self.overlay_child.take());
         self.chain.push(transform);
         self.visit(0, multiply(matrix, transform), depth + 1);
         self.chain.pop();
         self.view = previous_view;
         self.source_owner_id = previous_owner;
+        self.layer = previous_layer;
+        self.overlay_child = previous_overlay;
         Ok(())
     }
 
@@ -772,6 +852,21 @@ fn read_transform(value: &Value) -> Result<GraphicsTransform, String> {
     Ok(m)
 }
 
+/// Le facteur d'une matrice qui est une rotation (ou un miroir) multipliée par un nombre : ses trois colonnes sont orthogonales et de même
+/// longueur, à 1e-9 près en valeur relative. `None` pour un étirement ou un cisaillement, et pour une matrice nulle.
+pub fn uniform_scale(m: &GraphicsTransform) -> Option<f64> {
+    let column = |j: usize| [m[0][j], m[1][j], m[2][j]];
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let scale = dot(column(0), column(0)).sqrt();
+    if !scale.is_finite() || scale <= 0. {
+        return None;
+    }
+    let tolerance = 1e-9 * scale;
+    let equal = (0..3).all(|j| (dot(column(j), column(j)).sqrt() - scale).abs() <= tolerance);
+    let orthogonal = [(0, 1), (0, 2), (1, 2)].iter().all(|&(i, j)| dot(column(i), column(j)).abs() <= tolerance * scale);
+    (equal && orthogonal).then_some(scale)
+}
+
 fn multiply(a: GraphicsTransform, b: GraphicsTransform) -> GraphicsTransform {
     let mut result = [[0.; 4]; 4];
     for i in 0..4 {
@@ -804,6 +899,18 @@ fn direction_condition(value: &Value, matrix: GraphicsTransform) -> Result<bool,
     if length < 1e-12 {
         return Err("direction du filtre nulle".into());
     }
+    // Une matrice à échelle (instance à `m_bHasScale`) allonge la direction sans la tourner : seule la direction compte. Une matrice sans
+    // échelle (la rotation ou le miroir d'avant) n'est pas touchée, bit pour bit.
+    let local_length = local.iter().map(|x| x * x).sum::<f64>().sqrt();
+    let length = if local_length > 0. && (length / local_length - 1.).abs() > 1e-9 {
+        let ratio = length / local_length;
+        for component in &mut world {
+            *component /= ratio;
+        }
+        local_length
+    } else {
+        length
+    };
     let actual = [-0.577350269189625, -0.577350269189627, 0.577350269189626];
     let answer = match comparison {
         10 | 11 => {

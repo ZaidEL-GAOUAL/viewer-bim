@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use revit::geometry::pack::MATERIAL_STRIDE;
 use revit::geometry::{self, Geometry};
 use revit::Context;
 
@@ -64,10 +65,10 @@ fn check(geometry: &Geometry) -> f64 {
     // Primitives : bornes, matériaux, indices locaux, sans triangle en double.
     assert_eq!(geometry.indices.len() % 3, 0);
     assert_eq!(geometry.primitives.len() % 6, 0);
-    assert_eq!(geometry.materials.len() % 6, 0);
+    assert_eq!(geometry.materials.len() % MATERIAL_STRIDE, 0);
     let vertices = geometry.positions.len() / 3;
-    let materials = geometry.materials.len() / 6;
-    assert!(geometry.materials.chunks_exact(6).all(|row| row[4] <= 1 && row[5] <= 1 && (row[4] == 1) == (row[3] < 255)));
+    let materials = geometry.materials.len() / MATERIAL_STRIDE;
+    assert!(geometry.materials.chunks_exact(MATERIAL_STRIDE).all(|row| row[4] <= 1 && row[5] <= 1 && row[6] <= 1 && (row[4] == 1) == (row[3] < 255)));
     let mut drawn = vec![false; elements];
     let (mut agreeing, mut total) = (0usize, 0usize);
     for primitive in geometry.primitives.chunks_exact(6) {

@@ -81,7 +81,7 @@ fn main() -> ExitCode {
             .primitives
             .iter()
             .zip(&meshes.ours)
-            .map(|(primitive, own)| Face { vertices: &primitive.vertices, normals: Some(&primitive.normals), triangles: &primitive.triangles, paint: if *own { ours } else { others } })
+            .map(|(primitive, own)| Face { vertices: &primitive.vertices, normals: Some(&primitive.normals), triangles: &primitive.triangles, paint: if *own { ours } else { others }, overlay: false })
             .collect();
         let own: usize = meshes.primitives.iter().zip(&meshes.ours).filter(|(_, own)| **own).map(|(primitive, _)| primitive.triangles.len()).sum();
         (ElementMesh::build(&list), meshes.unbounded_faces, meshes.diagnostics.len(), own)

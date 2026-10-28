@@ -34,6 +34,9 @@ import { buildBlocks } from './triangleBlocks.ts';
 /** Calque des lots transparents : exclus des passes de remplissage des coupes. */
 export const TRANSPARENT_LAYER = 1;
 
+/** Octets d'une ligne de la table des matériaux d'un modèle brut (lecteur Revit) : r, g, b, a, transparent, double face, surcouche. */
+export const MATERIAL_STRIDE = 7;
+
 interface NodeDef {
   name?: string;
   extras?: Record<string, unknown>;
@@ -55,12 +58,24 @@ interface SourceMaterial {
   packed: number;
   transparent: boolean;
   doubleSided: boolean;
+  /**
+   * Surcouche : les triangles se dessinent par-dessus les surfaces coplanaires (l'image d'un contenu RPC posée sur le sol,
+   * que Revit montre pleine), par un décalage de profondeur négatif (`OVERLAY_POLYGON_OFFSET`). Une surcouche a son propre
+   * lot : elle n'est jamais fusionnée avec des triangles ordinaires de la même couleur.
+   */
+  overlay: boolean;
   vertexColors: boolean;
   map: Texture | null;
   /** Attribut de coordonnées de texture utilisé par `map` (uv, uv1, uv2…). */
   uvAttribute: string;
   alphaTest: number;
 }
+
+/**
+ * Décalage de profondeur (facteur, unités) d'un lot de surcouche : négatif, il rapproche les triangles de la caméra, qui
+ * gagnent contre une face coplanaire (le sol de l'arbre) sans traverser ce qui est vraiment devant eux.
+ */
+export const OVERLAY_POLYGON_OFFSET = { factor: -1, units: -4 } as const;
 
 /**
  * Un morceau de géométrie à fusionner, quelle que soit son origine (maillage glTF ou USD, primitive
@@ -126,7 +141,7 @@ export interface RawModel {
   indices: Uint32Array;
   /** Six entiers par primitive : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. */
   primitives: Uint32Array;
-  /** Six octets par matériau : r, g, b, a (sRGB), transparent (0/1), double face (0/1). */
+  /** Sept octets par matériau : r, g, b, a (sRGB), transparent (0/1), double face (0/1), surcouche (0/1). */
   materials: Uint8Array;
 }
 
@@ -313,6 +328,7 @@ function collectScene(source: ModelSource): Collected {
       const baseA = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
       info = {
         key: `${map ? material.uuid : 'uni'}|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}`,
+        overlay: false,
         r,
         g,
         b,
@@ -460,7 +476,7 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
     if (raw.names.length !== raw.keys.length || (raw.extras && raw.extras.length > raw.keys.length)) {
       throw new Error('Modèle brut incohérent : les clés, noms et propriétés des éléments ne correspondent pas.');
     }
-    if (raw.primitives.length % 6 !== 0 || raw.materials.length % 6 !== 0) {
+    if (raw.primitives.length % 6 !== 0 || raw.materials.length % MATERIAL_STRIDE !== 0) {
       throw new Error('Modèle brut incohérent : les tables de primitives et de matériaux sont mal formées.');
     }
     elementCount += raw.keys.length;
@@ -472,13 +488,15 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
   const sources: SourceMaterial[] = [];
   const sourceByRow = new Map<string, SourceMaterial>();
   const sourceOf = (materials: Uint8Array, m: number): SourceMaterial => {
-    const row = `${materials[m]},${materials[m + 1]},${materials[m + 2]},${materials[m + 3]},${materials[m + 4]},${materials[m + 5]}`;
+    const row = `${materials[m]},${materials[m + 1]},${materials[m + 2]},${materials[m + 3]},${materials[m + 4]},${materials[m + 5]},${materials[m + 6]}`;
     let source = sourceByRow.get(row);
     if (source) return source;
     const transparent = materials[m + 4] !== 0;
     const doubleSided = materials[m + 5] !== 0;
+    const overlay = materials[m + 6] !== 0;
     source = {
-      key: `uni|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}`,
+      key: `uni|${transparent ? 't' : 'o'}|${doubleSided ? 'd' : 's'}${overlay ? '|v' : ''}`,
+      overlay,
       r: srgbByteToLinear(materials[m]),
       g: srgbByteToLinear(materials[m + 1]),
       b: srgbByteToLinear(materials[m + 2]),
@@ -516,7 +534,7 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
   for (const raw of chunks) {
     const { positions, normals, indices, primitives, materials } = raw;
     const local: SourceMaterial[] = [];
-    for (let m = 0; m < materials.length; m += 6) local.push(sourceOf(materials, m));
+    for (let m = 0; m < materials.length; m += MATERIAL_STRIDE) local.push(sourceOf(materials, m));
     for (let i = 0; i < raw.keys.length; i++) {
       keys.push(raw.keys[i]);
       names.push(raw.names[i] || raw.keys[i]);
@@ -970,6 +988,10 @@ export class ModelBuilder {
           depthWrite: !source.transparent,
           map: source.map,
           alphaTest: source.alphaTest,
+          // Une surcouche gagne contre les faces coplanaires (voir `SourceMaterial.overlay`).
+          polygonOffset: source.overlay,
+          polygonOffsetFactor: source.overlay ? OVERLAY_POLYGON_OFFSET.factor : 0,
+          polygonOffsetUnits: source.overlay ? OVERLAY_POLYGON_OFFSET.units : 0,
         });
         applyElementState(material, state, this.selectColor);
         this.materials.set(source.key, material);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, PerspectiveCamera, Ray, Raycaster, Sphere, Vector2, Vector3, type Object3D } from 'three';
-import { ModelBuilder, TRANSPARENT_LAYER, buildModel, type ModelSource, type RawModel } from '../src/engine/buildModel.ts';
+import { Box3, BufferAttribute, BufferGeometry, Color, DoubleSide, Group, Mesh, MeshBasicMaterial, MeshLambertMaterial, PerspectiveCamera, Ray, Raycaster, Sphere, Vector2, Vector3, type Object3D } from 'three';
+import { MATERIAL_STRIDE, ModelBuilder, OVERLAY_POLYGON_OFFSET, TRANSPARENT_LAYER, buildModel, type ModelSource, type RawModel } from '../src/engine/buildModel.ts';
 import { Sections } from '../src/engine/Sections.ts';
 import { Viewer } from '../src/engine/Viewer.ts';
 import type { Model } from '../src/engine/Model.ts';
@@ -74,8 +74,11 @@ function rawModel(
   };
 }
 
-const OPAQUE = [200, 100, 50, 255, 0, 0];
-const GLASS = [30, 120, 200, 128, 1, 1];
+// Sept octets par matériau : r, g, b, a, transparent, double face, surcouche.
+const OPAQUE = [200, 100, 50, 255, 0, 0, 0];
+const GLASS = [30, 120, 200, 128, 1, 1, 0];
+/** La même couleur que OPAQUE, en surcouche (le voisin d'un imposteur RPC). */
+const OVERLAY = [200, 100, 50, 255, 0, 0, 1];
 const ORIGIN: [number, number, number] = [1000.5, 20, -300];
 
 function threeElements(): RawModel {
@@ -200,7 +203,7 @@ test('plusieurs matériaux de mêmes réglages partagent un lot, chacun avec sa 
       { element: 0, shape: cube([0, 0, 0], 1), material: 0 },
       { element: 1, shape: cube([3, 0, 0], 1), material: 1 },
     ],
-    [10, 20, 30, 255, 0, 0, 40, 50, 60, 255, 0, 0],
+    [10, 20, 30, 255, 0, 0, 0, 40, 50, 60, 255, 0, 0, 0],
   ), select());
   assert.equal(model.chunks.length, 1);
   const colors = model.chunks[0].mesh.geometry.getAttribute('color').array as Uint8Array;
@@ -294,6 +297,70 @@ test('un modèle brut incohérent est refusé au lieu de lire hors des tampons',
   const unknownElement = threeElements();
   unknownElement.primitives[0] = 7;
   assert.throws(() => buildModel(unknownElement, select()), /incohérent/);
+  // Une table de matériaux à six octets par ligne (l'ancien pas) n'est plus lisible : sept octets par ligne.
+  assert.equal(MATERIAL_STRIDE, 7);
+  const sixBytes = threeElements();
+  sixBytes.materials = new Uint8Array([200, 100, 50, 255, 0, 0, 30, 120, 200, 128, 1, 1]);
+  assert.throws(() => buildModel(sixBytes, select()), /incohérent/);
+});
+
+// ------------------------------------------------------------------------- surcouche (image d'un contenu RPC)
+
+test('une surcouche a son propre lot et un décalage de profondeur négatif, jamais fusionnée avec une face de la même couleur', () => {
+  // Un sol (opaque) et l'empreinte d'un arbre (même couleur, surcouche) dans le même plan.
+  const model = buildModel(rawModel(
+    ['sol', 'arbre'], ['Sol', 'Arbre'], [0, 0, 0],
+    [
+      { element: 0, shape: quad(-5, -5, 5, 5, 0), material: 0 },
+      { element: 1, shape: quad(-1, -1, 1, 1, 0), material: 1 },
+    ],
+    [...OPAQUE, ...OVERLAY],
+  ), select());
+  assert.equal(model.chunks.length, 2, 'deux lots : le sol et la surcouche, malgré la même couleur');
+  const offsets = model.chunks.map((chunk) => {
+    const material = chunk.mesh.material as MeshLambertMaterial;
+    return { offset: material.polygonOffset, factor: material.polygonOffsetFactor, units: material.polygonOffsetUnits };
+  });
+  const over = offsets.filter((o) => o.offset);
+  const plain = offsets.filter((o) => !o.offset);
+  assert.equal(over.length, 1);
+  assert.equal(plain.length, 1);
+  assert.deepEqual(over[0], { offset: true, factor: OVERLAY_POLYGON_OFFSET.factor, units: OVERLAY_POLYGON_OFFSET.units });
+  assert.ok(over[0].factor < 0 && over[0].units < 0, 'le décalage rapproche la surcouche de la caméra');
+  assert.deepEqual(plain[0], { offset: false, factor: 0, units: 0 });
+  // Chaque élément est dans son lot : le sol dans le lot ordinaire, l'arbre dans la surcouche.
+  const chunkOf = (element: number) => model.chunks[model.ranges[element][0].chunk];
+  assert.notEqual(chunkOf(0), chunkOf(1));
+  assert.ok(!(chunkOf(0).mesh.material as MeshLambertMaterial).polygonOffset);
+  assert.ok((chunkOf(1).mesh.material as MeshLambertMaterial).polygonOffset);
+  // La couleur est celle des octets, comme pour tout matériau.
+  const colors = chunkOf(1).mesh.geometry.getAttribute('color').array as Uint8Array;
+  assert.deepEqual(Array.from(colors.subarray(0, 4)), [200, 100, 50, 255]);
+  model.dispose();
+});
+
+test('deux surcouches de même couleur partagent un lot et un matériau', () => {
+  const model = buildModel(rawModel(
+    ['arbre-1', 'arbre-2'], ['Arbre 1', 'Arbre 2'], [0, 0, 0],
+    [
+      { element: 0, shape: quad(0, 0, 1, 1, 0), material: 0 },
+      { element: 1, shape: quad(3, 0, 4, 1, 0), material: 0 },
+    ],
+    [...OVERLAY],
+  ), select());
+  assert.equal(model.chunks.length, 1);
+  assert.ok((model.chunks[0].mesh.material as MeshLambertMaterial).polygonOffset);
+  model.dispose();
+});
+
+test('un modèle bâti morceau par morceau garde la surcouche d\'un morceau à l\'autre', () => {
+  const builder = new ModelBuilder(select());
+  builder.append(rawModel(['sol'], ['Sol'], ORIGIN, [{ element: 0, shape: quad(-5, -5, 5, 5, 0), material: 0 }], [...OPAQUE]));
+  builder.append(rawModel(['arbre'], ['Arbre'], ORIGIN, [{ element: 0, shape: quad(-1, -1, 1, 1, 0), material: 1 }], [...OPAQUE, ...OVERLAY]));
+  const model = builder.model;
+  assert.equal(model.chunks.length, 2);
+  assert.equal(model.chunks.filter((chunk) => (chunk.mesh.material as MeshLambertMaterial).polygonOffset).length, 1);
+  model.dispose();
 });
 
 // ----------------------------------------------------------------- parité avec le chemin glTF / USD

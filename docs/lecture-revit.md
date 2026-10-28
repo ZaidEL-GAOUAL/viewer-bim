@@ -100,7 +100,7 @@ n'existe pas en WebAssembly.
 | `normals` | `Float32Array`, une normale unitaire par sommet. |
 | `indices` | `Uint32Array`, coins des triangles, locaux au premier sommet de leur primitive. |
 | `primitives` | `Uint32Array`, six entiers par primitive : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. |
-| `materials` | `Uint8Array`, six octets par matériau : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1). |
+| `materials` | `Uint8Array`, sept octets par matériau : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1), surcouche (0 ou 1 : les triangles se dessinent par-dessus les surfaces coplanaires, voir § 3). Ce tableau est interne entre le module et le viewer, pas le contrat de métadonnées. |
 | `metadata` | Texte JSON, exactement le format de [contrat-metadonnees.md](contrat-metadonnees.md) (version 1, `readOnly`, `elements`, et si le fichier les donne `georeference`, `phases` et `views`). |
 | `report` | Bilan de la lecture, voir ci-dessous. |
 
@@ -160,7 +160,7 @@ Ce que le lecteur retient des graphiques enregistrés est ce qu'une vue 3D ombr�
 niveau de détail fin). Les octets des fichiers d'essai (`cargo run --release --example graph -- --classes <fichier>`)
 décident des cas que rvt-rs refuse : les flèches de retournement (`GBiFlipControl`) ne sont pas des surfaces
 et le miroir d'une instance est dans sa matrice ; l'image d'un contenu RPC (`GImposter`, actif nul) n'a rien à
-dessiner et son maillage voisin (`GPolyMesh`) se dessine ; une famille de détail imbriquée (arcs de
+dessiner et son maillage voisin (`GPolyMesh`) se dessine, en surcouche (voir plus bas) ; une famille de détail imbriquée (arcs de
 battement, régions remplies) ne se montre que dans les vues dont la direction correspond (plan, élévation) ;
 une instance imbriquée référencée par son hôte (`GComponentRef`) se dessine comme élément, pas deux fois. Les normales d'un `GPolyMesh` sont par
 sommet (indicateur 0) ou par facette (indicateur 2). Ce qui n'est pas compris reste un diagnostic : la forme
@@ -199,6 +199,79 @@ d'essai tranchent (mesurés par `examples/census.rs`, partie 4, et `examples/gra
   panneaux de toiture de Vignette-04 (54), les bols de SampleModel (4), les sculptures de `revit-curtainwall-byprofile_v21` (2)
   et la coque de `ShellFamily.rfa` en portent. Les points d'arête que Revit enregistre se retrouvent à 0,08 mm près
   (`examples/faces.rs`, couples `HermiteSurf/Plane` et `HermiteSurf/HermiteSurf`).
+
+- **DWG importée dans une famille (les voitures de `wadduwa.rvt`).** Une DWG importée dans une famille est un `MasterImportSymbol`
+  (« Peugeot 208.DWG », « Citroen C4.DWG ») : un graphique de maillages de facettes (`GPolyMesh`, une dizaine par voiture, un par calque), de
+  polylignes (`GPolyLine`, qui ne se dessinent pas) et d'instances (`GInstance`) de blocs, des `SlaveImportSymbol` (calques vides comme
+  `.AVE_RENDER` et `.AVE_GLOBAL`, qui ne sont qu'un `GElement`, et les roues). Le symbole de la voiture (« Blue Car », « Red Car ») le place par une instance, et la
+  forme de chaque voiture pèse 120 000 à 140 000 triangles (148 926 pour la Peugeot, dont 7 120 de roues, 123 868 pour la Citroën). Ces deux enregistrements
+  sont les plus gros des fichiers d'essai (3 769 685 et 3 363 927 octets, 1 970 695 et 1 739 483 valeurs, 198 et 451 objets) : 1,9 octet par valeur. Le
+  budget de décodage d'un graphique (`saved::GRAPH_LIMIT`, 1 million de valeurs et d'objets) les refusait, et les cinq voitures
+  n'étaient que des boîtes « Inconnue ». Deux budgets, désormais (`revit/src/geometry/saved.rs`, `graph_limit`) :
+  - les graphiques que l'on dessine (canal 103) : **3 millions** de valeurs et d'objets (`GEOMETRY_GRAPH_LIMIT`), une marge d'un tiers
+    sur les 1,97 million de la Peugeot ; un enregistrement de moins de 8 Mo en tient dès qu'il pèse 2,7 octets par valeur ou moins ;
+  - les enregistrements d'éléments (canal 102, les propriétés) : **1 million**, comme avant (`GRAPH_LIMIT`).
+  La borne en octets qui écarte un enregistrement avant de le décoder (`native::records::MAX_RECORD_BYTES`) ne suit pas le budget : elle reste
+  celle du million de valeurs, 1 000 000 × 8 = **8 000 000 octets**, pour les deux canaux. Sans elle, élever le budget laissait décoder (pour le refuser ensuite)
+  le `DirectShapeType` de 16,5 Mo de `2024_Core_Interior` (130286) : le pic de ce fichier passait de 274 à 1 356 Mo sans rien changer à sa
+  sortie (mesuré avec un budget de 4 millions). Il reste refusé d'emblée, sans rien coûter. Le graphe décodé d'un tel symbole (157 Mo pour la Peugeot, 148 Mo pour la Citroën, soit 42 à 44 fois leur enregistrement)
+  ne vit que le temps de son parcours : le cache des symboles garde la forme et les nœuds maillés (`GPolyMesh` en f64, un sommet par coin de facette : environ
+  23 Mo pour la Peugeot, 19 Mo pour la Citroën), jamais le graphe. Le pic de `wadduwa.rvt` passe de 716 à 970 Mo environ en natif (`/usr/bin/time -l`, maillage sur
+  plusieurs fils ; 703 à 838 Mo sur un seul) et la mémoire de l'instance WebAssembly de 254 à 418 Mio, pour une sortie qui passe de 340 000 à 1,01 million de triangles ; celui d'aucun fichier
+  dont la sortie ne change pas ne bouge, au bruit près (± 3 %).
+  - *Les instances à échelle.* Les instances de blocs de chaque voiture (9 pour la Citroën, 17 pour la Peugeot) ont `m_bHasScale` vrai (matrice
+    identité), et le lecteur refusait toute instance à échelle (rvt-rs aussi). L'échelle est dans la matrice 3 × 3 de `InstanceInfo.m_Trf`
+    (aucun autre champ d'`InstanceInfo` n'en porte) : toutes celles des fichiers d'essai sont une rotation ou un miroir multipliés
+    par un nombre (colonnes orthogonales et de même longueur, à 1e-9 près en valeur relative : `faces::select::uniform_scale`), de l'identité
+    de ces blocs à 0,125 chez `rac_advanced` et 25,4, 75 ou 2 413,27 chez les plans DWG de `wadduwa.rvt` (aucune échelle non uniforme). Une
+    telle instance **se place comme toute autre** : le symbole est maillé dans ses unités, une fois pour toutes ses instances (`faces::decode`),
+    puis ses sommets passent par la matrice et ses normales par l'inverse transposée, renormalisées (comme le miroir d'une instance) ; une
+    condition de direction de filtre se lit sur la direction de la matrice, sans son échelle. La flèche de maillage (1 mm) est donc celle des
+    unités du symbole, et vaut 75 mm à l'échelle 75 : sans effet sur les fichiers d'essai, dont les symboles à échelle ne portent que des
+    `GPolyMesh` (les facettes sont reprises telles quelles) et des faces planes, qui ne se tessellent pas à une flèche. Une matrice qui n'est pas
+    une échelle uniforme (étirement, cisaillement) n'a pas de lecture établie : un symbole qui porte des surfaces reste un diagnostic
+    (« instance à échelle non uniforme non prise en charge », forme partielle) ; un symbole sans surface (calque vide comme `.AVE_RENDER`,
+    lignes seulement) n'a rien à perdre, l'instance se saute. Les deux voitures sont donc entières : « Forme Revit ». **Exception : les imports
+    CAD du projet (classe `ImportInstance`, une DWG importée dans le modèle et non dans une famille).** Leurs blocs à échelle restent non placés,
+    comme avant, en attendant une décision à part : Revit montre ou non un import CAD du projet dans une vue 3D selon la visibilité de sa catégorie
+    d'import, que le lecteur ne lit pas, et les placer ferait apparaître sans que personne l'ait décidé sept éléments qui ne l'étaient pas. Cas mesurés :
+    les 5 plans DWG de `wadduwa.rvt` (508410, 508602, 508706, 509408, 509601 : des régions pleines plates, de 128 à 773 triangles, à la hauteur de chaque
+    niveau donc coplanaires avec le dessus des dalles), l'import de `Vignette-04-BaseFile` (308836 : 16 632 triangles sur 1,5 km, qui déplacerait de
+    230 m le centre du modèle) et le second import de `dynamo-nyc-site-2013` (230266). Cet élément reste donc, comme avant, une forme qui n'est pas dessinée
+    (`Settings::uniform_scales` faux pour sa classe, `saved::PROJECT_IMPORT_CLASS`). Aucun autre fichier d'essai ne change : sur les 57 fichiers, seules les 5 voitures
+    de `wadduwa.rvt` ont une sortie différente (435 éléments, 1 034 248 triangles, sources 432/3/0/0).
+  - *La couleur.* Les facettes n'ont ni matériau ni style de rendu (`m_materialID` et `m_interiorGStyleID` à −1) : rvt-rs les résout au gris du
+    viewport. Leur couleur est dans le `GStyleElem` que cite `GInfo.m_categoryId` du groupe de leur calque (type 3, possédé par
+    le `MasterImportSymbol`), par son `GStyle.m_materialElemId` : un style d'objet, que Revit applique à une surface sans matériau. Le `CategoryElem`
+    du calque (« 0 ») n'a pas de matériau propre, et la couleur de ligne du style (`GStyle.m_color`, avec `m_penNumber`) vaut 0 pour les 34 styles d'import
+    des deux voitures : elle ne dit rien, elle n'est pas utilisée. Le matériau passe par le résolveur ordinaire (couleur d'apparence, rattrapée par la couleur
+    d'ombrage quand elle est noire, voir `geometry::materials`). Résultat, par part des triangles de l'élément :
+    « Blue Car » 35,0 % bleu (15 21 143), 29,2 % noir (4 4 5), 13,8 % noir (0 0 0), 11,9 % blanc (7,1 % de calque blanc, 4,8 % de roues), 5,6 % gris 105, 3,1 % vitre (15 15 18, 30 % de
+    transparence), 1,0 % feux (53 19 20), 0,4 % gris ; « Red Car » 40,1 % rouge (130 0 0), 19,6 % gris foncé (25 25 34), 15,7 % (21 21 21),
+    12,4 % gris clair (173), 6,3 % (15 15 18, transparent), 2,8 % (15 15 18), 2,4 % rouge vif (255 0 0), 0,5 % (53 19 20), 0,1 % gris et 0,1 % bleu. La
+    carrosserie est bleue ou rouge, les parties communes (pneus, calandre, vitre) sont les mêmes. Des anomalies de données, que le
+    résolveur n'invente pas : des matériaux des deux imports partagent un même élément d'apparence (`m_appearanceAssetId`), dont la couleur n'est pas celle de
+    leur ombrage : « CITROEN C4 7 » (ombrage 155 0 0) a l'apparence de la vitre de la Peugeot et se dessine en vitre (6,3 %), « CITROEN C4 9 » celle de la
+    carrosserie bleue (0,1 %), « CITROEN C4 5 » (ombrage 66 66 66) une apparence rouge vive (2,4 %). La carrosserie, elle, ne change pas de couleur.
+    Les huit roues de la Peugeot (7 120 triangles) sont blanches : leur groupe est celui du calque « 0 » (style de type 1, `GStyleElem` 367827,
+    matériau « Render Material 255-255-255 »), pas celui du bloc qui les place ; le lecteur suit les octets du fichier.
+- **Contenu RPC posé sur le sol (surcouche).** Le symbole d'un arbre RPC (« M_RPC Tree », `GImposter` à actif nul) a pour voisin un
+  `GPolyMesh` : la silhouette et l'empreinte au sol que Revit dessine en vue ombrée. Les 14 triangles horizontaux de l'empreinte
+  d'un de ces arbres, dans `wadduwa.rvt`, sont à −6,53 m, exactement la face supérieure de la dalle (575046) : deux surfaces
+  coplanaires que le viewer dessinait en scintillant (« z-fighting »), là où Revit montre l'arbre plein sur le sol. Les triangles de ce
+  `GPolyMesh` (celui d'un `GFilter` ou d'un `GGroup` qui porte aussi un `GImposter`, `faces::select::Selected::overlay`) sont marqués
+  « surcouche » : un septième octet de la table des matériaux (`materials`, voir § 2), jamais groupé avec des triangles
+  ordinaires de la même couleur (primitive et matériau à part). Le viewer dessine un lot de surcouche avec un décalage de profondeur
+  négatif (`polygonOffset`, facteur −1, unités −4 : `OVERLAY_POLYGON_OFFSET` dans `src/engine/buildModel.ts`), qui le fait gagner contre
+  une face coplanaire sans traverser ce qui est vraiment devant. L'export GLB n'en dit rien (glTF n'a pas de décalage de profondeur) et la carte
+  Cesium non plus : l'arbre y reste coplanaire avec le sol. Les triangles de surcouche ne se trouvent que là où un `GImposter` existe :
+  `wadduwa.rvt` (4 arbres, 2 594 triangles), `rac_advanced` et `mega_advanced` (35 primitives, 29 961 triangles chacun), `SampleModel`
+  (18 primitives, 10 187), `RE1-Electrical` (2 primitives, 1 088) et `DynamoSample_2014`, `_2023`, `_2024` et `_2025` (2 primitives, 332 chacun) ;
+  aucun des autres fichiers d'essai. Les triangles dessinés ne changent pas, seules leurs primitives se séparent (l'empreinte exacte de la forme, que
+  comparent les essais de non-régression, ne dépend pas de la surcouche).
+- **Les textures ne sont pas dans le fichier.** Les 359 chemins d'image de `wadduwa.rvt` (`1/Mats/…jpg`) désignent la bibliothèque de
+  matériaux d'Autodesk sur la machine de l'auteur : aucun flux d'image n'existe dans le fichier, sauf l'aperçu `RevitPreview4.0`. Le
+  lecteur ne dessine donc que les couleurs des matériaux, jamais de texture.
 
 Ne sont pas dessinés, comme dans une vue 3D de Revit et comme l'`IfcSpace` du convertisseur IFC :
 pièces, surfaces, espaces, niveaux, axes, plans de référence, caméras et vues, boîtes de coupe et
@@ -672,8 +745,8 @@ Couverture mesurée sur les fichiers d'essai de 2012 à 2014 (éléments dessin�
 | clockwork-wall-stuff-2014.rvt | 2014 | 65 | 64 | 1 | 7 056 |
 | clockwork-roof-floor-stuff-2014.rvt | 2014 | 9 | 8 | 1 | 153 918 |
 
-Les trois formes partielles viennent de trous du mailleur qui existent à toutes les années : une instance à échelle (site de
-2013), une face `OffsetSurf` (toit) et des faces `SharedSurface` (système de murs-rideaux). Plusieurs projets d'essai de
+Les trois formes partielles viennent de trous du mailleur qui existent à toutes les années : une face `Plane` au contour non raccordé (site de
+2013 ; ses instances à échelle uniforme se placent depuis, § 3), une face `OffsetSurf` (toit) et des faces `SharedSurface` (système de murs-rideaux). Plusieurs projets d'essai de
 Dynamo sont des gabarits vides dont seules les familles sont chargées : ils ne dessinent rien, comme leur réenregistrement de
 2016. Restent non lus : Revit 2011 et avant (aucun fichier public sous licence libre ; une famille de 2007 montre une autre
 disposition des partitions : elle est refusée par la date de son build, « Revit antérieur à 2012 : ce fichier a été enregistré
@@ -923,7 +996,7 @@ triangles pendant le maillage : chaque forme achevée rejoint le morceau en cour
 oublié. Chaque symbole de famille est parcouru une fois, sa forme et ses nœuds maillés gardés, son graphe libéré ; les
 graphes décodés de rvt-rs (de 61 à 142 fois les octets d'un enregistrement) ne vivent que le temps d'un lot, borné en
 octets (128 Kio d'enregistrements sur un seul fil ; les files d'attente des définitions et des symboles, 1 et 2 Mio) ;
-un enregistrement que le budget de rvt-rs refuserait (plus de 8 Mo) n'est pas décodé ; une instance dont le symbole
+un enregistrement de plus de 8 000 000 octets (`native::records::MAX_RECORD_BYTES`) n'est pas décodé, et un graphique (canal 103) l'est jusqu'à 3 millions de valeurs (§ 3) ; une instance dont le symbole
 n'est pas encore lu n'attend plus avec son graphe, son placement est rejoué après la lecture des symboles, par tranches
 de 128 éléments.
 
@@ -1062,6 +1135,12 @@ Limites actuelles.
   partielle sur les fichiers d'essai (composants adaptatifs, instances à cibles interdites de masque 10, symboles résolus dans la vue sans
   condition, groupes étiquetés et surfaces d'Hermite se dessinent, § 3) ; un fichier dense de ces années ne pèse plus que 9 à 15
   fois sa taille en mémoire pendant la lecture, contre 44 à 72 avant (§ 7).
+- Une DWG importée dans une famille se dessine en couleurs de calque (§ 3), avec ses blocs à échelle uniforme ; une instance à échelle non uniforme
+  qui porte des surfaces reste un diagnostic (forme partielle), aucune n'existe dans les fichiers d'essai. Les textures des matériaux ne sont pas dans le
+  fichier (§ 3).
+- Les imports CAD du projet lui-même (`ImportInstance`) placés avec une échelle restent non lus, comme avant, en attendant qu'on décide s'il faut
+  les dessiner : les 5 plans DWG de `wadduwa.rvt`, l'import de 1,5 km de `Vignette-04` (308836), le second import de `dynamo-nyc-site-2013` (230266) (§ 3). Ce que Revit
+  en montre dans une vue 3D (catégories d'import visibles ou non) n'est pas lu.
 - Ce que les fichiers d'essai ne tranchent pas reste un diagnostic, donc une forme partielle : les masques de cibles interdites autres que
   10 sur une instance visible dont le symbole porte des surfaces (aucun n'existe dans les fichiers d'essai), un symbole résolu dans la vue
   dont le graphique contient des conditions, une surface d'Hermite périodique. Les surfaces d'Hermite sont maillées à 3 mm (0,01 pied) au

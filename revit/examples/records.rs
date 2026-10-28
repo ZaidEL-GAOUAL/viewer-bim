@@ -17,8 +17,9 @@ use std::time::Instant;
 use revit::native::{self, Options};
 
 fn options(channel: u64) -> Options {
-    // Les mêmes plafonds que `geometry::saved::GRAPH_LIMIT`.
-    Options { channels: BTreeSet::from([channel]), max_graph_values: 1_000_000, max_graph_objects: 1_000_000, ..Default::default() }
+    // Les mêmes plafonds que la lecture de la géométrie (`geometry::saved::graph_limit`).
+    let limit = revit::geometry::saved::graph_limit(channel);
+    Options { channels: BTreeSet::from([channel]), max_graph_values: limit, max_graph_objects: limit, ..Default::default() }
 }
 
 fn main() -> ExitCode {

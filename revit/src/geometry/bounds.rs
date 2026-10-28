@@ -72,7 +72,7 @@ impl Bounds {
     pub fn mesh(&self, paint: Paint) -> ElementMesh {
         let ([x0, y0, z0], [x1, y1, z1]) = (self.low, self.high);
         let vertices = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
-        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &TRIANGLES, paint }])
+        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &TRIANGLES, paint, overlay: false }])
     }
 }
 

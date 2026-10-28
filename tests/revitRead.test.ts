@@ -210,7 +210,7 @@ function cubeOutput(): RevitOutput {
     normals: new Float32Array(normals),
     indices: new Uint32Array(indices),
     primitives: new Uint32Array([0, 0, 24, 0, 36, 0]),
-    materials: new Uint8Array([180, 180, 175, 255, 0, 0]),
+    materials: new Uint8Array([180, 180, 175, 255, 0, 0, 0]),
     metadata: JSON.stringify({
       version: 1,
       readOnly: ['Catégorie'],

@@ -1032,7 +1032,7 @@ mod tests {
             triangles.push([k, k + 2, k + 1]);
             triangles.push([k + 1, k + 2, k + 3]);
         }
-        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &triangles, paint: Paint::NEUTRAL }])
+        ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &triangles, paint: Paint::NEUTRAL, overlay: false }])
     }
 
     /// Remet `cells` (identifiant, longueur de bande) à un `Outlet` au budget `budget` : (sources, triangles) remis, et le

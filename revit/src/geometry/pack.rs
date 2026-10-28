@@ -94,6 +94,7 @@ impl Paint {
 }
 
 /// Une face à mailler, dans le repère du document Revit (pieds, Z vers le haut).
+#[derive(Clone, Copy)]
 pub struct Face<'a> {
     pub vertices: &'a [[f64; 3]],
     /// Normales par sommet, même repère ; `None` pour les formes reconstruites (normale du
@@ -101,12 +102,17 @@ pub struct Face<'a> {
     pub normals: Option<&'a [[f64; 3]]>,
     pub triangles: &'a [[u32; 3]],
     pub paint: Paint,
+    /// Surcouche : la face se dessine par-dessus les surfaces coplanaires (le voisin d'un `GImposter`, voir
+    /// `faces::select::Selected::overlay`). Elle n'est jamais groupée avec des faces ordinaires de la même couleur.
+    pub overlay: bool,
 }
 
-/// Une primitive : les triangles d'un élément qui partagent une couleur.
+/// Une primitive : les triangles d'un élément qui partagent une couleur (et la même priorité de dessin).
 #[derive(Debug, Clone, Copy)]
 pub struct Group {
     pub paint: Paint,
+    /// Les triangles sont une surcouche (voir `Face::overlay`).
+    pub overlay: bool,
     pub vertex_start: u32,
     pub vertex_count: u32,
     pub index_start: u32,
@@ -157,6 +163,11 @@ pub struct ElementMesh {
     /// La forme n'est pas une coque fermée : à dessiner des deux côtés.
     pub open: bool,
     pub stats: MeshStats,
+    /// L'empreinte exacte de la forme que les mêmes faces auraient donnée sans surcouche (`Face::overlay`), pour une forme
+    /// qui en a : la surcouche est un attribut de dessin, pas de la géométrie, mais elle sépare ses triangles dans leur propre
+    /// groupe (leurs sommets ne se soudent plus à ceux des faces de la même couleur), ce qui change les tableaux sans changer les
+    /// triangles. `exact_fingerprint` rend celle-ci : les essais de non-régression comparent la forme, pas la façon de la découper.
+    plain_fingerprint: Option<u64>,
 }
 
 impl ElementMesh {
@@ -187,15 +198,15 @@ impl ElementMesh {
     pub fn build(faces: &[Face<'_>]) -> ElementMesh {
         let mut mesh = ElementMesh::default();
         let mut order: Vec<usize> = (0..faces.len()).collect();
-        order.sort_by_key(|&index| faces[index].paint);
+        order.sort_by_key(|&index| (faces[index].paint, faces[index].overlay));
 
         let mut net = [0.0f64; 3];
 
         let mut start = 0;
         while start < order.len() {
-            let paint = faces[order[start]].paint;
+            let (paint, overlay) = (faces[order[start]].paint, faces[order[start]].overlay);
             let mut end = start;
-            while end < order.len() && faces[order[end]].paint == paint {
+            while end < order.len() && faces[order[end]].paint == paint && faces[order[end]].overlay == overlay {
                 end += 1;
             }
             let vertex_start = mesh.positions.len();
@@ -292,6 +303,7 @@ impl ElementMesh {
             if index_count > 0 {
                 mesh.groups.push(Group {
                     paint,
+                    overlay,
                     vertex_start: vertex_start as u32,
                     vertex_count: vertex_count as u32,
                     index_start: index_start as u32,
@@ -311,6 +323,10 @@ impl ElementMesh {
             // concordaient, mais dedans-dehors. On la retourne en bloc.
             mesh.invert();
             mesh.stats.inverted += 1;
+        }
+        if faces.iter().any(|face| face.overlay) {
+            let plain: Vec<Face<'_>> = faces.iter().map(|face| Face { overlay: false, ..*face }).collect();
+            mesh.plain_fingerprint = Some(ElementMesh::build(&plain).exact_fingerprint());
         }
         mesh
     }
@@ -344,6 +360,9 @@ impl ElementMesh {
     /// groupe. Pour les essais de non-régression : deux lectures qui donnent la même empreinte donnent bit à bit la
     /// même forme, et elle ne dépend pas de l'origine du modèle (les positions sont encore absolues).
     pub fn exact_fingerprint(&self) -> u64 {
+        if let Some(plain) = self.plain_fingerprint {
+            return plain;
+        }
         let mut hash = 0xcbf2_9ce4_8422_2325u64;
         let mut feed = |bytes: &[u8]| {
             for byte in bytes {
@@ -468,21 +487,24 @@ pub fn origin_of<'a>(meshes: impl Iterator<Item = &'a ElementMesh>) -> [f64; 3] 
     if any { [(low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0, (low[2] + high[2]) / 2.0] } else { [0.0; 3] }
 }
 
+/// Octets d'une ligne de la table des matériaux : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1), surcouche (0 ou 1).
+pub const MATERIAL_STRIDE: usize = 7;
+
 /// La table des matériaux du contrat, dans l'ordre de première apparition : partagée entre les morceaux d'une même
 /// lecture, pour que l'indice d'un matériau soit le même dans tous (chaque morceau emporte la table telle qu'elle est à
 /// sa fin, dont la table finale est le prolongement).
 #[derive(Debug, Clone, Default)]
-pub struct MaterialTable(BTreeMap<[u8; 6], u32>);
+pub struct MaterialTable(BTreeMap<[u8; MATERIAL_STRIDE], u32>);
 
 impl MaterialTable {
-    fn index(&mut self, row: [u8; 6]) -> u32 {
+    fn index(&mut self, row: [u8; MATERIAL_STRIDE]) -> u32 {
         let next = self.0.len() as u32;
         *self.0.entry(row).or_insert(next)
     }
 
-    /// Les lignes de la table, six octets chacune, dans l'ordre des indices.
+    /// Les lignes de la table, [`MATERIAL_STRIDE`] octets chacune, dans l'ordre des indices.
     pub fn rows(&self) -> Vec<u8> {
-        let mut rows: Vec<([u8; 6], u32)> = self.0.iter().map(|(row, index)| (*row, *index)).collect();
+        let mut rows: Vec<([u8; MATERIAL_STRIDE], u32)> = self.0.iter().map(|(row, index)| (*row, *index)).collect();
         rows.sort_by_key(|(_, index)| *index);
         rows.into_iter().flat_map(|(row, _)| row).collect()
     }
@@ -515,7 +537,7 @@ pub fn pack_chunk(meshes: Vec<ElementMesh>, origin: [f64; 3], table: &mut Materi
             packed.double_sided_elements += 1;
         }
         for group in &mesh.groups {
-            let row = [group.paint.rgba[0], group.paint.rgba[1], group.paint.rgba[2], group.paint.rgba[3], u8::from(group.paint.transparent()), u8::from(mesh.open)];
+            let row = [group.paint.rgba[0], group.paint.rgba[1], group.paint.rgba[2], group.paint.rgba[3], u8::from(group.paint.transparent()), u8::from(mesh.open), u8::from(group.overlay)];
             let material = table.index(row);
             packed.primitives.extend_from_slice(&[
                 element as u32,
@@ -547,7 +569,7 @@ mod tests {
     const GREY: Paint = Paint::NEUTRAL;
 
     fn face<'a>(vertices: &'a [[f64; 3]], normals: Option<&'a [[f64; 3]]>, triangles: &'a [[u32; 3]]) -> Face<'a> {
-        Face { vertices, normals, triangles, paint: GREY }
+        Face { vertices, normals, triangles, paint: GREY, overlay: false }
     }
 
     /// Normale géométrique du premier triangle d'un maillage (sens des indices).
@@ -638,18 +660,55 @@ mod tests {
         let vertices = [[10.0, 0.0, 0.0], [11.0, 0.0, 0.0], [10.0, 1.0, 0.0]];
         let glass = Paint::from_srgb([0.1, 0.2, 0.3], 0.4);
         let one = ElementMesh::build(&[face(&vertices, None, &[[0, 1, 2]])]);
-        let two = ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &[[0, 1, 2]], paint: glass }]);
+        let two = ElementMesh::build(&[Face { vertices: &vertices, normals: None, triangles: &[[0, 1, 2]], paint: glass, overlay: false }]);
         let packed = pack(vec![one, two]);
         assert_eq!(packed.primitives.len(), 12);
         assert_eq!(packed.primitives[0..6], [0, 0, 3, 0, 3, 0]);
         assert_eq!(packed.primitives[6..12], [1, 3, 3, 3, 3, 1]);
-        // Deux matériaux : le gris opaque et le verre transparent.
-        assert_eq!(packed.materials.len(), 12);
-        assert_eq!(&packed.materials[0..6], &[190, 190, 190, 255, 0, 1]);
-        assert_eq!(&packed.materials[6..12], &[26, 51, 77, 102, 1, 1]);
+        // Deux matériaux : le gris opaque et le verre transparent, sept octets chacun (le dernier : la surcouche).
+        assert_eq!(packed.materials.len(), 2 * MATERIAL_STRIDE);
+        assert_eq!(&packed.materials[0..7], &[190, 190, 190, 255, 0, 1, 0]);
+        assert_eq!(&packed.materials[7..14], &[26, 51, 77, 102, 1, 1, 0]);
         // L'origine est le centre de la boîte englobante ; les positions en sont relatives.
         let (min, max) = (to_frame([10.0, 0.0, 0.0]), to_frame([11.0, 1.0, 0.0]));
         assert!((packed.origin[0] - (min[0] + max[0]) / 2.0).abs() < 1e-12);
         assert!(packed.positions.iter().all(|value| value.abs() < 0.2));
+    }
+
+    /// Les faces de surcouche ont leur propre primitive et leur propre matériau, même de la couleur d'une face ordinaire : le
+    /// viewer ne fusionne que ce qui se dessine pareil, et la surcouche, elle, gagne contre une face coplanaire.
+    #[test]
+    fn une_surcouche_n_est_jamais_groupee_avec_une_face_ordinaire_de_la_meme_couleur() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+        let ordinary = Face { vertices: &vertices, normals: None, triangles: &[[0, 1, 2]], paint: GREY, overlay: false };
+        let over = Face { vertices: &vertices, normals: None, triangles: &[[0, 2, 1]], paint: GREY, overlay: true };
+        let mesh = ElementMesh::build(&[over, ordinary]);
+        assert_eq!(mesh.groups.len(), 2);
+        assert_eq!(mesh.groups.iter().filter(|group| group.overlay).count(), 1);
+        let packed = pack(vec![mesh]);
+        // Deux lignes de matériau qui ne diffèrent que par le dernier octet.
+        assert_eq!(packed.materials.len(), 2 * MATERIAL_STRIDE);
+        assert_eq!(&packed.materials[0..6], &packed.materials[7..13]);
+        assert_eq!(packed.materials[6] + packed.materials[13], 1);
+        // Les groupes sont triés par couleur puis par surcouche : la face ordinaire d'abord, la surcouche ensuite, chacune avec
+        // la ligne de sa nature.
+        let natures: Vec<u8> = packed.primitives.chunks_exact(6).map(|primitive| packed.materials[primitive[5] as usize * MATERIAL_STRIDE + 6]).collect();
+        assert_eq!(natures, vec![0, 1]);
+    }
+
+    /// La surcouche est un attribut de dessin : l'empreinte exacte d'une forme (celle des essais de non-régression) est celle
+    /// des mêmes faces sans elle, même quand la surcouche sépare leurs triangles d'une face de la même couleur (leurs sommets
+    /// ne se soudent plus : les tableaux changent, pas les triangles).
+    #[test]
+    fn l_empreinte_exacte_ignore_la_surcouche() {
+        let vertices = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0]];
+        let plain = ElementMesh::build(&[face(&vertices, None, &[[0, 1, 2]]), face(&vertices, None, &[[1, 3, 2]])]);
+        let over = ElementMesh::build(&[face(&vertices, None, &[[0, 1, 2]]), Face { vertices: &vertices, normals: None, triangles: &[[1, 3, 2]], paint: GREY, overlay: true }]);
+        assert_eq!(plain.groups.len(), 1);
+        assert_eq!(over.groups.len(), 2);
+        assert_eq!(plain.exact_fingerprint(), over.exact_fingerprint());
+        assert_eq!(plain.fingerprint(), over.fingerprint());
+        // Sans surcouche, rien n'est gardé à part : l'empreinte vient des groupes.
+        assert!(plain.plain_fingerprint.is_none());
     }
 }
