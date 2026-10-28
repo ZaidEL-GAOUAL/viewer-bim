@@ -46,6 +46,8 @@ export type MeasureTool = MeasureKind | 'dimensions';
 /** « section » : le prochain clic sur une surface y pose un plan de coupe. */
 export type Tool = 'select' | MeasureTool | 'section';
 
+/** Fenêtre étroite : les panneaux latéraux s'ouvrent par-dessus la vue 3D (même seuil que styles.css). */
+const NARROW_LAYOUT = '(max-width: 960px)';
 const SECTION_HINT = 'Cliquez une surface : un plan de coupe s’y pose, orienté comme elle, et retire ce qui est devant. Échap annule.';
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 export type ModelFormat = 'glb' | 'usd';
@@ -294,14 +296,36 @@ export class App {
     }
     this.syncFormat();
 
-    // Boutons de repli des panneaux latéraux, aux deux extrémités de la barre.
+    // Boutons de repli des panneaux latéraux, aux deux extrémités de la barre. Dans une fenêtre étroite (NARROW_LAYOUT, même
+    // seuil que styles.css), les panneaux s'ouvrent par-dessus la vue 3D : ils se replient quand la fenêtre le devient, ouvrir l'un
+    // replie l'autre, et l'état d'avant revient quand la fenêtre s'élargit.
+    const narrow = window.matchMedia(NARROW_LAYOUT);
+    const setPanel = new Map<'left' | 'right', (collapsed: boolean) => void>();
+    const isCollapsed = (side: 'left' | 'right') => root.classList.contains(`${side}-collapsed`);
     const panelToggle = (side: 'left' | 'right', label: string) => {
-      const toggle = button('', () => {
-        const collapsed = root.classList.toggle(`${side}-collapsed`);
+      const set = (collapsed: boolean) => {
+        root.classList.toggle(`${side}-collapsed`, collapsed);
         toggle.setAttribute('aria-pressed', String(!collapsed));
         toggle.title = `${collapsed ? 'Afficher' : 'Masquer'} ${label}`;
+      };
+      const toggle = button('', () => {
+        const collapsed = !isCollapsed(side);
+        set(collapsed);
+        if (!collapsed && narrow.matches) setPanel.get(side === 'left' ? 'right' : 'left')?.(true);
       }, { class: `panel-toggle ${side}`, title: `Masquer ${label}`, attrs: { 'aria-pressed': 'true', 'aria-label': `Afficher ou masquer ${label}` } });
+      setPanel.set(side, set);
       return toggle;
+    };
+    let beforeNarrow: { left: boolean; right: boolean } | null = null;
+    const fitPanelsToWidth = () => {
+      if (narrow.matches && !beforeNarrow) {
+        beforeNarrow = { left: isCollapsed('left'), right: isCollapsed('right') };
+        for (const set of setPanel.values()) set(true);
+      } else if (!narrow.matches && beforeNarrow) {
+        setPanel.get('left')?.(beforeNarrow.left);
+        setPanel.get('right')?.(beforeNarrow.right);
+        beforeNarrow = null;
+      }
     };
 
     this.stats = h('div', { class: 'stats' });
@@ -335,6 +359,8 @@ export class App {
       h('div', { class: 'spacer' }),
       panelToggle('right', 'le panneau de droite (propriétés)'),
     );
+    fitPanelsToWidth();
+    narrow.addEventListener('change', fitPanelsToWidth);
 
     this.toastEl = h('div', { class: 'toast', attrs: { role: 'status', hidden: '' } });
     this.busyEl = h('div', { class: 'busy', attrs: { hidden: '' } });

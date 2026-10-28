@@ -350,6 +350,38 @@ button[aria-pressed='true'] {
   border-left: 1px solid var(--border);
 }
 
+/* Fenêtre étroite : les deux panneaux font 630 px à eux deux, la vue 3D tombait à 0 px et ses cartes (« Fichier Revit lu »…)
+   s'écrasaient en colonne. Sous 960 px, la vue garde toute la largeur et chaque panneau s'ouvre par-dessus elle, dans la même
+   case de la grille. App.ts les replie quand la fenêtre devient étroite et n'en laisse qu'un ouvert à la fois (même seuil :
+   NARROW_LAYOUT). Au-dessus du seuil, rien ne change. */
+@media (max-width: 960px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar.left,
+  .viewport,
+  .sidebar.right {
+    grid-area: 2 / 1;
+  }
+
+  .sidebar.left,
+  .sidebar.right {
+    position: relative;
+    z-index: 10; /* au-dessus des outils de la vue (z-index 3), sous les menus de la barre (30) */
+    width: min(320px, calc(100vw - 48px));
+    box-shadow: var(--shadow);
+  }
+
+  .sidebar.left {
+    justify-self: start;
+  }
+
+  .sidebar.right {
+    justify-self: end;
+  }
+}
+
 .panel {
   display: flex;
   flex: 1;
