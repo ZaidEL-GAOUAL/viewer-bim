@@ -1053,6 +1053,20 @@ button[aria-pressed='true'] {
   white-space: nowrap;
 }
 
+.empty-card .empty-legal {
+  margin: 18px 0 0;
+  font-size: 11px;
+}
+
+.empty-legal a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.empty-legal a:hover {
+  color: var(--accent);
+}
+
 .app.dragging .viewport::after {
   content: 'Déposez les fichiers ici';
   position: absolute;

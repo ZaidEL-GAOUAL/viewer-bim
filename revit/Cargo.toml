@@ -3,7 +3,8 @@ name = "viewer-bim-revit"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.87"
-license = "Apache-2.0"
+# Licence de consultation du dépôt (../LICENSE) ; rvt-rs et les autres caisses gardent la leur (THIRD_PARTY.md).
+license-file = "../LICENSE"
 description = "Lecture native des fichiers Revit (.rvt) pour Viewer BIM : enveloppe de rvt-rs, native ou compilée en WebAssembly."
 publish = false
 

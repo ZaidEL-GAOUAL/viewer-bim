@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Licences · Viewer BIM</title>
+<style>
+  :root {
+    --bg: #f3f4f6;
+    --panel: #ffffff;
+    --border: #dfe3e8;
+    --text: #1b2026;
+    --muted: #65707d;
+    --accent: #1667d9;
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b;
+      --panel: #1b1f24;
+      --border: #2d333b;
+      --text: #e5e8ec;
+      --muted: #96a0ab;
+      --accent: #4c9bff;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 16px;
+    overflow-wrap: anywhere;
+  }
+
+  main {
+    max-width: 46rem;
+    margin: 0 auto;
+  }
+
+  a { color: var(--accent); }
+
+  .back { margin: 0 0 20px; }
+
+  h1 { margin: 0 0 4px; font-size: 1.75rem; line-height: 1.2; }
+  h2 { margin: 36px 0 10px; font-size: 1.2rem; line-height: 1.3; }
+  h3 { margin: 0 0 4px; font-size: 1rem; }
+  p { margin: 0 0 12px; }
+
+  .lead { color: var(--muted); }
+
+  ul.components {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 10px;
+  }
+
+  ul.components > li {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+
+  ul.components p { margin: 0 0 6px; }
+  ul.components p:last-child { margin-bottom: 0; }
+  ul.components ul { margin: 4px 0 8px; padding-left: 1.2rem; }
+
+  .role, .muted { color: var(--muted); }
+
+  details { margin-top: 8px; }
+  summary { cursor: pointer; }
+
+  pre {
+    margin: 8px 0 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="back"><a href="../">← Back to the viewer</a></p>
+
+  <h1>Licences</h1>
+  <p class="lead">What Viewer BIM contains, and on what terms.</p>
+
+  <h2>Viewer BIM</h2>
+  <p>© 2026 Zaid EL GAOUAL. All rights reserved.</p>
+  <p>You may read the code and use this site to display your own files. Any other use needs the author’s written consent.</p>
+  <p><a href="LICENCE.txt">Full licence text</a></p>
+
+  <h2>Distributed with this site</h2>
+  <ul class="components">
+    <li>
+      <p><strong>three.js 0.186.1</strong> <span class="role">· 3D display</span></p>
+      <p>MIT licence · <a href="three.txt">full text</a></p>
+    </li>
+    <li>
+      <p><strong>meshoptimizer decoder</strong> <span class="role">· shipped with three.js, decompresses meshes</span></p>
+      <p>MIT licence · Copyright (C) 2016-2026 Arseny Kapoulkine</p>
+      <details>
+        <summary>MIT licence text</summary>
+        <pre>MIT License
+
+Copyright (c) 2016-2026 Arseny Kapoulkine
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.</pre>
+      </details>
+    </li>
+    <li>
+      <p><strong>CesiumJS 1.146.0</strong> <span class="role">· map mode</span></p>
+      <p>Apache-2.0 licence, with the licences of its own third-party components · <a href="cesium.txt">full text</a></p>
+    </li>
+    <li>
+      <p><strong>Draco decoder</strong> <span class="role">· decompresses meshes</span></p>
+      <p>© The Draco Authors · Apache-2.0 licence · <a href="https://www.apache.org/licenses/LICENSE-2.0">full text</a></p>
+    </li>
+    <li>
+      <p><strong>Revit reader</strong> <span class="role">· WebAssembly module that reads .rvt files</span></p>
+      <p>rvt-rs (Apache-2.0) and the Rust libraries compiled with it. The Revit parameter names come from Rhino.Inside.Revit (MIT) and the surface formulas from rvt-reader (MIT).</p>
+      <p>Full texts: <a href="NOTICE.txt">third-party notices</a> · <a href="revit-THIRD_PARTY.txt">Revit reader licences</a></p>
+    </li>
+    <li>
+      <p><strong>Sample model <code>revit-demo.rvt</code></strong> <span class="role">· the « Maquette Revit (2023) » entry of the « Exemples… » menu</span></p>
+      <p><a href="revit-demo.txt">Origin and licence of the file</a></p>
+    </li>
+    <li>
+      <p><strong>EGM96 geoid grid</strong> <span class="role">· mean sea level heights for map mode, from the NGA</span></p>
+      <p>Public domain</p>
+    </li>
+  </ul>
+
+  <h2>Loaded on demand from their own sites (not distributed by this site)</h2>
+  <ul class="components">
+    <li>
+      <p><strong>Pyodide 0.29.3</strong> <span class="role">· Python in the browser, from jsDelivr</span></p>
+      <p>MPL-2.0 licence, with micropip (MPL-2.0)</p>
+    </li>
+    <li>
+      <p><strong>IfcOpenShell 0.8.5 for the browser</strong> <span class="role">· reads IFC files</span></p>
+      <p>LGPL-3.0-or-later licence. The binary also contains:</p>
+      <ul>
+        <li>CGAL, some of whose packages are under GPL-3.0-or-later;</li>
+        <li>Open CASCADE Technology (LGPL-2.1 with exception);</li>
+        <li>GMP and MPFR (LGPL-3.0-or-later);</li>
+        <li>Boost (BSL-1.0);</li>
+        <li>Eigen (MPL-2.0);</li>
+        <li>nlohmann/json (MIT).</li>
+      </ul>
+      <p>It is downloaded from ifcopenshell.github.io, and its SHA-256 fingerprint is checked before it is installed. Source code: <a href="https://github.com/IfcOpenShell/IfcOpenShell/tree/ifcopenshell-python-0.8.5">https://github.com/IfcOpenShell/IfcOpenShell/tree/ifcopenshell-python-0.8.5</a></p>
+    </li>
+    <li>
+      <p><strong>Python packages installed with it</strong></p>
+      <ul>
+        <li>shapely (BSD-3-Clause)</li>
+        <li>numpy (BSD-3-Clause)</li>
+        <li>isodate (BSD-3-Clause)</li>
+        <li>python-dateutil (Apache-2.0 or BSD-3-Clause)</li>
+        <li>lark (MIT)</li>
+        <li>typing-extensions (PSF-2.0)</li>
+      </ul>
+    </li>
+    <li>
+      <p><strong>Map data</strong></p>
+      <ul>
+        <li>OpenStreetMap, “© OpenStreetMap contributors”, ODbL licence: background map and buildings (through Overpass);</li>
+        <li>Terrain Tiles (AWS Open Data, Mapzen): relief, from SRTM, ASTER, EU-DEM and other sources;</li>
+        <li>Cesium ion and Google’s 3D tiles: only with your own key, under their own terms.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h2>Trademarks</h2>
+  <p>“Autodesk” and “Revit” are registered trademarks of Autodesk, Inc. This project is not affiliated with, endorsed by or sponsored by Autodesk.</p>
+</main>
+</body>
+</html>

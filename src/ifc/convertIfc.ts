@@ -28,10 +28,15 @@ export interface IfcConversion {
   report: IfcReport;
 }
 
-// IfcOpenShell compilé pour le navigateur, servi avec le viewer. La 0.8.5 est la dernière version
-// complète : à partir de la 0.8.6, le paquet pour navigateur n'est plus qu'un noyau dont les
-// schémas IFC et le moteur géométrique sont des modules séparés, pas encore tous publiés.
-const WHEEL = 'wheels/ifcopenshell-0.8.5-cp313-cp313-pyodide_2025_0_wasm32.whl';
+// IfcOpenShell compilé pour le navigateur, téléchargé depuis le site d'IfcOpenShell. La 0.8.5 est
+// la dernière version complète : à partir de la 0.8.6, le paquet pour navigateur n'est plus qu'un
+// noyau dont les schémas IFC et le moteur géométrique sont des modules séparés, pas encore tous
+// publiés.
+// Le fichier officiel n'est pas hébergé ici : son binaire inclut du code GPL (CGAL), que ce site
+// ne distribue donc pas lui-même. L'empreinte SHA-256 épingle le fichier exact : le convertisseur
+// refuse un paquet qui ne correspond pas.
+const WHEEL = 'https://ifcopenshell.github.io/wasm-wheels/ifcopenshell-0.8.5-cp313-cp313-pyodide_2025_0_wasm32.whl';
+const WHEEL_SHA256 = 'fbebb7a7144277be213d156ed9b77de30de1d92b0b2b0c815e4a07555bfb929c';
 
 const MAX_WORKERS = 4;
 
@@ -139,7 +144,7 @@ function convertShard(
     };
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    const request: ConvertRequest = { kind: 'convert', id, buffer, shard, wheelUrl: new URL(WHEEL, document.baseURI).href };
+    const request: ConvertRequest = { kind: 'convert', id, buffer, shard, wheelUrl: WHEEL, wheelSha256: WHEEL_SHA256 };
     worker.postMessage(request, [buffer]);
   });
 }
@@ -179,7 +184,7 @@ function packageModel(glb: ArrayBuffer, metadata: string, onStatus: (message: st
     };
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    const request: UsdRequest = { kind: 'usd', id, glb: glb.slice(0), metadata, wheelUrl: new URL(WHEEL, document.baseURI).href };
+    const request: UsdRequest = { kind: 'usd', id, glb: glb.slice(0), metadata, wheelUrl: WHEEL, wheelSha256: WHEEL_SHA256 };
     worker.postMessage(request, [request.glb]);
   });
 }

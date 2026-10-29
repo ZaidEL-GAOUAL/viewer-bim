@@ -375,6 +375,10 @@ export class App {
           button('Choisir un dossier…', () => folderInput.click()),
           button('Charger l’exemple', () => void this.loadSample('demo')),
         ),
+        h('p', { class: 'empty-legal' },
+          '© 2026 Zaid EL GAOUAL · view-only licence · ',
+          h('a', { text: 'Licences', attrs: { href: 'licences/index.html', target: '_blank', rel: 'noopener' } }),
+        ),
       ),
     );
     const globeHost = h('div', { class: 'globe-host', attrs: { hidden: '' } });

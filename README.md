@@ -52,9 +52,10 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 
 - **Ouverture d'un IFC** : converti sur place dans le navigateur, sans serveur. Le convertisseur
   (Python et IfcOpenShell en WebAssembly, environ 30 Mo) n'est téléchargé qu'au premier IFC
-  ouvert. La conversion utilise plusieurs workers (jusqu’à quatre, selon les ressources
-  signalées par le navigateur et la taille du fichier) ; il ne s’agit pas de cœurs physiques
-  réservés. Le GLB et le JSON produits peuvent être téléchargés.
+  ouvert : Pyodide depuis jsDelivr, IfcOpenShell depuis son propre site, avec vérification de
+  son empreinte SHA-256 (ce site ne le distribue pas). La conversion utilise plusieurs workers
+  (jusqu’à quatre, selon les ressources signalées par le navigateur et la taille du fichier) ; il
+  ne s’agit pas de cœurs physiques réservés. Le GLB et le JSON produits peuvent être téléchargés.
 - **Ouverture d'un fichier Revit (.rvt, .rfa, gabarits .rte et .rft)** : lu sur place, sans serveur, par le lecteur du dossier
   `revit/` (Rust, rvt-rs, environ 5 Mo de WebAssembly). Ce module n'est
   téléchargé qu'au premier fichier Revit ouvert, et tourne dans un worker : l'interface reste libre
@@ -416,3 +417,10 @@ supplémentaires sont libérés après la conversion et le dernier après 30 sec
 - Un verre décrit par l'extension « transmission » est rendu par une simple transparence.
 - Les éléments transparents ne sont pas triés entre eux : des vitrages superposés de couleurs
   très différentes peuvent se mélanger de façon approximative.
+
+## Licence
+
+View-only code: © 2026 Zaid EL GAOUAL, all rights reserved. You may read the code and use the
+official site to display your own files; any other use needs written consent (see
+[LICENSE](LICENSE)). Third-party components keep their own licences: see [NOTICE](NOTICE),
+[revit/THIRD_PARTY.md](revit/THIRD_PARTY.md) and the site's « Licences » page.

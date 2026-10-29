@@ -12,8 +12,10 @@ export interface ConvertRequest {
   kind: 'convert';
   id: number;
   buffer: ArrayBuffer;
-  /** Adresse absolue du paquet IfcOpenShell pour le navigateur, servi avec le viewer. */
+  /** Adresse absolue du paquet IfcOpenShell pour le navigateur, sur le site d'IfcOpenShell. */
   wheelUrl: string;
+  /** Empreinte SHA-256 (hexadécimale) attendue du paquet : un autre fichier est refusé. */
+  wheelSha256: string;
   /** Tranche des éléments à convertir : [indice, nombre de tranches]. */
   shard: [number, number];
 }
@@ -25,6 +27,7 @@ export interface UsdRequest {
   glb: ArrayBuffer;
   metadata: string;
   wheelUrl: string;
+  wheelSha256: string;
 }
 
 
@@ -53,8 +56,35 @@ const post = (message: ConvertMessage, transfer: Transferable[] = []) => scope.p
 
 let runtime: Promise<Pyodide> | null = null;
 
+/** Empreinte SHA-256 des octets, en hexadécimal minuscule. */
+async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Télécharge le paquet IfcOpenShell, vérifie son empreinte, puis l'installe depuis le système de
+ * fichiers du moteur. micropip lit le nom du fichier pour en déduire la version et la plateforme :
+ * on garde donc le nom officiel du paquet (dernier segment de l'adresse).
+ */
+async function installWheel(pyodide: Pyodide, wheelUrl: string, wheelSha256: string): Promise<void> {
+  const response = await fetch(wheelUrl);
+  if (!response.ok) throw new Error(`Le téléchargement d’IfcOpenShell a échoué (HTTP ${response.status}).`);
+  const bytes = await response.arrayBuffer();
+  if ((await sha256Hex(bytes)) !== wheelSha256.toLowerCase()) {
+    throw new Error('Le paquet IfcOpenShell téléchargé ne correspond pas à la version 0.8.5 attendue : conversion annulée.');
+  }
+  const path = `/tmp/${new URL(wheelUrl).pathname.split('/').pop()}`;
+  pyodide.FS.writeFile(path, new Uint8Array(bytes));
+  try {
+    await pyodide.pyimport('micropip').install(`emfs:${path}`);
+  } finally {
+    pyodide.FS.unlink(path);
+  }
+}
+
 /** Télécharge et prépare Python, IfcOpenShell et le convertisseur pour ce worker. */
-async function prepare(id: number, wheelUrl: string): Promise<Pyodide> {
+async function prepare(id: number, wheelUrl: string, wheelSha256: string): Promise<Pyodide> {
   post({ id, type: 'status', message: 'Chargement du moteur de conversion…' });
   const { loadPyodide } = (await import(/* @vite-ignore */ `${PYODIDE_URL}pyodide.mjs`)) as {
     loadPyodide(options: { indexURL: string }): Promise<Pyodide>;
@@ -62,7 +92,7 @@ async function prepare(id: number, wheelUrl: string): Promise<Pyodide> {
   const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
   await pyodide.loadPackage('micropip');
   post({ id, type: 'status', message: 'Installation d’IfcOpenShell…' });
-  await pyodide.pyimport('micropip').install(wheelUrl);
+  await installWheel(pyodide, wheelUrl, wheelSha256);
   pyodide.FS.mkdirTree('/pipeline');
   pyodide.FS.writeFile('/pipeline/ifc_to_glb.py', converterSource);
   pyodide.FS.writeFile('/pipeline/usd_writer.py', usdWriterSource);
@@ -98,9 +128,9 @@ del _scene, _metadata
 `;
 
 async function handle(event: MessageEvent<ConvertRequest | UsdRequest>): Promise<void> {
-  const { id, wheelUrl } = event.data;
+  const { id, wheelUrl, wheelSha256 } = event.data;
   try {
-    runtime ??= prepare(id, wheelUrl);
+    runtime ??= prepare(id, wheelUrl, wheelSha256);
     const pyodide = await runtime.catch((error: unknown) => {
       runtime = null; // un échec de téléchargement ne doit pas bloquer l'essai suivant
       throw error;

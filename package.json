@@ -2,6 +2,8 @@
   "name": "viewer-bim",
   "private": true,
   "version": "0.1.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Zaid EL GAOUAL",
   "type": "module",
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js",

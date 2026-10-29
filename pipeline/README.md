@@ -103,7 +103,9 @@ propriétés (`Pset_*`) restent modifiables. Dans l'USD, la même liste est dans
 
 ## Version d'IfcOpenShell dans le navigateur
 
-Le viewer embarque le paquet 0.8.5. À partir de la 0.8.6, le paquet pour navigateur publié par
+Le viewer *charge* le paquet 0.8.5 depuis le site d'IfcOpenShell
+(https://ifcopenshell.github.io/wasm-wheels/) et vérifie son empreinte SHA-256 avant de
+l'installer ; il ne l'embarque plus. À partir de la 0.8.6, le paquet pour navigateur publié par
 IfcOpenShell est « modulaire » : un noyau, auquel les schémas IFC et le moteur géométrique
 s'ajoutent comme modules séparés. Le paquet 0.9.0 ne contient que le noyau (son binaire fait
 5,8 Mo contre 53,6 Mo) et ses modules ne sont pas publiés : lire un IFC le fait planter (« memory
@@ -126,7 +128,27 @@ par les tests et par l'exemple « Maquette IFC » du viewer.
 
 ## Licence d'IfcOpenShell
 
-IfcOpenShell est distribué sous licence LGPL-3.0. La version pour navigateur servie avec le
-viewer (`public/wheels/`) est le paquet officiel non modifié, publié sur
-https://ifcopenshell.github.io/wasm-wheels/ ; son code source est sur
-https://github.com/IfcOpenShell/IfcOpenShell.
+IfcOpenShell est distribué sous licence **LGPL-3.0-or-later**.
+
+Le binaire de la version pour navigateur contient aussi d'autres bibliothèques, chacune sous sa
+propre licence :
+
+- CGAL, dont plusieurs paquets sont sous **GPL-3.0-or-later** : Nef_3, Nef_S2,
+  Convex_decomposition_3, Arrangement_2 et Straight_skeleton_2 ;
+- Open CASCADE Technology (LGPL-2.1 avec exception) ;
+- GMP et MPFR (LGPL-3.0-or-later) ;
+- Boost (BSL-1.0) ;
+- Eigen (MPL-2.0) ;
+- nlohmann/json (MIT).
+
+**Ce site ne distribue plus ce paquet.** Le navigateur le télécharge depuis le site d'IfcOpenShell,
+comme il télécharge Pyodide depuis jsDelivr ; l'empreinte SHA-256 épingle le fichier exact :
+`fbebb7a7144277be213d156ed9b77de30de1d92b0b2b0c815e4a07555bfb929c` (14 654 346 octets).
+
+Son code source est sur https://github.com/IfcOpenShell/IfcOpenShell : étiquette
+`ifcopenshell-python-0.8.5`, commit `16723d11cab9bc8a13b4e025a00d39445ccc462e`. Le paquet pour
+navigateur est construit par le workflow `.github/workflows/build-ifcopenshell-wasm.yml` du même
+dépôt.
+
+Les versions précédentes de ce dépôt contenaient, dans `public/wheels/`, le même fichier non
+modifié ; son code source est le même.

@@ -1,0 +1,57 @@
+Viewer BIM: view-only licence
+Copyright © 2026 Zaid EL GAOUAL. All rights reserved.
+
+This licence covers the code, documentation, data and other files of the repository
+https://github.com/ZaidEL-GAOUAL/viewer-bim, and the website built from it and published at
+https://zaidel-gaoual.github.io/viewer-bim/ (together, "the Software"). It does not cover third-party
+components (section 5).
+
+1. What you may do
+
+   a) Read the Software's source code, on GitHub or in a copy kept for that sole purpose. GitHub's
+      Terms of Service also let its users display the repository and copy it ("fork") on GitHub.
+      Those copies grant no right other than reading.
+   b) Use the official website, at the address above, to open and display your own files. This
+      permission is free of charge, non-exclusive and may be withdrawn at any time.
+
+2. What you may not do without the author's prior written consent
+
+   Any other use of the Software, in particular:
+   a) copying or reproducing it, in whole or in part, beyond what reading requires (display,
+      browser cache);
+   b) running it anywhere other than on the official website;
+   c) modifying, adapting or translating it, reusing parts of it in other software, or creating
+      derivative works;
+   d) distributing, publishing, selling, renting or sublicensing it, or making it available to
+      others, including by hosting it or offering it as a service;
+   e) using it to train, fine-tune or evaluate an artificial intelligence model, or including it
+      in a dataset;
+   f) removing or altering copyright, licence or trademark notices.
+
+3. Rights granted by law
+
+   This licence does not limit any right the law grants without the author's permission, including
+   those of Article L. 122-6-1 of the French Intellectual Property Code (observing, studying and
+   testing how the Software works, and decompiling it to the extent needed for interoperability).
+
+4. No warranty
+
+   The Software is provided "as is", without warranty of any kind. To the fullest extent permitted
+   by law, the author is not liable for any damage resulting from its use.
+
+5. Third-party components
+
+   The Software contains, or loads from their own websites, components by other authors. Each one
+   remains under its own licence, and this licence does not restrict any right those licences
+   grant. They are listed in the NOTICE file, in revit/THIRD_PARTY.md and on the website's
+   "Licences" page (licences/index.html).
+
+6. Termination
+
+   Any use contrary to this licence ends the permissions of section 1, without notice.
+
+7. Governing law
+
+   This licence is governed by French law.
+
+For any other use, contact the author: https://github.com/ZaidEL-GAOUAL
