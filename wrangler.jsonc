@@ -1,0 +1,13 @@
+// Copie du site hébergée par Cloudflare (Workers Builds, projet « viewer-bim-site ») : le dossier dist/
+// produit par `npm run build`, servi tel quel, sans code serveur. L'assistant est un autre Worker
+// (« viewer-bim », dossier worker/) : ce nom doit rester différent, sinon un déploiement du site le
+// remplacerait.
+{
+  "name": "viewer-bim-site",
+  "compatibility_date": "2026-10-23",
+  "assets": {
+    "directory": "./dist"
+  },
+  // Requis par `npx wrangler preview`, la commande par défaut des branches autres que main.
+  "previews": {}
+}
