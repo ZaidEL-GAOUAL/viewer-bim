@@ -409,6 +409,36 @@ test('plan_dates écrit des dates ordonnées par étage, dans le chantier, en un
   assert.match((runTool('plan_dates', { ...args, start: 'janvier' }, context).result as { error: string }).error, /illisible/);
 });
 
+test('plan_dates construit du bas vers le haut d’après la hauteur réelle des étages, quels que soient leurs noms', () => {
+  // Noms qui ne se trient pas d'eux-mêmes : F.G.L (terrain fini), GF (rez), 1F, 2F, RF (toiture).
+  // Les éléments 9 et 10 n'ont pas de niveau.
+  const levels = ['1F', 'GF', 'RF', 'F.G.L', '2F', 'GF', '1F', 'GF', 'GF', '', ''];
+  // Bas de chaque élément ; une fondation du GF descend sous le terrain, les éléments 7 et 10 n'ont pas de géométrie.
+  const bottoms = [3.2, 0.5, 9.6, 0, 6.4, -1.5, 3.5, undefined, 0.45, 3.3, undefined];
+  const store = new PropertyStore(levels.length);
+  levels.forEach((level, index) => store.set(index, level ? { Niveau: level } : { Nom: 'sans niveau' }, `élément ${index}`));
+  store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  const context: ToolContext = {
+    store, count: levels.length, keys: levels.map((_, index) => `k${index}`), labelOf: (index) => `élément ${index}`,
+    selection: new Set(), select: () => {}, writeProperties: (updates) => edits.setMany(updates), heightOf: (index) => bottoms[index],
+  };
+  const args = { filters: [], start: '2026-01-04', end: '2027-12-12', minDays: 15, maxDays: 45, orderBy: ['Niveau'] };
+  const periods = (outcome: { result: unknown }) => (outcome.result as { periods: { value: string }[] }).periods.map((period) => period.value);
+  const outcome = runTool('plan_dates', args, context);
+  assert.deepEqual(periods(outcome), ['F.G.L', 'GF', '1F', '2F', 'RF', '(non défini)']);
+  assert.match((outcome.result as { placedByHeight: string }).placedByHeight, /1 élément/);
+
+  // Dans un étage aussi, du bas vers le haut ; l'élément sans géométrie passe après les autres.
+  // L'élément 9, sans niveau, rejoint le 1F où il est posé ; le 10, sans niveau ni géométrie, finit le chantier.
+  const start = (index: number) => parseScheduleDate(store.propsOf(index)?.['Planning / Date début']);
+  const sequence = [3, 5, 8, 1, 7, 0, 9, 6, 4, 2, 10].map(start);
+  assert.ok(sequence.every((day, i) => i === 0 || sequence[i - 1] < day), sequence.join(', '));
+
+  // Un ordre dicté par l'utilisateur l'emporte ; les autres étages suivent, du plus bas au plus haut.
+  assert.deepEqual(periods(runTool('plan_dates', { ...args, order: ['RF'] }, context)), ['RF', 'F.G.L', 'GF', '1F', '2F', '(non défini)']);
+});
+
 test('l’API des agents expose les outils du chat, en direct et par WebMCP', async () => {
   const { context, store } = writableContext();
   const api = createViewerApi(() => context);

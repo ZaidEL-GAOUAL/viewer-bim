@@ -248,7 +248,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   valeur fixe ou formule par élément) et préparer un planning prévisionnel : « ajoute une date
   de début et une date de fin à chaque objet, chantier du 04/01/2026 au 12/12/2027, 15 à 45 jours
   par objet, ordonnés par code étage » écrit `Planning / Date début` et `Planning / Date fin`
-  puis ouvre le Planning 4D. Ces écritures passent par l’historique des propriétés : une seule
+  puis ouvre le Planning 4D, en construisant du bas vers le haut d’après la hauteur des objets
+  dans la maquette, quels que soient les noms des étages (GF, 1F, RDC, R+1…). Ces écritures passent par l’historique des propriétés : une seule
   étape, annulable, et rien n’est écrit dans les fichiers sans export. Il peut aussi sélectionner, isoler (« n’affiche que le bâtiment A, le reste
   invisible »), masquer ou réafficher (« masque le niveau R+2 », « tout afficher »), mettre en
   évidence (« fais ressortir le bâtiment A » : surbrillance, le reste atténué par deux règles

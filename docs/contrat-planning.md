@@ -107,9 +107,12 @@ effectués pendant la lecture.
 
 L’outil `plan_dates` de l’assistant (aussi appelable par `window.viewerBim.call`) écrit une
 date de début et une date de fin sur chaque objet visé, au format `AAAA-MM-JJ`, puis ouvre
-le planning comme **Depuis les métadonnées…**, une tâche par objet. Les objets sont rangés selon
-une ou plusieurs propriétés (`orderBy`, le code étage par exemple), dans l’ordre `order` donné
-ou, à défaut, dans l’ordre naturel ; les objets sans valeur passent en dernier. Les objets
+le planning comme **Depuis les métadonnées…**, une tâche par objet. Les objets sont groupés selon
+une ou plusieurs propriétés (`orderBy`, le code étage par exemple) et l’on construit du bas vers
+le haut : un étage se place à la hauteur médiane du bas de ses objets dans la maquette, quel que
+soit son nom (GF, 1F, F.G.L, RDC, R+1…), et les objets d’un même étage suivent aussi leur
+hauteur. Un ordre `order` dicté par l’utilisateur passe devant ; à hauteur égale ou sans
+géométrie, l’ordre naturel départage, et les objets sans valeur passent en dernier. Les objets
 s’enchaînent dans cet ordre à intervalles réguliers : le premier commence le jour du début,
 le dernier finit le jour de la fin, un étage dure à proportion de son nombre d’objets et ne
 commence jamais avant le précédent ; les tâches voisines se chevauchent. Chaque objet dure

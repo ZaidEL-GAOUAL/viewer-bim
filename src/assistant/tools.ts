@@ -40,6 +40,8 @@ export interface ToolContext {
   writeProperties?(updates: readonly (readonly [number, string, PropValue])[]): boolean;
   /** Ouvre le Planning 4D à partir de deux propriétés de dates ; renvoie le nombre de tâches. */
   openPlanning?(startProperty: string, endProperty: string): number;
+  /** Bas de l'élément sur l'axe vertical de la maquette (undefined sans géométrie). Sert à ranger un planning, jamais renvoyé au modèle. */
+  heightOf?(index: number): number | undefined;
   isCurrent?(): boolean;
 }
 
@@ -193,7 +195,7 @@ export const TOOL_DEFINITIONS = [
   {
     type: 'function', function: {
       name: 'plan_dates',
-      description: 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent dans l’ordre d’orderBy (ex. le code étage), répartis régulièrement de start (premier début) à end (dernière fin) ; chaque élément dure entre minDays et maxDays jours. Annulable par l’utilisateur.',
+      description: 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent groupe par groupe d’orderBy (ex. le niveau ou code étage), du plus bas au plus haut d’après la maquette quels que soient les noms, répartis régulièrement de start (premier début) à end (dernière fin) ; chaque élément dure entre minDays et maxDays jours. Annulable par l’utilisateur.',
       parameters: {
         type: 'object',
         properties: {
@@ -204,7 +206,7 @@ export const TOOL_DEFINITIONS = [
           minDays: { type: 'number', description: 'Durée minimale d’un élément, en jours.' },
           maxDays: { type: 'number', description: 'Durée maximale d’un élément, en jours.' },
           orderBy: { type: 'array', description: 'Propriétés qui ordonnent les tâches, la première d’abord.', items: { type: 'string', description: 'Nom de propriété.' } },
-          order: { type: 'array', description: 'Valeurs de la première propriété d’orderBy dans l’ordre de construction, du plus bas au plus haut (ex. SS1, RDC, R+1). Sans order : ordre naturel (00, 01, 02…). Valeurs absentes en dernier.', items: { type: 'string', description: 'Valeur.' } },
+          order: { type: 'array', description: 'Seulement si l’utilisateur a dicté lui-même l’ordre des valeurs de la première propriété d’orderBy ; ne le devine jamais. Sans order, l’outil range les groupes du plus bas au plus haut d’après la maquette.', items: { type: 'string', description: 'Valeur.' } },
           startProperty: { type: 'string', description: 'Propriété de début (défaut « Planning / Date début »).' },
           endProperty: { type: 'string', description: 'Propriété de fin (défaut « Planning / Date fin »).' },
         },
@@ -798,27 +800,65 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const indices = selectIndices(context, filters, args.scope).sort((a, b) => a - b);
       if (indices.length === 0) return { result: { elements: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
 
-      // Un groupe par combinaison de valeurs d'orderBy, rangés dans l'ordre de construction :
-      // order d'abord pour la première propriété, puis l'ordre naturel ; valeurs absentes en dernier.
+      // On construit du bas vers le haut : un étage se place à la hauteur médiane du bas de ses
+      // éléments (une fondation ou une poutre isolée ne le déplace pas), quel que soit son nom
+      // (GF, 1F, F.G.L, RDC, R+1, L00…). Les éléments d'un même groupe aussi, du plus bas au plus haut.
+      const bottom = new Map<number, number>();
+      const heightOf = context.heightOf;
+      if (heightOf) {
+        for (const index of indices) {
+          const y = heightOf(index);
+          if (y !== undefined && Number.isFinite(y)) bottom.set(index, y);
+        }
+      }
+      const below = (a: number | undefined, b: number | undefined) => (a === b ? 0 : b === undefined || (a !== undefined && a < b) ? -1 : 1);
+
+      const rows = indices.map((index) => orderBy.map((path) => {
+        const value = valueOf(context, index, path);
+        return isMissing(value) ? UNDEFINED_LABEL : formatValue(value);
+      }));
+      const levelBottoms = new Map<string, number[]>();
+      indices.forEach((index, i) => {
+        const level = rows[i][0], y = bottom.get(index);
+        if (level === undefined || level === UNDEFINED_LABEL || y === undefined) return;
+        const list = levelBottoms.get(level);
+        if (list) list.push(y);
+        else levelBottoms.set(level, [y]);
+      });
+      const levelHeight = new Map([...levelBottoms].map(([level, list]) => [level, list.sort((a, b) => a - b)[Math.floor((list.length - 1) / 2)]]));
+      // Un élément sans valeur rejoint l'étage sur lequel il est posé (le plus haut qui ne dépasse
+      // pas son bas) plutôt que d'attendre la fin du chantier ; sans géométrie, il reste en dernier.
+      const floors = [...levelHeight].sort((a, b) => a[1] - b[1]);
+      let placed = 0;
+      indices.forEach((index, i) => {
+        const y = bottom.get(index);
+        if (rows[i][0] !== UNDEFINED_LABEL || y === undefined || floors.length === 0) return;
+        let floor = floors[0][0];
+        for (const [level, height] of floors) if (height <= y) floor = level;
+        rows[i][0] = floor;
+        placed++;
+      });
+
+      // Un groupe par combinaison de valeurs d'orderBy, rangés dans l'ordre de construction : order
+      // (dicté par l'utilisateur) d'abord pour la première propriété, puis la hauteur, puis l'ordre
+      // naturel ; valeurs absentes en dernier.
       const groups = new Map<string, { values: string[]; members: number[] }>();
-      for (const index of indices) {
-        const values = orderBy.map((path) => {
-          const value = valueOf(context, index, path);
-          return isMissing(value) ? UNDEFINED_LABEL : formatValue(value);
-        });
-        const key = values.join('\u0000');
+      indices.forEach((index, i) => {
+        const key = rows[i].join('\u0000');
         const group = groups.get(key);
         if (group) group.members.push(index);
-        else groups.set(key, { values, members: [index] });
-      }
+        else groups.set(key, { values: rows[i], members: [index] });
+      });
       const rankOf = (value: string) => (value === UNDEFINED_LABEL ? Infinity : rank.get(fold(value)) ?? rank.size);
       const ordered = [...groups.values()].sort((a, b) => {
         for (let i = 0; i < a.values.length; i++) {
-          const diff = (i === 0 ? rankOf(a.values[0]) - rankOf(b.values[0]) : 0) || compareValues(a.values[i], b.values[i]);
+          const diff = (i === 0 ? rankOf(a.values[0]) - rankOf(b.values[0]) || below(levelHeight.get(a.values[0]), levelHeight.get(b.values[0])) : 0)
+            || compareValues(a.values[i], b.values[i]);
           if (diff) return diff;
         }
         return 0;
       });
+      for (const group of ordered) group.members.sort((a, b) => below(bottom.get(a), bottom.get(b)) || a - b);
 
       // Les éléments s'enchaînent dans l'ordre des groupes, à intervalles réguliers sur tout le
       // chantier : le premier commence au début, le dernier finit à la fin, et un groupe dure à
@@ -858,6 +898,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
           elements: indices.length, startProperty: startPath, endProperty: endPath,
           from: formatScheduleDate(first), to: formatScheduleDate(finish),
           ...(orderBy.length > 0 ? { orderBy } : {}),
+          ...(bottom.size > 0 ? { sequence: `${rank.size > 0 ? 'Ordre dicté, puis d' : 'D'}u plus bas au plus haut, d’après la maquette.` } : {}),
+          ...(placed > 0 ? { placedByHeight: `Sans « ${orderBy[0]} », ${plural(placed, 'élément')} : chacun rangé avec l’étage où il se trouve.` } : {}),
           periods: periods.slice(0, 30), ...(periods.length > 30 ? { morePeriods: periods.length - 30 } : {}),
           ...(changed ? {} : { unchanged: 'Ces dates étaient déjà écrites.' }),
           planning, next: DONE,

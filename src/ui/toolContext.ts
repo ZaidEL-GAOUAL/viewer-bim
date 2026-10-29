@@ -1,3 +1,4 @@
+import { Box3 } from 'three';
 import type { ToolContext } from '../assistant/tools.ts';
 import type { App } from './App.ts';
 
@@ -7,6 +8,7 @@ import type { App } from './App.ts';
  */
 export function toolContext(app: App): ToolContext {
   const initialModel = app.model;
+  const box = new Box3();
   return {
     isCurrent: () => app.model === initialModel,
     get store() { return app.store; },
@@ -27,5 +29,10 @@ export function toolContext(app: App): ToolContext {
     groupBy: (paths) => app.groupBy(paths),
     writeProperties: (updates) => app.editProperties(updates),
     openPlanning: (startProperty, endProperty) => app.openPlanning(startProperty, endProperty),
+    // La maquette est en Y vers le haut : le bas d'un élément est le minimum de sa boîte en Y.
+    heightOf: (index) => {
+      if (!app.model?.elementBox(index, box) || box.isEmpty()) return undefined;
+      return box.min.y;
+    },
   };
 }
