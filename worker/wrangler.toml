@@ -17,7 +17,7 @@ simple = { limit = 20, period = 60 }
 
 [vars]
 # Seules ces origines peuvent appeler le worker (séparées par des virgules).
-ALLOWED_ORIGINS = "https://zaidel-gaoual.github.io,http://localhost:5173,http://localhost:4173"
+ALLOWED_ORIGINS = "https://zaidel-gaoual.github.io,https://viewer-bim-site.elgaoualaccount.workers.dev,http://localhost:5173,http://localhost:4173"
 # Modèle Workers AI par défaut (doit savoir appeler des fonctions).
 MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 # Relais optionnels, utilisés quand Workers AI refuse (quota du jour atteint, panne).
