@@ -74,3 +74,35 @@ test('le relais OpenAI reçoit toujours le contenu null et le dialogue d’origi
   assert.equal(response.status, 200);
   assert.equal((await response.json() as { provider: string }).provider, 'Groq');
 });
+
+test('un appel d’outil écrit dans le texte par Llama devient un vrai appel', async () => {
+  const call = [{ id: 'call_text_0', name: 'get_element', arguments: { query: 'Mur test' } }];
+  const cases: [unknown, unknown, unknown][] = [
+    // Texte JSON au format natif de Llama, avec ou sans <|python_tag|>.
+    ['<|python_tag|>{"name": "get_element", "parameters": {"query": "Mur test"}}', [], call],
+    // Workers AI a déjà relu ce JSON en objet.
+    [{ name: 'get_element', parameters: { query: 'Mur test' } }, [], call],
+    // Appel normal dont les arguments s'appellent « parameters ».
+    ['', [{ name: 'get_element', parameters: { query: 'Mur test' } }], [{ ...call[0], id: 'call_0' }]],
+  ];
+  for (const [responseText, toolCalls, expected] of cases) {
+    const response = await worker.fetch(request(conversation()), {
+      ALLOWED_ORIGINS: ORIGIN,
+      MODEL,
+      AI: { async run() { return { response: responseText, tool_calls: toolCalls }; } },
+    });
+    const reply = await response.json() as { content: string; tool_calls: unknown };
+    assert.deepEqual(reply.tool_calls, expected);
+    assert.equal(reply.content, '');
+  }
+
+  // Un JSON qui n'appelle pas un outil proposé reste du texte, au lieu d'une réponse vide.
+  const other = await worker.fetch(request(conversation()), {
+    ALLOWED_ORIGINS: ORIGIN,
+    MODEL,
+    AI: { async run() { return { response: { name: 'delete_everything', parameters: {} }, tool_calls: [] }; } },
+  });
+  const reply = await other.json() as { content: string; tool_calls: unknown[] };
+  assert.deepEqual(reply.tool_calls, []);
+  assert.equal(reply.content, '{"name":"delete_everything","parameters":{}}');
+});

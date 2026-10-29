@@ -6,7 +6,11 @@ import { numericValue, validateAppearanceRules, type AppearanceRule, type RuleCo
 import { ELEMENT_ID, ELEMENT_NAME, isElementField } from '../data/elementFields.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
 
-export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less';
+export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less' | 'greater_or_equal' | 'less_or_equal';
+const FILTER_OPS: readonly string[] = ['equals', 'not_equals', 'contains', 'missing', 'present', 'greater', 'less', 'greater_or_equal', 'less_or_equal'];
+/** Opérateurs écrits en symboles par certains modèles (« = », « >= ») : ramenés aux noms attendus. */
+const OP_ALIASES: Record<string, string> = { '=': 'equals', '==': 'equals', '!=': 'not_equals', '<>': 'not_equals', '>': 'greater', '<': 'less', '>=': 'greater_or_equal', '<=': 'less_or_equal' };
+const opOf = (raw: unknown): string => { const op = String(raw ?? 'equals').trim(); return OP_ALIASES[op] ?? op; };
 
 export interface Filter {
   property: string;
@@ -44,7 +48,7 @@ export interface ToolOutcome {
 /** Définitions au format OpenAI (comprises par Workers AI, Groq, Cerebras). Renvoyées à chaque appel : courtes. */
 const FILTERS = {
   type: 'array',
-  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less. Liste vide = tous. property peut aussi être "#nom" (nom affiché de l’élément) ou "#id" (son identifiant).',
+  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less, greater_or_equal, less_or_equal. Liste vide = tous. property peut aussi être "#nom" (nom affiché de l’élément) ou "#id" (son identifiant).',
   items: { type: 'object', description: 'Filtre {property, op, value}.' },
 };
 const SCOPE = { type: 'string', description: '"model" (défaut) ou "selection" (éléments sélectionnés).' };
@@ -237,7 +241,26 @@ function namesOf(context: ToolContext, indices: number[], limit = 10): { element
   return indices.length > limit ? { elements, more: indices.length - limit } : { elements };
 }
 
-const NO_MATCH = 'Aucun élément ne vérifie ces filtres. Vérifiez la valeur exacte avec find_elements ou count_by ; un nom d’élément se filtre sur "#nom", un identifiant sur "#id".';
+const NO_MATCH = 'Aucun élément ne vérifie ces filtres. existingValues donne les valeurs présentes des propriétés filtrées : corrige la valeur et réessaie. Un nom d’élément se filtre sur "#nom", un identifiant sur "#id".';
+const EXISTING_VALUES = 15;
+
+/**
+ * Valeurs présentes des propriétés filtrées, les plus fréquentes d'abord. Renvoyées quand rien ne
+ * correspond : le modèle corrige sa valeur (« R1 » au lieu de « Niveau R1 ») sans dépenser un
+ * appel de plus en count_by.
+ */
+function existingValues(store: PropertyStore, filters: ResolvedFilter[]): { existingValues?: Record<string, string[]> } {
+  const out: Record<string, string[]> = {};
+  for (const { path } of filters) {
+    if (isElementField(path) || path in out) continue;
+    out[path] = [...store.groups(path).entries()]
+      .filter(([label]) => label !== UNDEFINED_LABEL)
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, EXISTING_VALUES)
+      .map(([label]) => label);
+  }
+  return Object.keys(out).length > 0 ? { existingValues: out } : {};
+}
 
 function isMissing(value: PropValue | undefined): boolean {
   return value === undefined || value === null || value === '';
@@ -266,11 +289,15 @@ function matches(value: PropValue | undefined, filter: Filter): boolean {
     case 'contains':
       return !isMissing(value) && fold(String(value)).includes(fold(String(filter.value ?? '')));
     case 'greater':
-    case 'less': {
+    case 'less':
+    case 'greater_or_equal':
+    case 'less_or_equal': {
       const a = numericValue(value);
       const b = numericValue(filter.value);
       if (a === undefined || b === undefined) return false;
-      return filter.op === 'greater' ? a > b : a < b;
+      if (filter.op === 'greater') return a > b;
+      if (filter.op === 'less') return a < b;
+      return filter.op === 'greater_or_equal' ? a >= b : a <= b;
     }
     default:
       return false;
@@ -282,17 +309,38 @@ interface ResolvedFilter {
   filter: Filter;
 }
 
-/** Certains modèles renvoient une liste sous forme de texte JSON : on la relit. */
+/**
+ * Booléen d'un argument d'outil. Certains modèles (Llama 3.3 en particulier) envoient « "true" » en
+ * texte : comparé à `true`, il était ignoré, et « n'affiche que X » ne faisait que sélectionner X.
+ */
+function flag(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value !== 'string') return undefined;
+  const text = fold(value);
+  if (['true', '1', 'oui', 'vrai', 'yes'].includes(text)) return true;
+  if (['false', '0', 'non', 'faux', 'no'].includes(text)) return false;
+  return undefined;
+}
+
+/**
+ * Une liste attendue, telle que les modèles l'envoient parfois : en texte JSON, ou réduite à son
+ * seul élément ({property, op, value} au lieu de [{…}], "Niveau" au lieu de ["Niveau"]).
+ */
 function asList(raw: unknown): unknown {
-  if (typeof raw === 'string') {
+  let value = raw;
+  if (typeof value === 'string') {
     try {
-      return JSON.parse(raw);
+      value = JSON.parse(value);
     } catch {
-      return raw;
+      // un texte simple : un seul élément
     }
   }
-  return raw;
+  return value === undefined || value === null || value === '' || Array.isArray(value) ? value : [value];
 }
+
+/** Périmètre « selection », même écrit « sélection » ou « Selection ». */
+const inSelection = (scope: unknown): boolean => typeof scope === 'string' && fold(scope) === 'selection';
 
 function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter[] | { error: string } {
   const raw = asList(rawFilters);
@@ -303,8 +351,8 @@ function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter
     if (typeof item !== 'object' || item === null) return { error: 'Chaque filtre doit être un objet {property, op, value}.' };
     const record = item as Record<string, unknown>;
     const property = typeof record.property === 'string' ? record.property : '';
-    const op = String(record.op ?? 'equals') as FilterOp;
-    if (!['equals', 'not_equals', 'contains', 'missing', 'present', 'greater', 'less'].includes(op)) return { error: `Opérateur inconnu : ${op}` };
+    const op = opOf(record.op) as FilterOp;
+    if (!FILTER_OPS.includes(op)) return { error: `Opérateur inconnu : ${op}` };
     const path = resolveProperty(store, property);
     if (typeof path !== 'string') return path;
     const value = record.value;
@@ -315,7 +363,7 @@ function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter
 
 /** Indices des éléments du périmètre qui vérifient tous les filtres. */
 export function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
-  const base = scope === 'selection' ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
+  const base = inSelection(scope) ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
   if (filters.length === 0) return base;
   return base.filter((index) => filters.every(({ path, filter }) => matches(valueOf(context, index, path), filter)));
 }
@@ -361,7 +409,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const path = resolveProperty(store, String(args.property ?? ''));
       if (typeof path !== 'string') return { result: path, note: path.error };
       if (isElementField(path)) return { result: { error: `${path} distingue chaque élément : utilisez find_elements avec un filtre sur ${path}.` }, note: 'Répartition impossible sur le nom ou l’identifiant' };
-      const scope = args.scope === 'selection' ? context.selection : null;
+      const scope = inSelection(args.scope) ? context.selection : null;
       const counts = new Map<string, number>();
       for (const [label, members] of store.groups(path)) {
         const count = scope ? members.filter((index) => scope.has(index)).length : members.length;
@@ -391,7 +439,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const indices = selectIndices(context, filters, args.scope);
       const limit = Math.min(DETAIL_MAX, Math.max(1, Number(args.limit) || DETAIL_LIMIT));
       const elements = indices.slice(0, limit).map((index) => elementSummary(context, index, wanted));
-      return { result: { count: indices.length, shown: elements.length, elements }, note: `${plural(indices.length, 'élément')} trouvé${indices.length > 1 ? 's' : ''}` };
+      return { result: { count: indices.length, shown: elements.length, elements, ...(indices.length === 0 ? existingValues(store, filters) : {}) }, note: `${plural(indices.length, 'élément')} trouvé${indices.length > 1 ? 's' : ''}` };
     }
 
     case 'get_element': {
@@ -411,12 +459,12 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
       const indices = narrowing.indices;
-      const isolate = args.isolate === true;
-      const highlight = args.highlight === true;
-      if (indices.length === 0) return { result: { count: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
+      const isolate = flag(args.isolate) === true;
+      const highlight = flag(args.highlight) === true;
+      if (indices.length === 0) return { result: { count: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       context.select(indices, isolate);
       let dimmed = false;
-      if (highlight && context.setAppearanceRules && args.scope !== 'selection') {
+      if (highlight && context.setAppearanceRules && !inSelection(args.scope)) {
         // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité.
         // Deux règles empilées, reconnaissables à leur identifiant pour pouvoir les retirer.
         // Cible réduite aux éléments cités : une règle par identifiant (les conditions se combinent par ET).
@@ -449,16 +497,16 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
 
     case 'set_visibility': {
       if (!context.setVisible || !context.showAll) throw new Error('La visibilité n’est pas réglable dans ce contexte.');
-      if (args.showAll === true) {
+      if (flag(args.showAll) === true) {
         context.showAll();
         return { result: { shown: context.count }, note: 'Toute la maquette est réaffichée' };
       }
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const visible = args.visible !== false;
+      const visible = flag(args.visible) !== false;
       const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
       const indices = narrowing.indices;
-      if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH }, note: 'Aucun élément concerné' };
+      if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       context.setVisible(indices, visible);
       return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
     }
@@ -551,10 +599,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const patched = rawRules.map((raw) => {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Chaque règle doit être un objet.');
         const rule = structuredClone(raw) as Record<string, unknown>;
-        if (Array.isArray(rule.conditions)) rule.conditions = rule.conditions.map((condition: unknown) => {
+        // Mêmes écarts des modèles que pour les autres outils : booléen ou nombre en texte, liste
+        // réduite à un élément, opérateur en symbole. Une règle ajoutée sans « enabled » est active.
+        rule.enabled = rule.enabled === undefined ? true : flag(rule.enabled) ?? rule.enabled;
+        if (typeof rule.opacity === 'string' && rule.opacity.trim() !== '' && Number.isFinite(Number(rule.opacity))) rule.opacity = Number(rule.opacity);
+        const conditions = asList(rule.conditions);
+        if (Array.isArray(conditions)) rule.conditions = conditions.map((condition: unknown) => {
           if (!condition || typeof condition !== 'object' || Array.isArray(condition)) throw new Error('Condition illisible.');
           const c = condition as Record<string, unknown>;
-          return { ...c, property: resolve(c.property) };
+          return { ...c, property: resolve(c.property), op: opOf(c.op) };
         });
         if (rule.opacityBy && typeof rule.opacityBy === 'object' && !Array.isArray(rule.opacityBy)) {
           const opacityBy = rule.opacityBy as Record<string, unknown>;

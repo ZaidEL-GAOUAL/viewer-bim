@@ -69,7 +69,8 @@ function normalizeToolCalls(raw: unknown): ToolCall[] {
     if (!isRecord(item)) return;
     const fn = isRecord(item.function) ? item.function : item;
     if (typeof fn.name !== 'string') return;
-    calls.push({ id: typeof item.id === 'string' ? item.id : `call_${index}`, name: fn.name, arguments: parseArguments(fn.arguments) });
+    // Llama nomme les arguments « parameters » dans son format natif.
+    calls.push({ id: typeof item.id === 'string' ? item.id : `call_${index}`, name: fn.name, arguments: parseArguments(fn.arguments ?? fn.parameters) });
   });
   return calls;
 }
@@ -79,7 +80,33 @@ function textOf(content: unknown): string {
   if (Array.isArray(content)) {
     return content.map((part: unknown) => (isRecord(part) && typeof part.text === 'string' ? part.text : '')).join('');
   }
-  return '';
+  // Workers AI rend parfois un objet quand le texte du modèle est du JSON : ne pas le perdre.
+  return isRecord(content) ? JSON.stringify(content) : '';
+}
+
+/**
+ * Appel d'outil écrit dans le texte au lieu de tool_calls ({"name":…,"parameters":…}, parfois
+ * précédé de <|python_tag|>, ou déjà relu en objet par Workers AI). Sans cela, le viewer affichait
+ * ce JSON comme réponse et rien n'était fait. Seuls les outils proposés sont reconnus.
+ */
+function toolCallInText(content: unknown, tools: unknown[]): ToolCall | null {
+  let value = content;
+  if (typeof value === 'string') {
+    const text = value.trim().replace(/^<\|python_tag\|>/, '').trim();
+    if (!text.startsWith('{')) return null;
+    try { value = JSON.parse(text); } catch { return null; }
+  }
+  if (!isRecord(value)) return null;
+  const call = normalizeToolCalls([value])[0];
+  const offered = tools.some((tool) => isRecord(tool) && isRecord(tool.function) && tool.function.name === call?.name);
+  return call && offered ? { ...call, id: 'call_text_0' } : null;
+}
+
+/** Contenu et appels d'outils d'une réponse, quel que soit le fournisseur. */
+function replyParts(content: unknown, rawCalls: unknown, tools: unknown[]): Pick<Reply, 'content' | 'tool_calls'> {
+  const calls = normalizeToolCalls(rawCalls);
+  const inText = calls.length === 0 ? toolCallInText(content, tools) : null;
+  return inText ? { content: '', tool_calls: [inText] } : { content: textOf(content), tool_calls: calls };
 }
 
 // -------------------------------------------------------------- fournisseurs
@@ -99,7 +126,7 @@ function workersAi(env: Env): Provider {
       if (tools.length > 0) input.tools = tools;
       const output = await env.AI.run(model, input);
       if (!isRecord(output)) throw new Error('réponse inattendue du modèle');
-      return { content: textOf(output.response), tool_calls: normalizeToolCalls(output.tool_calls), provider: 'Cloudflare Workers AI', model, usage: normalizeUsage(output.usage) };
+      return { ...replyParts(output.response, output.tool_calls, tools), provider: 'Cloudflare Workers AI', model, usage: normalizeUsage(output.usage) };
     },
   };
 }
@@ -128,7 +155,7 @@ function openAiCompatible(name: string, url: string, key: string, model: string)
       const choice = isRecord(output) && Array.isArray(output.choices) ? (output.choices[0] as unknown) : null;
       const message = isRecord(choice) && isRecord(choice.message) ? choice.message : null;
       if (!message) throw new Error(`${name} : réponse inattendue`);
-      return { content: textOf(message.content), tool_calls: normalizeToolCalls(message.tool_calls), provider: name, model, usage: normalizeUsage(isRecord(output) ? output.usage : undefined) };
+      return { ...replyParts(message.content, message.tool_calls, tools), provider: name, model, usage: normalizeUsage(isRecord(output) ? output.usage : undefined) };
     },
   };
 }

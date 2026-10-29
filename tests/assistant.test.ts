@@ -114,6 +114,9 @@ test('le message système résume les propriétés sans dépasser quelques milli
   const prompt = buildSystemPrompt({ fileName: 'test.glb', count: 6, store });
   assert.match(prompt, /« test.glb », 6 éléments, 5 avec des propriétés/);
   assert.match(prompt, /Champs verrouillés .* : Classe IFC, Niveau, Matériaux, Qto_\*/);
+  // Demande dictée sans « ne » (« affiche que les éléments en R1 ») : elle isole.
+  assert.match(prompt, /« affiche que X » \(à l’oral, sans « ne »\).* → select_elements avec isolate:true/);
+  assert.match(prompt, /n’écris « isolés » que si isolated vaut true/);
 
   // Un modèle aux valeurs toutes différentes ne liste que des exemples, et la taille reste bornée.
   const wide = new PropertyStore(3000);
@@ -253,6 +256,54 @@ test('set_visibility masque, réaffiche ou montre tout sans toucher à la sélec
   assert.equal(shownAllCount(), 1);
   assert.match(runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+9' }], visible: false }, context).note, /Aucun élément/);
   assert.equal(selected.length, 0, 'la sélection n’a pas bougé');
+});
+
+test('les booléens envoyés en texte (« "true" », Llama) comptent comme des booléens', () => {
+  // « affiche que les éléments en R1 » : le modèle envoyait isolate:"true", ignoré, et ne faisait que sélectionner.
+  const { context, selected, isolated, visibility, shownAllCount } = sampleContext();
+  const isolatedOutcome = runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], isolate: 'true' }, context);
+  assert.deepEqual(selected, [[2, 3]]);
+  assert.deepEqual(isolated, [true]);
+  assert.equal(isolatedOutcome.note, '2 éléments isolés');
+  assert.equal((isolatedOutcome.result as { isolated: boolean }).isolated, true);
+
+  runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], isolate: 'false' }, context);
+  assert.deepEqual(isolated[1], false);
+  assert.equal(runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], highlight: 'True' }, context).note, '2 éléments mis en évidence');
+
+  // « masque X » avec visible:"false" réaffichait X au lieu de le masquer.
+  assert.equal(runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], visible: 'false' }, context).note, '2 éléments masqués');
+  assert.deepEqual(visibility[0], [[2, 3], false]);
+  runTool('set_visibility', { filters: [], showAll: 'true' }, context);
+  assert.equal(shownAllCount(), 1);
+});
+
+test('les autres écarts courants des modèles sont tolérés : liste réduite, opérateur en symbole, « sélection »', () => {
+  const { context, rulesOf } = sampleContext();
+  // Un filtre seul au lieu d'une liste, « >= » au lieu de greater_or_equal (accepté par les règles, pas par les filtres).
+  const big = runTool('find_elements', { filters: { property: 'NetVolume', op: '>=', value: 5.6 } }, context).result as { count: number };
+  assert.equal(big.count, 1);
+  // « sélection » avec accent visait toute la maquette.
+  assert.equal((runTool('count_by', { property: 'Niveau', scope: 'sélection' }, context).result as { total: number }).total, 2);
+
+  // update_view : règle seule, enabled et opacité en texte, condition seule en symbole, regroupement en texte simple.
+  let grouped: string[] = [];
+  context.groupBy = (paths) => { grouped = paths; };
+  const outcome = runTool('update_view', { rules: { id: 'beton', enabled: 'true', conditions: { property: 'Matériaux', op: '=', value: 'Béton' }, opacity: '0.5' }, groupBy: 'Niveau' }, context);
+  assert.equal(outcome.note, 'Présentation mise à jour : règles et regroupement');
+  assert.deepEqual(rulesOf().map((rule) => [rule.id, rule.enabled, rule.opacity, rule.conditions[0].op]), [['beton', true, 0.5, 'equals']]);
+  assert.deepEqual(grouped, ['Niveau']);
+  // Sans « enabled », la règle ajoutée est active (elle était refusée).
+  runTool('update_view', { rules: [{ id: 'bois', conditions: [{ property: 'Matériaux', op: 'equals', value: 'Bois' }], color: '#00ff00' }] }, context);
+  assert.equal(rulesOf().find((rule) => rule.id === 'bois')?.enabled, true);
+});
+
+test('sans résultat, les valeurs présentes de la propriété filtrée accompagnent l’erreur', () => {
+  // « R1 » au lieu de « R+1 » : le modèle corrige d'après existingValues, sans appel count_by de plus.
+  const { context } = sampleContext();
+  const outcome = runTool('select_elements', { filters: [{ property: 'Niveau', op: 'equals', value: 'R1' }], isolate: true }, context);
+  assert.equal(outcome.note, 'Aucun élément concerné');
+  assert.deepEqual((outcome.result as { existingValues: Record<string, string[]> }).existingValues, { Niveau: ['RDC', 'R+1'] });
 });
 
 test('select_elements avec highlight atténue le reste par deux règles empilées, retirables par id', () => {
