@@ -8,6 +8,6 @@
     "dev": "wrangler dev --remote"
   },
   "devDependencies": {
-    "wrangler": "^4.40.0"
+    "wrangler": "^4.153.0"
   }
 }

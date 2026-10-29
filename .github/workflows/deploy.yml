@@ -47,7 +47,7 @@ jobs:
           workingDirectory: worker
           # Même version que worker/package-lock.json ; l'action installe sinon un wrangler 3,
           # qui ne connaît pas [[ratelimits]].
-          wranglerVersion: '4.147.0'
+          wranglerVersion: '4.153.0'
           command: deploy
       - run: npm run build
         env:
