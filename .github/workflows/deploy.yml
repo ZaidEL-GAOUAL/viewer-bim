@@ -35,9 +35,30 @@ jobs:
           python-version: '3.12'
       - run: pip install -r pipeline/requirements.txt pytest usd-core
       - run: pytest pipeline/tests -q
+      # Le worker n'est redéployé que si worker/ (ou ce fichier, qui fixe la version de wrangler) a
+      # changé depuis le push précédent. Lancement à la main, nouvelle branche ou historique réécrit :
+      # pas de comparaison sûre, on déploie.
+      - name: Le worker a-t-il changé ?
+        id: changes
+        if: env.HAS_CLOUDFLARE == 'true'
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" != push ] || [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ] \
+             || ! git fetch --quiet --depth=1 origin "$BEFORE"; then
+            echo "worker=true" >> "$GITHUB_OUTPUT"
+            echo "Pas de push précédent à comparer : le worker est déployé."
+          elif git diff --quiet "$BEFORE" HEAD -- worker .github/workflows/deploy.yml; then
+            echo "worker=false" >> "$GITHUB_OUTPUT"
+            echo "worker/ inchangé : le worker déjà en ligne est gardé."
+          else
+            echo "worker=true" >> "$GITHUB_OUTPUT"
+            echo "worker/ a changé : le worker est redéployé."
+          fi
       - name: Déploiement du worker Cloudflare (assistant)
         id: worker
-        if: env.HAS_CLOUDFLARE == 'true'
+        if: env.HAS_CLOUDFLARE == 'true' && steps.changes.outputs.worker == 'true'
         # Un échec ici ne bloque pas le site : il se déploie alors sans assistant.
         continue-on-error: true
         uses: cloudflare/wrangler-action@v3
