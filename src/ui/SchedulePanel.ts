@@ -1,4 +1,4 @@
-import { compileSchedule, evaluateSchedule, formatScheduleDate, parseSchedule, parseScheduleDate, scheduleFromMetadata, type CompiledSchedule, type Schedule, type ScheduleFrame } from '../data/schedule.ts';
+import { compileSchedule, evaluateSchedule, formatScheduleDate, parseSchedule, parseScheduleDate, scheduleFromMetadata, type CompiledSchedule, type MetadataScheduleOptions, type Schedule, type ScheduleFrame } from '../data/schedule.ts';
 import type { App } from './App.ts';
 import type { Model } from '../engine/Model.ts';
 import { button, h, integer } from './dom.ts';
@@ -47,7 +47,7 @@ export class SchedulePanel {
   private readonly collapsed = new Set<string>();
   private fadeFrame = 0;
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  private metadataMapping: Parameters<typeof scheduleFromMetadata>[2] | null = null;
+  private metadataMapping: MetadataScheduleOptions | null = null;
   private metadataNote = '';
   private bindingError = '';
   private selectedTask = -1;
@@ -338,14 +338,21 @@ export class SchedulePanel {
     const notice = h('p', { class: 'hint', attrs: { role: 'status' } });
     body.append(notice, button('Créer le planning', () => {
       if (!start.value || !end.value) { notice.textContent = 'Choisissez une propriété de début et de fin.'; return; }
-      const mapping = { startProperty: start.value, endProperty: end.value, ...(id.value ? { taskIdProperty: id.value } : {}) };
       try {
-        const result = scheduleFromMetadata(this.app.model!.keys, this.app.store, mapping);
-        if (!result.schedule) { notice.textContent = `Aucune tâche utilisable. ${this.mappingNotice(result.report)}`; return; }
-        this.loadJson(result.schedule, 'Dates des métadonnées'); this.metadataMapping = mapping; this.metadataNote = this.mappingNotice(result.report);
-        this.render(); dialog.close();
+        this.fromMetadata({ startProperty: start.value, endProperty: end.value, ...(id.value ? { taskIdProperty: id.value } : {}) });
+        dialog.close();
       } catch (error) { notice.textContent = error instanceof Error ? error.message : String(error); }
     }, { class: 'primary' }));
+  }
+
+  /** Opens the planning built from date properties, kept in sync with later edits. Returns the task count. */
+  fromMetadata(mapping: MetadataScheduleOptions): number {
+    if (!this.app.model) throw new Error('Chargez une maquette pour créer le planning.');
+    const result = scheduleFromMetadata(this.app.model.keys, this.app.store, mapping);
+    if (!result.schedule) throw new Error(`Aucune tâche utilisable. ${this.mappingNotice(result.report)}`);
+    this.loadJson(result.schedule, 'Dates des métadonnées'); this.metadataMapping = mapping; this.metadataNote = this.mappingNotice(result.report);
+    this.render();
+    return result.schedule.tasks.length;
   }
 
   private download(): void {

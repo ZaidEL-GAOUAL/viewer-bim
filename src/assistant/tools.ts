@@ -1,7 +1,8 @@
 // Outils mis à disposition du LLM. Ils tournent dans le navigateur, sur les données déjà
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
-import { PATH_SEP, UNDEFINED_LABEL, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
+import { PATH_SEP, UNDEFINED_LABEL, compareValues, formatValue, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
+import { formatScheduleDate, parseScheduleDate } from '../data/schedule.ts';
 import { numericValue, validateAppearanceRules, type AppearanceRule, type RuleCondition } from '../data/appearanceRules.ts';
 import { ELEMENT_ID, ELEMENT_NAME, isElementField } from '../data/elementFields.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
@@ -18,7 +19,7 @@ export interface Filter {
   value?: PropValue;
 }
 
-/** Tools can read metadata and change presentation only. No geometry or metadata write access. */
+/** Tools read metadata, change presentation and write properties (undoable). No geometry access. */
 export interface ToolContext {
   store: PropertyStore;
   count: number;
@@ -35,6 +36,10 @@ export interface ToolContext {
   setAppearanceRules?(rules: AppearanceRule[]): void;
   grouping?: readonly string[];
   groupBy?(paths: string[]): void;
+  /** Écrit des valeurs (élément, propriété, valeur) en une seule étape annulable. Faux si rien n'a changé. */
+  writeProperties?(updates: readonly (readonly [number, string, PropValue])[]): boolean;
+  /** Ouvre le Planning 4D à partir de deux propriétés de dates ; renvoie le nombre de tâches. */
+  openPlanning?(startProperty: string, endProperty: string): number;
   isCurrent?(): boolean;
 }
 
@@ -165,6 +170,45 @@ export const TOOL_DEFINITIONS = [
           ruleOrder: { type: 'array', description: 'Tous les ids restants dans l’ordre souhaité ; dernier prioritaire.', items: { type: 'string', description: 'Identifiant de règle.' } },
           groupBy: { type: 'array', description: 'Propriétés formant la hiérarchie de l’arbre, dans l’ordre ; [] pour supprimer le regroupement.', items: { type: 'string', description: 'Nom exact d’une propriété.' } },
         },
+      },
+    },
+  },
+  {
+    type: 'function', function: {
+      name: 'set_property',
+      description: 'Ajoute ou modifie une propriété des éléments vérifiant les filtres. La propriété est créée si elle n’existe pas ; dans une catégorie, écrire « Catégorie / Nom ». value : la même valeur pour tous ; expression : formule calculée par élément, comme compute ([Longueur] * 2). Modification annulable par l’utilisateur.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          property: { type: 'string', description: 'Nom de la propriété à écrire.' },
+          value: { type: 'string', description: 'Valeur à écrire (texte, nombre ou booléen).' },
+          expression: { type: 'string', description: 'Formule par élément, à la place de value.' },
+        },
+        required: ['filters', 'property'],
+      },
+    },
+  },
+  {
+    type: 'function', function: {
+      name: 'plan_dates',
+      description: 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent dans l’ordre d’orderBy (ex. le code étage), répartis régulièrement de start (premier début) à end (dernière fin) ; chaque élément dure entre minDays et maxDays jours. Annulable par l’utilisateur.',
+      parameters: {
+        type: 'object',
+        properties: {
+          filters: FILTERS,
+          scope: SCOPE,
+          start: { type: 'string', description: 'Début du chantier, AAAA-MM-JJ.' },
+          end: { type: 'string', description: 'Fin du chantier, AAAA-MM-JJ.' },
+          minDays: { type: 'number', description: 'Durée minimale d’un élément, en jours.' },
+          maxDays: { type: 'number', description: 'Durée maximale d’un élément, en jours.' },
+          orderBy: { type: 'array', description: 'Propriétés qui ordonnent les tâches, la première d’abord.', items: { type: 'string', description: 'Nom de propriété.' } },
+          order: { type: 'array', description: 'Valeurs de la première propriété d’orderBy dans l’ordre de construction, du plus bas au plus haut (ex. SS1, RDC, R+1). Sans order : ordre naturel (00, 01, 02…). Valeurs absentes en dernier.', items: { type: 'string', description: 'Valeur.' } },
+          startProperty: { type: 'string', description: 'Propriété de début (défaut « Planning / Date début »).' },
+          endProperty: { type: 'string', description: 'Propriété de fin (défaut « Planning / Date fin »).' },
+        },
+        required: ['start', 'end', 'minDays', 'maxDays'],
       },
     },
   },
@@ -361,6 +405,67 @@ function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter
   return out;
 }
 
+/** Formule par élément (compute, set_property) ; null si absente. */
+function compileFormula(store: PropertyStore, text: unknown): Expression | null | { error: string } {
+  if (typeof text !== 'string' || text.trim() === '') return null;
+  try {
+    return compileExpression(text, (name) => {
+      const path = resolveProperty(store, name);
+      if (typeof path !== 'string') throw new ExpressionError(path.error);
+      return path;
+    });
+  } catch (error) {
+    return { error: `Formule illisible : ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+/**
+ * Chemin d'une propriété à écrire. Seuls le nom complet (casse et accents ignorés) ou un dernier
+ * segment unique désignent une propriété existante, jamais un rapprochement partiel qui écrirait
+ * dans un autre champ. Sinon la propriété est créée sous ce nom.
+ */
+function writablePath(store: PropertyStore, raw: unknown): string | { error: string } {
+  const name = String(raw ?? '').trim().replace(/\s*\/\s*/g, PATH_SEP);
+  if (!name) return { error: 'Nom de propriété manquant.' };
+  if (isElementField(name)) return { error: `${name} n’est pas une propriété : le nom affiché et l’identifiant ne s’écrivent pas.` };
+  let path = name;
+  if (!store.paths.includes(name)) {
+    const wanted = fold(name);
+    const exact = store.paths.filter((candidate) => fold(candidate) === wanted);
+    const tails = name.includes(PATH_SEP) ? [] : store.paths.filter((candidate) => candidate.includes(PATH_SEP) && fold(candidate.slice(candidate.lastIndexOf(PATH_SEP) + PATH_SEP.length)) === wanted);
+    const found = exact.length > 0 ? exact : tails;
+    if (found.length > 1) return { error: `Propriété « ${name} » ambiguë : ${found.slice(0, 8).join(' ; ')}` };
+    if (found.length === 1) path = found[0];
+  }
+  return store.isEditable(path) ? path : { error: `La propriété « ${path} » est verrouillée : elle ne se modifie pas.` };
+}
+
+/** Jour d'une date AAAA-MM-JJ, ou JJ/MM/AAAA comme on l'écrit en français. */
+function dayOf(raw: unknown, label: string): number {
+  const text = String(raw ?? '').trim();
+  const french = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+  try {
+    return parseScheduleDate(french ? `${french[3]}-${french[2].padStart(2, '0')}-${french[1].padStart(2, '0')}` : text);
+  } catch {
+    throw new Error(`${label} : date « ${text} » illisible, attendu AAAA-MM-JJ.`);
+  }
+}
+
+function dayCount(raw: unknown, label: string): number {
+  const value = Number(typeof raw === 'string' ? raw.replace(',', '.') : raw);
+  if (!Number.isFinite(value) || value < 1) throw new Error(`${label} doit être un nombre de jours, au moins 1.`);
+  return Math.round(value);
+}
+
+/** Nombre tiré de l'identifiant (FNV-1a) : relancer donne les mêmes durées. */
+function stableHash(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+  return hash >>> 0;
+}
+
+const NO_WRITE = 'La modification des propriétés n’est pas disponible dans ce contexte.';
+
 /** Indices des éléments du périmètre qui vérifient tous les filtres. */
 export function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
   const base = inSelection(scope) ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
@@ -514,20 +619,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
     case 'compute': {
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const compile = (text: unknown): Expression | null | { error: string } => {
-        if (typeof text !== 'string' || text.trim() === '') return null;
-        try {
-          return compileExpression(text, (name) => {
-            const path = resolveProperty(store, name);
-            if (typeof path !== 'string') throw new ExpressionError(path.error);
-            return path;
-          });
-        } catch (error) {
-          return { error: `Formule illisible : ${error instanceof Error ? error.message : String(error)}` };
-        }
-      };
-      const expression = compile(args.expression);
-      const where = compile(args.where);
+      const expression = compileFormula(store, args.expression);
+      const where = compileFormula(store, args.where);
       if (expression && 'error' in expression) return { result: expression, note: expression.error };
       if (where && 'error' in where) return { result: where, note: where.error };
       if (!expression && !where) return { result: { error: 'Donnez expression et/ou where.' }, note: 'Formule manquante' };
@@ -643,6 +736,134 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (changesRules) context.setAppearanceRules(rules);
       if (grouping !== undefined) context.groupBy(grouping);
       return { result: { rules: rules.map((rule) => ({ id: rule.id, enabled: rule.enabled })), groupBy: grouping ?? context.grouping ?? [], next: DONE }, note: 'Présentation mise à jour : règles et regroupement' };
+    }
+
+    case 'set_property': {
+      if (!context.writeProperties) throw new Error(NO_WRITE);
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      const path = writablePath(store, args.property);
+      if (typeof path !== 'string') return { result: path, note: path.error };
+      const formula = compileFormula(store, args.expression);
+      if (formula && 'error' in formula) return { result: formula, note: formula.error };
+      const constant = args.value;
+      if (!formula && (constant === undefined || (constant !== null && typeof constant === 'object'))) return { result: { error: 'Donnez value ou expression.' }, note: 'Valeur manquante' };
+      const indices = selectIndices(context, filters, args.scope);
+      if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
+      const created = !store.paths.includes(path);
+      const updates: [number, string, PropValue][] = [];
+      for (const index of indices) {
+        if (!formula) { updates.push([index, path, constant as PropValue]); continue; }
+        const value = formula.evaluate((name) => valueOf(context, index, name));
+        if (value === null || (typeof value === 'number' && !Number.isFinite(value))) continue;
+        updates.push([index, path, typeof value === 'number' ? Number(value.toPrecision(12)) : value]);
+      }
+      if (updates.length === 0) return { result: { changed: 0, error: 'La formule ne donne aucune valeur pour ces éléments (propriétés absentes ?).' }, note: 'Aucune valeur calculée' };
+      const changed = context.writeProperties(updates);
+      const skipped = indices.length - updates.length;
+      return {
+        result: { property: path, created, count: updates.length, ...(skipped > 0 ? { skipped } : {}), ...(changed ? {} : { unchanged: 'Ces éléments avaient déjà cette valeur.' }), ...namesOf(context, updates.map(([index]) => index)), next: DONE },
+        note: `« ${path} » ${created ? 'ajoutée' : 'modifiée'} sur ${plural(updates.length, 'élément')}`,
+      };
+    }
+
+    case 'plan_dates': {
+      if (!context.writeProperties) throw new Error(NO_WRITE);
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      const first = dayOf(args.start, 'start');
+      const last = dayOf(args.end, 'end');
+      if (last < first) throw new Error('La fin du chantier précède son début.');
+      const total = last - first + 1;
+      const shortest = dayCount(args.minDays, 'minDays');
+      const longest = dayCount(args.maxDays, 'maxDays');
+      const [minDays, maxDays] = shortest <= longest ? [shortest, longest] : [longest, shortest];
+      if (maxDays > total) throw new Error(`maxDays (${maxDays} j) dépasse la durée du chantier (${total} j).`);
+      const startPath = writablePath(store, args.startProperty ?? 'Planning / Date début');
+      if (typeof startPath !== 'string') return { result: startPath, note: startPath.error };
+      const endPath = writablePath(store, args.endProperty ?? 'Planning / Date fin');
+      if (typeof endPath !== 'string') return { result: endPath, note: endPath.error };
+      if (startPath === endPath) throw new Error('Les propriétés de début et de fin doivent être différentes.');
+      const orderBy: string[] = [];
+      const requested = asList(args.orderBy);
+      for (const name of Array.isArray(requested) ? requested : []) {
+        const path = resolveProperty(store, String(name));
+        if (typeof path !== 'string') return { result: path, note: path.error };
+        orderBy.push(path);
+      }
+      const listed = asList(args.order);
+      const rank = new Map<string, number>();
+      for (const value of Array.isArray(listed) ? listed : []) if (!rank.has(fold(String(value)))) rank.set(fold(String(value)), rank.size);
+
+      const indices = selectIndices(context, filters, args.scope).sort((a, b) => a - b);
+      if (indices.length === 0) return { result: { elements: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
+
+      // Un groupe par combinaison de valeurs d'orderBy, rangés dans l'ordre de construction :
+      // order d'abord pour la première propriété, puis l'ordre naturel ; valeurs absentes en dernier.
+      const groups = new Map<string, { values: string[]; members: number[] }>();
+      for (const index of indices) {
+        const values = orderBy.map((path) => {
+          const value = valueOf(context, index, path);
+          return isMissing(value) ? UNDEFINED_LABEL : formatValue(value);
+        });
+        const key = values.join('\u0000');
+        const group = groups.get(key);
+        if (group) group.members.push(index);
+        else groups.set(key, { values, members: [index] });
+      }
+      const rankOf = (value: string) => (value === UNDEFINED_LABEL ? Infinity : rank.get(fold(value)) ?? rank.size);
+      const ordered = [...groups.values()].sort((a, b) => {
+        for (let i = 0; i < a.values.length; i++) {
+          const diff = (i === 0 ? rankOf(a.values[0]) - rankOf(b.values[0]) : 0) || compareValues(a.values[i], b.values[i]);
+          if (diff) return diff;
+        }
+        return 0;
+      });
+
+      // Les éléments s'enchaînent dans l'ordre des groupes, à intervalles réguliers sur tout le
+      // chantier : le premier commence au début, le dernier finit à la fin, et un groupe dure à
+      // proportion de son nombre d'éléments. Les départs ne reculent jamais, donc un groupe ne
+      // commence pas avant le précédent. Chaque durée est tirée de l'identifiant de l'élément.
+      const updates: [number, string, PropValue][] = [];
+      const periods: { value: string; elements: number; from: string; to: string }[] = [];
+      const gaps = Math.max(1, indices.length - 1);
+      let j = 0;
+      let finish = first;
+      for (const group of ordered) {
+        let from = Infinity;
+        let to = -Infinity;
+        for (const index of group.members) {
+          const duration = minDays + (stableHash(context.keys[index] ?? String(index)) % (maxDays - minDays + 1));
+          const start = j > 0 && j === indices.length - 1 ? last - duration + 1 : first + Math.floor((j * (total - maxDays)) / gaps);
+          const end = start + duration - 1;
+          updates.push([index, startPath, formatScheduleDate(start)], [index, endPath, formatScheduleDate(end)]);
+          from = Math.min(from, start);
+          to = Math.max(to, end);
+          j++;
+        }
+        finish = Math.max(finish, to);
+        periods.push({ value: group.values.join(' · ') || 'tous', elements: group.members.length, from: formatScheduleDate(from), to: formatScheduleDate(to) });
+      }
+      const changed = context.writeProperties(updates);
+      let planning: Record<string, unknown> = { opened: false };
+      if (context.openPlanning) {
+        try {
+          planning = { opened: true, tasks: context.openPlanning(startPath, endPath) };
+        } catch (error) {
+          planning = { opened: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      return {
+        result: {
+          elements: indices.length, startProperty: startPath, endProperty: endPath,
+          from: formatScheduleDate(first), to: formatScheduleDate(finish),
+          ...(orderBy.length > 0 ? { orderBy } : {}),
+          periods: periods.slice(0, 30), ...(periods.length > 30 ? { morePeriods: periods.length - 30 } : {}),
+          ...(changed ? {} : { unchanged: 'Ces dates étaient déjà écrites.' }),
+          planning, next: DONE,
+        },
+        note: `Dates de planning écrites sur ${plural(indices.length, 'élément')} (${plural(periods.length, 'période')})`,
+      };
     }
 
     default:

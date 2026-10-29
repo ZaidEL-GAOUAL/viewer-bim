@@ -1,7 +1,7 @@
 import { AssistantError, assistantUrl, fetchStatus, runTurn, type ApiSettings, type Message } from '../assistant/client.ts';
 import { SessionUsage } from '../assistant/usage.ts';
 import { buildSystemPrompt } from '../assistant/prompt.ts';
-import type { ToolContext } from '../assistant/tools.ts';
+import { toolContext } from './toolContext.ts';
 import { describeMentions, mentionedElements } from '../assistant/mentions.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
@@ -39,7 +39,7 @@ export class AssistantPanel {
     this.status = h('p', { class: 'assistant-status' });
     this.log = h('div', { class: 'assistant-log', attrs: { 'aria-live': 'polite' } });
     this.suggestions = h('div', { class: 'assistant-suggestions' });
-    this.input = h('textarea', { attrs: { rows: '2', placeholder: 'Interrogez le modèle ou ajustez son affichage…', 'aria-label': 'Message à l’assistant' } });
+    this.input = h('textarea', { attrs: { rows: '2', placeholder: 'Interrogez le modèle, ajustez son affichage ou complétez ses propriétés…', 'aria-label': 'Message à l’assistant' } });
     this.input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -127,31 +127,6 @@ export class AssistantPanel {
     this.syncStatus();
   }
 
-  /** Le contexte des outils : lecture du magasin de propriétés et actions sur la vue. */
-  private context(): ToolContext {
-    const { app } = this;
-    const initialModel = app.model;
-    return {
-      isCurrent: () => app.model === initialModel,
-      get store() { return app.store; },
-      get count() { return app.model?.count ?? 0; },
-      get keys() { return app.model?.keys ?? []; },
-      labelOf: (index) => app.elementLabel(index),
-      get selection() { return app.selection; },
-      select: (indices, isolate) => {
-        app.select(indices, 'panel');
-        if (isolate) app.isolate(indices);
-        if (indices.length > 0) app.fitTo(indices);
-      },
-      setVisible: (indices, visible) => app.setVisible(indices, visible),
-      showAll: () => app.showAll(),
-      get appearanceRules() { return app.appearanceRules; },
-      setAppearanceRules: (rules) => app.setAppearanceRules(rules),
-      get grouping() { return app.grouping; },
-      groupBy: (paths) => app.groupBy(paths),
-    };
-  }
-
   private line(kind: 'user' | 'assistant' | 'note' | 'error', text: string): HTMLElement {
     const element = h('div', { class: `chat ${kind}`, text });
     this.log.append(element);
@@ -175,7 +150,7 @@ export class AssistantPanel {
       this.line('note', `Identifiant reconnu : ${mentioned.slice(0, 3).map((index) => `« ${app.elementLabel(index)} »`).join(', ')}${mentioned.length > 3 ? ` et ${mentioned.length - 3} autres` : ''}`);
     }
     const request = text + describeMentions(mentioned, app.model!.keys, (index) => app.elementLabel(index));
-    const context = this.context();
+    const context = toolContext(app);
     context.mentioned = new Set(mentioned);
     const pending = this.line('note', 'Réflexion…');
     const controller = new AbortController();

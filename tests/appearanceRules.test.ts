@@ -111,7 +111,7 @@ test('Invalid rule lists fail validation atomically', () => {
   assert.throws(() => validateAppearanceRules([{ ...rules[0], conditions: [{ property: 'CO2', op: 'greater', value: 'later' }] }], store), /numérique/);
 });
 
-test('Assistant can only read metadata and modify view rules/grouping, never properties or geometry', () => {
+test('Assistant never edits geometry, and writes properties only through the app’s undoable writer', () => {
   const { store, rules } = fixture();
   let current = rules, grouping: string[] = [];
   const context: ToolContext = {
@@ -120,12 +120,15 @@ test('Assistant can only read metadata and modify view rules/grouping, never pro
     get grouping() { return grouping; }, groupBy: (paths) => { grouping = paths; },
   };
   const before = JSON.stringify(store.export(context.keys));
-  const unavailable = ['set_property', 'move_elements', 'duplicate_elements', 'add_boxes', 'create_elements', 'delete_elements', 'rotate_elements', 'update_parameters', 'edit_history'];
+  const unavailable = ['move_elements', 'duplicate_elements', 'add_boxes', 'create_elements', 'delete_elements', 'rotate_elements', 'update_parameters', 'edit_history'];
   for (const name of unavailable) {
     assert.equal(TOOL_DEFINITIONS.some((tool) => tool.function.name === name), false);
     assert.match(runTool(name, { filters: [], property: 'CO2', value: 0 }, context).note, /inconnu/);
   }
   assert.match(runTool('compute', { filters: [], expression: '[Géométrie / Haut]' }, context).note, /introuvable/);
+  // Sans écrivain fourni par l'application (et donc sans historique annulable), aucune écriture.
+  assert.match(runTool('set_property', { filters: [], property: 'CO2', value: 0 }, context).note, /pas disponible/);
+  assert.match(runTool('plan_dates', { filters: [], start: '2026-01-05', end: '2026-06-30', minDays: 5, maxDays: 10 }, context).note, /pas disponible/);
   const view = runTool('update_view', { rules: [{ id: 'co2', enabled: true, conditions: [{ property: 'CO2', op: 'greater', value: 1000 }], color: '#ff0000' }], groupBy: ['bâtiment', 'Avancement'] }, context);
   assert.doesNotMatch(view.note, /Erreur/);
   assert.equal(current.length, 3, 'other rules remain');

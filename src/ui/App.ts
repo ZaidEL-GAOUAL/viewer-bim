@@ -1242,6 +1242,10 @@ export class App {
     return this.propertyEdits?.set(indices, path, value) ?? false;
   }
   deleteProperty(indices: readonly number[], path: string): boolean { return this.propertyEdits?.delete(indices, path) ?? false; }
+  /** Several values in one undoable step (the assistant's writes). */
+  editProperties(updates: readonly (readonly [number, string, PropValue])[]): boolean { return this.propertyEdits?.setMany(updates) ?? false; }
+  /** Opens the 4D planning from two date properties; returns its task count. */
+  openPlanning(startProperty: string, endProperty: string): number { return this.planning.fromMetadata({ startProperty, endProperty }); }
   undoProperties(): void { this.propertyEdits?.undo(); this.emit('selection'); }
   redoProperties(): void { this.propertyEdits?.redo(); this.emit('selection'); }
   revertEdits(): void { this.propertyEdits?.revert(); this.emit('selection'); }

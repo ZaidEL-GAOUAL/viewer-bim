@@ -72,3 +72,18 @@ test('undoing the first property restores an element with no metadata', () => {
   edits.set([0], 'CO2', 100); assert.equal(store.matched, 1);
   edits.undo(); assert.equal(store.propsOf(0), undefined); assert.equal(store.matched, 0); assert.equal(edits.changed, false);
 });
+
+test('setMany writes one value per element and property, undone in one step', () => {
+  const store = new PropertyStore(2); store.set(0, { Nom: 'Mur' }, 'Mur'); store.finalize();
+  const events: string[] = [], edits = new PropertyEdits(store, (path) => events.push(path));
+  assert.equal(edits.setMany([[0, 'Début', '2026-01-04'], [0, 'Fin', '2026-01-20'], [1, 'Début', '2026-02-01'], [1, 'Fin', '2026-02-15']]), true);
+  assert.deepEqual(store.propsOf(0), { Nom: 'Mur', Début: '2026-01-04', Fin: '2026-01-20' });
+  assert.equal(store.propsOf(1)?.Fin, '2026-02-15');
+  assert.equal(edits.count, 1); assert.equal(events.at(-1), '*');
+  assert.equal(edits.setMany([[0, 'Début', '2026-01-04']]), false, 'same value: no step');
+  edits.undo();
+  assert.deepEqual(store.propsOf(0), { Nom: 'Mur' }); assert.equal(store.propsOf(1), undefined);
+  store.readOnly = ['Fin'];
+  assert.equal(edits.setMany([[0, 'Début', 'x'], [0, 'Fin', 'y']]), false, 'a locked field rejects the whole batch');
+  assert.equal(store.propsOf(0)?.Début, undefined);
+});

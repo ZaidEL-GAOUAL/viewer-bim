@@ -6,6 +6,9 @@ import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
 import type { AppearanceRule } from '../src/data/appearanceRules.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
+import { PropertyEdits } from '../src/data/PropertyEdits.ts';
+import { parseScheduleDate } from '../src/data/schedule.ts';
+import { createViewerApi, registerWebMcp } from '../src/assistant/agentApi.ts';
 
 function sampleContext() {
   const store = new PropertyStore(6);
@@ -165,7 +168,7 @@ test('trimHistory garde le message système et des échanges complets', () => {
 
 test('les définitions d’outils sont au format OpenAI et nomment des outils implémentés', () => {
   const names = TOOL_DEFINITIONS.map((tool) => tool.function.name);
-  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'set_visibility', 'compute', 'get_view_settings', 'update_view']);
+  assert.deepEqual(names, ['list_properties', 'count_by', 'find_elements', 'get_element', 'select_elements', 'set_visibility', 'compute', 'get_view_settings', 'update_view', 'set_property', 'plan_dates']);
   for (const tool of TOOL_DEFINITIONS) {
     assert.equal(tool.type, 'function');
     assert.equal(tool.function.parameters.type, 'object');
@@ -333,4 +336,91 @@ test('select_elements avec highlight atténue le reste par deux règles empilée
   context.setAppearanceRules!([]);
   runTool('select_elements', { filters: [], scope: 'selection', highlight: true }, context);
   assert.equal(rulesOf().length, 0);
+});
+
+/** Contexte où les outils peuvent écrire, par le même historique annulable que l'application. */
+function writableContext() {
+  const sample = sampleContext();
+  const edits = new PropertyEdits(sample.store, () => {});
+  const plannings: [string, string][] = [];
+  sample.context.writeProperties = (updates) => edits.setMany(updates);
+  sample.context.openPlanning = (start, end) => { plannings.push([start, end]); return 6; };
+  return { ...sample, edits, plannings };
+}
+
+test('set_property crée ou modifie une propriété, calcule par élément et refuse les champs verrouillés', () => {
+  const { context, store, edits } = writableContext();
+  const walls = [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }];
+  const added = runTool('set_property', { filters: walls, property: 'Lot / Nom', value: 'Gros œuvre' }, context);
+  assert.equal(added.note, '« Lot / Nom » ajoutée sur 2 éléments');
+  assert.equal((added.result as { created: boolean }).created, true);
+  assert.equal(store.propsOf(0)?.['Lot / Nom'], 'Gros œuvre');
+  assert.equal(store.propsOf(2)?.['Lot / Nom'], undefined);
+
+  // Nom approché d'une propriété existante : on l'écrit, sans créer de doublon.
+  const renamed = runTool('set_property', { filters: walls, property: 'lot/nom', value: 'GO' }, context);
+  assert.equal((renamed.result as { created: boolean }).created, false);
+  assert.equal(store.propsOf(1)?.['Lot / Nom'], 'GO');
+  assert.equal(store.paths.filter((path) => path.toLowerCase().startsWith('lot')).length, 1);
+
+  const doubled = runTool('set_property', { filters: [{ property: 'NetVolume', op: 'present' }], property: 'Volume double', expression: '[NetVolume] * 2' }, context);
+  assert.equal((doubled.result as { count: number }).count, 2);
+  assert.equal(store.propsOf(0)?.['Volume double'], 11.2);
+
+  assert.match((runTool('set_property', { filters: walls, property: 'niveau', value: 'R+3' }, context).result as { error: string }).error, /verrouillée/);
+  assert.match((runTool('set_property', { filters: walls, property: '#nom', value: 'X' }, context).result as { error: string }).error, /ne s’écrivent pas/);
+  assert.match((runTool('set_property', { filters: walls, property: 'Lot / Nom' }, context).result as { error: string }).error, /value ou expression/);
+
+  edits.undo();
+  assert.equal(store.paths.includes('Volume double'), false);
+  assert.equal(store.propsOf(1)?.['Lot / Nom'], 'GO');
+});
+
+test('plan_dates écrit des dates ordonnées par étage, dans le chantier, en une étape annulable, puis ouvre le planning', () => {
+  const { context, store, edits, plannings } = writableContext();
+  const args = { filters: [], start: '04/01/2026', end: '2027-12-12', minDays: '15', maxDays: 45, orderBy: 'Niveau', order: ['RDC', 'R+1'] };
+  const outcome = runTool('plan_dates', args, context);
+  const result = outcome.result as { elements: number; periods: { value: string; elements: number }[]; planning: { opened: boolean; tasks: number }; from: string; to: string };
+  assert.equal(outcome.note, 'Dates de planning écrites sur 6 éléments (3 périodes)');
+  assert.deepEqual(result.periods.map((period) => [period.value, period.elements]), [['RDC', 3], ['R+1', 2], ['(non défini)', 1]]);
+  assert.deepEqual(result.planning, { opened: true, tasks: 6 });
+  assert.deepEqual(plannings, [['Planning / Date début', 'Planning / Date fin']]);
+  assert.equal(result.from, '2026-01-04');
+  assert.equal(result.to, '2027-12-12', 'la dernière tâche finit le jour de fin du chantier');
+
+  const day = (index: number, path: string) => parseScheduleDate(store.propsOf(index)?.[path]);
+  const [first, last] = [parseScheduleDate('2026-01-04'), parseScheduleDate('2027-12-12')];
+  for (let index = 0; index < 6; index++) {
+    const start = day(index, 'Planning / Date début'), end = day(index, 'Planning / Date fin');
+    assert.ok(start >= first && end <= last, `élément ${index} hors du chantier`);
+    assert.ok(end - start + 1 >= 15 && end - start + 1 <= 45, `élément ${index} : durée ${end - start + 1} j`);
+  }
+  assert.equal(day(0, 'Planning / Date début'), first);
+  // Le rez-de-chaussée (éléments 0, 1, 4) commence avant le R+1 (2, 3).
+  assert.ok(Math.max(...[0, 1, 4].map((i) => day(i, 'Planning / Date début'))) < Math.min(...[2, 3].map((i) => day(i, 'Planning / Date début'))));
+
+  // Mêmes arguments, mêmes dates : rien ne change.
+  assert.ok((runTool('plan_dates', args, context).result as { unchanged?: string }).unchanged);
+  edits.undo();
+  assert.equal(store.paths.includes('Planning / Date début'), false);
+  assert.equal(store.paths.includes('Planning / Date fin'), false);
+
+  assert.match((runTool('plan_dates', { ...args, maxDays: 900 }, context).result as { error: string }).error, /dépasse la durée du chantier/);
+  assert.match((runTool('plan_dates', { ...args, start: 'janvier' }, context).result as { error: string }).error, /illisible/);
+});
+
+test('l’API des agents expose les outils du chat, en direct et par WebMCP', async () => {
+  const { context, store } = writableContext();
+  const api = createViewerApi(() => context);
+  assert.deepEqual(api.tools.map((tool) => tool.name), TOOL_DEFINITIONS.map((tool) => tool.function.name));
+  assert.equal((api.call('count_by', { property: 'Niveau' }).result as { total: number }).total, 6);
+  assert.equal((api.call('count_by', '{"property":"Niveau"}').result as { total: number }).total, 6);
+  assert.match((createViewerApi(() => null).call('count_by', { property: 'Niveau' }).result as { error: string }).error, /Aucun modèle/);
+
+  const registered: { name: string; execute(args: Record<string, unknown>): Promise<{ content: { text: string }[] }> }[] = [];
+  assert.equal(registerWebMcp(api, { registerTool: (tool: (typeof registered)[number]) => { registered.push(tool); } }), api.tools.length);
+  const reply = await registered.find((tool) => tool.name === 'set_property')!.execute({ filters: [], property: 'Lot', value: 'A' });
+  assert.equal(JSON.parse(reply.content[0].text).result.count, 6);
+  assert.equal(store.propsOf(5)?.Lot, 'A');
+  assert.equal(registerWebMcp(api, undefined), 0);
 });

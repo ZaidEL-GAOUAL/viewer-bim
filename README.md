@@ -242,9 +242,14 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   Quick Look sur mobile nécessite alors un second clic. Le fichier reste local, sans envoi à un serveur.
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
-- **Assistant en lecture seule sur les données** : recherches, comptages et calculs utilisent
-  exclusivement les métadonnées ; l’assistant n’accède pas aux maillages et ne modifie aucune
-  propriété ni aucun objet. Il peut sélectionner, isoler (« n’affiche que le bâtiment A, le reste
+- **Assistant sur les données** : recherches, comptages et calculs utilisent exclusivement les
+  métadonnées ; l’assistant n’accède pas aux maillages et ne modifie aucun objet 3D. Il peut
+  ajouter ou modifier des propriétés (« ajoute une propriété Lot = Gros œuvre aux murs »,
+  valeur fixe ou formule par élément) et préparer un planning prévisionnel : « ajoute une date
+  de début et une date de fin à chaque objet, chantier du 04/01/2026 au 12/12/2027, 15 à 45 jours
+  par objet, ordonnés par code étage » écrit `Planning / Date début` et `Planning / Date fin`
+  puis ouvre le Planning 4D. Ces écritures passent par l’historique des propriétés : une seule
+  étape, annulable, et rien n’est écrit dans les fichiers sans export. Il peut aussi sélectionner, isoler (« n’affiche que le bâtiment A, le reste
   invisible »), masquer ou réafficher (« masque le niveau R+2 », « tout afficher »), mettre en
   évidence (« fais ressortir le bâtiment A » : surbrillance, le reste atténué par deux règles
   d’opacité retirables), configurer les mêmes règles de couleur/opacité que le panneau manuel et
@@ -253,6 +258,12 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   les noms des éléments touchés avant de répondre. Les calculs et règles s’exécutent dans le navigateur ; seuls
   le résumé, la conversation et des résultats bornés sont envoyés au modèle. Les contrôles
   manuels ne consomment aucun jeton d’IA.
+- **API pour les agents** : les outils de l’assistant sont offerts à tout agent qui pilote la
+  page, sans passer par le service d’IA du site. `window.viewerBim.tools` les décrit (nom,
+  description, schéma JSON des arguments) et `window.viewerBim.call('plan_dates', {...})` les
+  exécute ; un agent qui exécute du JavaScript dans l’onglet (extension de navigateur, Playwright)
+  s’en sert directement. Les navigateurs qui proposent WebMCP (`document.modelContext`) les
+  reçoivent aussi comme outils déclarés. Les données restent dans l’onglet.
 - **Usage et API** : l’assistant affiche les jetons d’entrée/sortie/total communiqués pendant
   la session ; `?` signale une mesure indisponible, sans estimation inventée. Les réglages permettent
   d’utiliser une API compatible personnelle ou d’entreprise via le relais. Les paramètres et

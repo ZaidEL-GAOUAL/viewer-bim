@@ -103,6 +103,20 @@ et les règles d’opacité restent appliqués. La teinte orange remplace tempor
 des objets actifs ; la fermeture révèle les couleurs et filtres courants, y compris les changements
 effectués pendant la lecture.
 
+## Générer des dates avec l’assistant
+
+L’outil `plan_dates` de l’assistant (aussi appelable par `window.viewerBim.call`) écrit une
+date de début et une date de fin sur chaque objet visé, au format `AAAA-MM-JJ`, puis ouvre
+le planning comme **Depuis les métadonnées…**, une tâche par objet. Les objets sont rangés selon
+une ou plusieurs propriétés (`orderBy`, le code étage par exemple), dans l’ordre `order` donné
+ou, à défaut, dans l’ordre naturel ; les objets sans valeur passent en dernier. Les objets
+s’enchaînent dans cet ordre à intervalles réguliers : le premier commence le jour du début,
+le dernier finit le jour de la fin, un étage dure à proportion de son nombre d’objets et ne
+commence jamais avant le précédent ; les tâches voisines se chevauchent. Chaque objet dure
+entre `minDays` et `maxDays` jours, valeur tirée de son identifiant : relancer donne les mêmes dates. Les jours ouvrés, dépendances et ressources ne sont pas pris en compte.
+Les dates s’écrivent en une seule étape annulable, dans `Planning / Date début` et
+`Planning / Date fin` par défaut.
+
 ## Réutiliser des dates déjà dans les métadonnées
 
 **Depuis les métadonnées…** permet de choisir explicitement les propriétés de début et de fin,

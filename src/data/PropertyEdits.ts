@@ -26,22 +26,25 @@ export class PropertyEdits {
     this.changes.splice(this.cursor); this.changes.push(change); this.cursor++;
     this.apply(change.after, change.readOnly?.after); this.notify(change.path); return true;
   }
-  set(indices: Iterable<number>, path: string, value: PropValue): boolean { return this.edit(indices, path, value, false); }
-  delete(indices: Iterable<number>, path: string): boolean { return this.edit(indices, path, null, true); }
-  private edit(indices: Iterable<number>, path: string, value: PropValue, remove: boolean): boolean {
-    if (!path.trim() || !this.store.isEditable(path) || (typeof value === 'number' && !Number.isFinite(value))) return false;
-    const before = new Map<number, Entry>(), after = new Map<number, Entry>();
-    for (const i of new Set(indices)) {
+  set(indices: Iterable<number>, path: string, value: PropValue): boolean { return this.write([...new Set(indices)].map((i) => [i, path, value] as const), false); }
+  delete(indices: Iterable<number>, path: string): boolean { return this.write([...new Set(indices)].map((i) => [i, path, null] as const), true); }
+  /** One value per element and property (dates of a planning…), undone in a single step. */
+  setMany(updates: Iterable<readonly [index: number, path: string, value: PropValue]>): boolean { return this.write(updates, false); }
+  private write(updates: Iterable<readonly [number, string, PropValue]>, remove: boolean): boolean {
+    const before = new Map<number, Entry>(), after = new Map<number, Entry>(), paths = new Set<string>();
+    for (const [i, path, value] of updates) {
+      if (!path.trim() || !this.store.isEditable(path) || (typeof value === 'number' && !Number.isFinite(value))) return false;
       if (!Number.isInteger(i) || i < 0 || i >= this.store.count) continue;
-      const old = this.entry(i), owns = old.props !== undefined && Object.hasOwn(old.props, path);
+      const old = after.get(i) ?? this.entry(i), owns = old.props !== undefined && Object.hasOwn(old.props, path);
       if (remove ? !owns : owns && old.props![path] === value) continue;
       const next = { props: { ...old.props }, label: old.label };
       if (remove) delete next.props[path];
       else Object.defineProperty(next.props, path, { value, enumerable: true, configurable: true, writable: true });
       if (old.label !== undefined && owns && old.label === String(old.props![path])) next.label = remove || value === null || value === '' ? undefined : String(value);
-      before.set(i, old); after.set(i, next);
+      if (!before.has(i)) before.set(i, old);
+      after.set(i, next); paths.add(path);
     }
-    return this.record({ before, after, path });
+    return this.record({ before, after, path: paths.size === 1 ? [...paths][0] : '*' });
   }
   import(metadata: Metadata, keys: readonly string[]): boolean {
     const before = new Map<number, Entry>(), after = new Map<number, Entry>();
