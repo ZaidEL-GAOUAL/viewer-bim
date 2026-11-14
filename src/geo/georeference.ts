@@ -4,6 +4,8 @@
 // Le viewer, lui, travaille dans le repère glTF recentré : (x, y, z) glTF = (x, z, −y) IFC, moins
 // un décalage (voir Model.offset). Les fonctions ci-dessous font ces conversions.
 
+import { isRecord } from '../data/json.ts';
+
 export interface Georeference {
   latitude: number;
   longitude: number;
@@ -17,7 +19,7 @@ export interface Georeference {
   source?: string;
 }
 
-export type Enu = [number, number, number];
+type Enu = [number, number, number];
 
 function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -29,25 +31,24 @@ function triple(value: unknown, fallback: [number, number, number]): [number, nu
 
 /** Lecture tolérante du bloc `georeference` du JSON ; null s'il est absent ou inutilisable. */
 export function parseGeoreference(raw: unknown): Georeference | null {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
-  const record = raw as Record<string, unknown>;
-  const latitude = record.latitude, longitude = record.longitude;
+  if (!isRecord(raw)) return null;
+  const latitude = raw.latitude, longitude = raw.longitude;
   if (!finite(latitude) || !finite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
   let trueNorth: [number, number] = [0, 1];
-  if (Array.isArray(record.trueNorth) && record.trueNorth.length === 2 && record.trueNorth.every(finite)) {
-    const [x, y] = record.trueNorth as [number, number];
+  if (Array.isArray(raw.trueNorth) && raw.trueNorth.length === 2 && raw.trueNorth.every(finite)) {
+    const [x, y] = raw.trueNorth as [number, number];
     const length = Math.hypot(x, y);
     if (length > 0) trueNorth = [x / length, y / length];
-  } else if (finite(record.rotation)) {
-    trueNorth = trueNorthFromAzimuth(record.rotation);
+  } else if (finite(raw.rotation)) {
+    trueNorth = trueNorthFromAzimuth(raw.rotation);
   }
   return {
     latitude,
     longitude,
-    elevation: finite(record.elevation) ? record.elevation : 0,
-    origin: triple(record.origin, [0, 0, 0]),
+    elevation: finite(raw.elevation) ? raw.elevation : 0,
+    origin: triple(raw.origin, [0, 0, 0]),
     trueNorth,
-    ...(typeof record.source === 'string' ? { source: record.source } : {}),
+    ...(typeof raw.source === 'string' ? { source: raw.source } : {}),
   };
 }
 
@@ -100,13 +101,4 @@ export function enuVectorToLocal(enu: ArrayLike<number>, georeference: Georefere
   const dx = enu[0] * ny + enu[1] * nx;
   const dy = -enu[0] * nx + enu[1] * ny;
   return [dx + 0, enu[2] + 0, -dy + 0];
-}
-
-/** Lecture d'une latitude ou longitude IFC : (degrés, minutes, secondes, millionièmes de seconde). */
-export function degreesFromIfc(parts: ArrayLike<number> | null | undefined): number | null {
-  if (!parts || parts.length < 3 || !Array.from(parts).every(finite)) return null;
-  const sign = parts[0] < 0 || Object.is(parts[0], -0) ? -1 : 1;
-  const [d, m, s] = [Math.abs(parts[0]), Math.abs(parts[1]), Math.abs(parts[2])];
-  const micro = parts.length > 3 ? Math.abs(parts[3]) : 0;
-  return sign * (d + m / 60 + (s + micro / 1e6) / 3600);
 }

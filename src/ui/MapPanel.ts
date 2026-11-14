@@ -2,28 +2,14 @@ import { Box3 } from 'three';
 import { azimuthOf, trueNorthFromAzimuth } from '../geo/georeference.ts';
 import { GlobeView, IMAGERY, TERRAINS, type ImageryKind, type TerrainKind } from '../geo/GlobeView.ts';
 import type { App } from './App.ts';
-import { button, clear, h } from './dom.ts';
+import { button, clear, h, stored } from './dom.ts';
 
 const number = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 6, useGrouping: false });
 const KEY_ION = 'viewer-bim.cesiumIonToken';
 const KEY_GOOGLE = 'viewer-bim.googleMapsKey';
 
-function readKey(name: string): string {
-  try {
-    return localStorage.getItem(name) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function writeKey(name: string, value: string): void {
-  try {
-    if (value) localStorage.setItem(name, value);
-    else localStorage.removeItem(name);
-  } catch {
-    // Stockage indisponible (navigation privée) : la clé ne vaut que pour cette session.
-  }
-}
+const readKey = (name: string): string => stored.get(name) ?? '';
+const writeKey = (name: string, value: string): void => stored.set(name, value);
 
 /**
  * Carte « Carte » : le globe sous la maquette (CesiumJS, chargé à la demande), le choix du fond,
@@ -50,7 +36,7 @@ export class MapPanel {
     this.el = h('section', { class: 'card map-card', attrs: { hidden: '' } },
       h('div', { class: 'card-head' },
         h('h2', { class: 'card-title', text: 'Carte' }),
-        button('×', () => void this.toggle(), { class: 'measure-remove', title: 'Fermer la carte', attrs: { 'aria-label': 'Fermer la carte' } }),
+        button('×', () => void this.toggle(), { class: 'close-button', title: 'Fermer la carte', attrs: { 'aria-label': 'Fermer la carte' } }),
       ),
       this.status,
       this.body,
@@ -71,10 +57,6 @@ export class MapPanel {
       this.render();
     });
     this.render();
-  }
-
-  get active(): boolean {
-    return this.globe.active;
   }
 
   /** Vrai dès que la carte est demandée : son hôte doit être visible avant que le globe ne se crée. */

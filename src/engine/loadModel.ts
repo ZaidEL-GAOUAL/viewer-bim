@@ -2,6 +2,7 @@ import { LoadingManager } from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { extensionOf } from './fileKinds.ts';
 
 /** Un fichier fourni par l'utilisateur, avec son chemin relatif quand il vient d'un dossier. */
 export interface InputFile {
@@ -9,7 +10,7 @@ export interface InputFile {
   path: string;
 }
 
-export interface LoadedModel {
+interface LoadedModel {
   gltf: GLTF;
   /** Textures de couleur référencées par le modèle mais absentes des fichiers fournis. */
   missingTextures: string[];
@@ -105,10 +106,6 @@ function createLoader(manager: LoadingManager, warnings: string[]): GLTFLoader {
   return loader;
 }
 
-export function isModelFile(name: string): boolean {
-  return /\.(glb|gltf)$/i.test(name);
-}
-
 /** Chemin normalisé : séparateurs « / », sans « ./ » ni segments « .. ». */
 function normalizePath(path: string): string {
   const out: string[] = [];
@@ -154,7 +151,7 @@ export async function loadModelFiles(main: InputFile, siblings: InputFile[]): Pr
     return byPath.get(path) ?? byName.get(path.slice(path.lastIndexOf('/') + 1));
   };
 
-  const isBinary = /\.glb$/i.test(main.file.name);
+  const isBinary = extensionOf(main.file.name) === 'glb';
   const data = isBinary ? await main.file.arrayBuffer() : await main.file.text();
   const missingTextures: string[] = [];
 

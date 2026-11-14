@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ModelFileError, isModelFile, loadModelFiles } from '../src/engine/loadModel.ts';
+import { isModelFile } from '../src/engine/fileKinds.ts';
+import { ModelFileError, loadModelFiles } from '../src/engine/loadModel.ts';
 
 const input = (name: string, content: string, path = name) => ({ file: new File([content], name), path });
 

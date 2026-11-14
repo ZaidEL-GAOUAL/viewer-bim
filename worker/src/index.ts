@@ -173,7 +173,10 @@ const DEFAULT_ENDPOINTS = [
   'https://api.cerebras.ai/v1/chat/completions',
 ];
 
-/** Destination validation precedes the exact operator allowlist; no arbitrary outbound proxy. */
+/**
+ * Destination validation precedes the exact operator allowlist; no arbitrary outbound proxy.
+ * Twin of `normalizeApiSettings` in src/assistant/settings.ts (client side): separate packages, change both together.
+ */
 export function validateEndpoint(raw: string): string {
   const url = new URL(raw);
   const host = url.hostname.toLowerCase();

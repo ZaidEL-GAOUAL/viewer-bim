@@ -10,7 +10,7 @@ export interface OsmBuilding {
   height: number;
 }
 
-export interface Bbox { south: number; west: number; north: number; east: number }
+interface Bbox { south: number; west: number; north: number; east: number }
 
 /**
  * Instances publiques d'Overpass acceptant les requêtes depuis un navigateur (en-têtes CORS),
@@ -18,7 +18,7 @@ export interface Bbox { south: number; west: number; north: number; east: number
  * alors souvent directement. Les autres miroirs connus refusent les navigateurs ou ne couvrent
  * qu'un pays.
  */
-export const OVERPASS_URLS = [
+const OVERPASS_URLS = [
   'https://overpass-api.de/api/interpreter',
   'https://lz4.overpass-api.de/api/interpreter',
   'https://z.overpass-api.de/api/interpreter',

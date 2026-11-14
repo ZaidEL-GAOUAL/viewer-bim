@@ -1,16 +1,14 @@
-import { Box3, Vector3 } from 'three';
 import { combineMeasures, measureElement, type Dimensions, type ElementMeasure } from '../engine/dimensions.ts';
 import { formatArea, formatLength, formatVolume } from '../engine/Measure.ts';
 import type { App } from './App.ts';
-import { button, clear, h, integer } from './dom.ts';
+import { button, clear, h } from './dom.ts';
+import { decimal, integer } from '../data/text.ts';
 
 /** Au-delà, seule l'emprise de la sélection est donnée : le calcul ferait attendre. */
 const MAX_ELEMENTS = 2000;
 const MAX_TRIANGLES = 1_500_000;
 /** Lignes détaillées affichées ; le tableau copié contient toujours tous les éléments mesurés. */
 const MAX_ROWS = 200;
-
-const decimal = new Intl.NumberFormat('fr-FR', { useGrouping: false, maximumFractionDigits: 4 });
 
 /**
  * Carte « Cotes » de l'outil de mesure du même nom : longueur, largeur, hauteur, surface et
@@ -31,7 +29,7 @@ export class DimensionsCard {
     this.el = h('section', { class: 'card dimensions-card', attrs: { hidden: '', 'aria-live': 'polite' } },
       h('div', { class: 'card-head' },
         h('h2', { class: 'card-title', text: 'Cotes' }),
-        button('×', () => app.setTool('select'), { class: 'measure-remove', title: 'Fermer les cotes', attrs: { 'aria-label': 'Fermer les cotes' } }),
+        button('×', () => app.setTool('select'), { class: 'close-button', title: 'Fermer les cotes', attrs: { 'aria-label': 'Fermer les cotes' } }),
       ),
       this.body,
     );
@@ -64,7 +62,7 @@ export class DimensionsCard {
     let triangles = 0;
     for (const index of indices) for (const range of model.ranges[index]) triangles += range.count / 3;
     if (indices.length > MAX_ELEMENTS || triangles > MAX_TRIANGLES) {
-      const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
+      const size = model.sizeOf(indices);
       this.body.append(
         h('p', { class: 'dimensions-title', text: `${integer.format(indices.length)} éléments` }),
         this.list([['Emprise X', formatLength(size.x)], ['Hauteur', formatLength(size.y)], ['Emprise Z', formatLength(size.z)]]),

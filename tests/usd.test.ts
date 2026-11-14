@@ -6,7 +6,7 @@ import { buildModel } from '../src/engine/buildModel.ts';
 import { loadUsda, usdaFromUsdz } from '../src/usd/loadUsd.ts';
 import { parseUsda } from '../src/usd/usda.ts';
 
-const samples = new URL('../public/samples/', import.meta.url);
+const samples = new URL('./fixtures/', import.meta.url);
 const usdz = readFileSync(new URL('ifc-demo.usdz', samples));
 const text = usdaFromUsdz(usdz.buffer.slice(usdz.byteOffset, usdz.byteOffset + usdz.byteLength) as ArrayBuffer);
 

@@ -1,6 +1,7 @@
 import { buildTree, groupingProperties, suggestGrouping, type TreeGroup } from '../data/grouping.ts';
 import type { App } from './App.ts';
-import { button, clear, h, integer } from './dom.ts';
+import { button, clear, h } from './dom.ts';
+import { fold, integer } from '../data/text.ts';
 
 const PAGE = 200;
 
@@ -109,9 +110,8 @@ export class TreePanel {
     const search = h('input', { class: 'grouping-search', attrs: { type: 'search', placeholder: 'Rechercher une propriété…', 'aria-label': 'Rechercher une propriété de regroupement', value: this.propertyQuery } });
     const all = h('input', { attrs: { type: 'checkbox' } }); all.checked = this.allProperties;
     const add = h('select', { class: 'add-level', attrs: { 'aria-label': 'Ajouter un niveau de regroupement' } });
-    const fold = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
     const options = () => {
-      const query = fold(this.propertyQuery.trim());
+      const query = fold(this.propertyQuery);
       const available = (this.allProperties || query ? store.paths : common).filter((path) => !this.paths.includes(path) && (!query || fold(path).includes(query)));
       add.replaceChildren(h('option', { text: available.length ? this.paths.length === 0 ? 'Choisir une propriété…' : '+ Ajouter un sous-niveau' : 'Aucune propriété correspondante', attrs: { value: '' } }),
         ...available.map((path) => h('option', { text: path, attrs: { value: path } })));

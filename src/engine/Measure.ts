@@ -5,7 +5,7 @@ import type { Viewer } from './Viewer.ts';
 
 export type MeasureKind = 'distance' | 'area' | 'volume';
 
-export interface Measurement {
+interface Measurement {
   id: number;
   kind: MeasureKind;
   value: number;

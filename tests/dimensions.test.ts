@@ -67,3 +67,12 @@ test('combineMeasures réunit plusieurs éléments : emprise commune, sommes, fe
   assert.equal(combineMeasures([...measures, { ...measures[0], closed: false }])!.closed, false);
   assert.equal(combineMeasures([]), null);
 });
+
+test('Model.sizeOf donne l’emprise de la sélection sur chaque axe (Y : hauteur)', async () => {
+  const scale = [2, 3, 5];
+  const model = await buildFromNodes([{ name: 'a', mesh: 0, scale, extras: { id: 'a' } }, { name: 'b', mesh: 0, translation: [10, 0, 0], extras: { id: 'b' } }], [0, 1], CUBE);
+  const one = model.sizeOf([0]);
+  assert.deepEqual([one.x, one.y, one.z].map((v) => Math.round(v * 1000) / 1000), [2, 3, 5]);
+  const both = model.sizeOf([0, 1]);
+  assert.equal(Math.round(both.x * 1000) / 1000, 11, 'de 0 à 2 puis de 10 à 11');
+});

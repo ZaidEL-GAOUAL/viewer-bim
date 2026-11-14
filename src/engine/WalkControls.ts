@@ -111,11 +111,6 @@ export class WalkControls {
     return this.baseSpeed;
   }
 
-  /** Hauteur des pieds et du sol connu sous eux : pour vérifier, et pour l'afficher. */
-  get heights(): { feet: number; ground: number | null; eye: number } {
-    return { feet: this.feet, ground: this.ground, eye: this.feet + EYE_HEIGHT };
-  }
-
   /** Pourquoi la visite ne peut pas commencer, ou null si elle le peut. */
   get unavailable(): string | null {
     if (!this.viewer.model) return 'Ouvrez d’abord une maquette.';

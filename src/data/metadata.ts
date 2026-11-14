@@ -4,6 +4,8 @@
 import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
 import { parsePhases, type Phases } from './phases.ts';
 import { parseViews, type SavedView } from './savedViews.ts';
+import { isRecord } from './json.ts';
+import { decimal } from './text.ts';
 
 export type PropValue = string | number | boolean | null;
 export type FlatProps = Record<string, PropValue>;
@@ -54,13 +56,12 @@ export function isReadOnly(path: string, patterns: readonly string[]): boolean {
   return false;
 }
 
-export const SUPPORTED_VERSION = 1;
+const SUPPORTED_VERSION = 1;
 export const PATH_SEP = ' / ';
-export const UNDEFINED_LABEL = '(non défini)';
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+/** Chemin d'une propriété écrit à la main : « Catégorie/Nom » ou « Catégorie /  Nom » deviennent « Catégorie / Nom ». */
+export const toPropertyPath = (text: string): string => text.split('/').map((part) => part.trim()).filter(Boolean).join(PATH_SEP);
+export const UNDEFINED_LABEL = '(non défini)';
 
 /** Aplatit des propriétés imbriquées : { A: { B: 1 } } devient { "A / B": 1 }. */
 export function flattenProperties(input: Record<string, unknown>, prefix = '', out: FlatProps = {}): FlatProps {
@@ -167,9 +168,10 @@ export function unflattenProperties(flat: FlatProps): Record<string, unknown> {
   return out;
 }
 
-// Nombres à la française (virgule décimale), sans séparateur de milliers pour ne pas dénaturer
-// un numéro ou une année.
-const decimal = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 4, useGrouping: false });
+/** Valeurs définies d'une propriété avec leurs éléments, les plus fréquentes d'abord. */
+export function rankedValues(store: PropertyStore, path: string): [string, number[]][] {
+  return [...store.groups(path).entries()].filter(([label]) => label !== UNDEFINED_LABEL).sort((a, b) => b[1].length - a[1].length);
+}
 
 export function formatValue(value: PropValue | undefined): string {
   if (value === undefined || value === null || value === '') return UNDEFINED_LABEL;
@@ -263,10 +265,6 @@ export class PropertyStore {
     if (!this.paths.includes(path)) this.paths = [...this.paths, path].sort(collator.compare);
     this.groupCache.delete(path);
     return true;
-  }
-
-  setLabel(index: number, label: string | undefined): void {
-    this.labels[index] = label;
   }
 
   /** Les métadonnées courantes, modifications comprises, au format du contrat. */

@@ -1004,7 +1004,7 @@ button[aria-pressed='true'] {
   margin-top: 8px;
 }
 
-.measure-remove {
+.close-button {
   width: 22px;
   height: 22px;
   padding: 0;

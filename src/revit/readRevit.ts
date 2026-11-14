@@ -1,6 +1,9 @@
 import type { RawModel } from '../engine/buildModel.ts';
 import type { RevitChunk, RevitOutput } from './pkg/revit.js';
 import type { RevitMessage, RevitReadOptions, RevitRequest } from './revitWorker.ts';
+import { megabytes } from '../data/text.ts';
+import { extensionOf, isRevitFile, withoutExtension } from '../engine/fileKinds.ts';
+import { ASSUMED_MEMORY_GB, deviceMemoryGB } from '../engine/deviceMemory.ts';
 
 /** Bilan de la lecture, tel que le lecteur le rend (voir docs/lecture-revit.md). */
 export type RevitReport = RevitOutput['report'];
@@ -31,7 +34,7 @@ export interface RevitRead {
  * morceau d'une lecture : après une panique, la relecture en mode prudent recommence du début, et ce qui avait été
  * construit des morceaux précédents est à jeter. Une erreur levée ici interrompt la lecture.
  */
-export type RevitChunkListener = (raw: RawModel, first: boolean) => void;
+type RevitChunkListener = (raw: RawModel, first: boolean) => void;
 
 /**
  * Le budget de triangles d'une lecture, d'après la mémoire de l'appareil (`navigator.deviceMemory`, en Go, que les
@@ -44,37 +47,26 @@ export type RevitChunkListener = (raw: RawModel, first: boolean) => void;
  * fichiers d'essai, tous sous 1,7 million) et 20 millions (8 Go : la maquette de 12,4 millions passe entière). Au-delà
  * du budget, le lecteur montre les éléments qui ne tiennent plus par leur boîte, marqués « Inconnue », et le dit.
  */
-export function triangleBudgetFor(deviceMemoryGB: number | undefined): number {
-  const gb = deviceMemoryGB !== undefined && Number.isFinite(deviceMemoryGB) && deviceMemoryGB > 0 ? deviceMemoryGB : 4;
+export function triangleBudgetFor(memoryGB: number | undefined): number {
+  const gb = memoryGB !== undefined && Number.isFinite(memoryGB) && memoryGB > 0 ? memoryGB : ASSUMED_MEMORY_GB;
   return Math.min(20e6, Math.max(2e6, Math.round(gb * 2.5e6)));
 }
 
 /** Le budget de triangles de cet appareil (voir `triangleBudgetFor`). */
 export function deviceTriangleBudget(): number {
-  return triangleBudgetFor((navigator as Navigator & { deviceMemory?: number }).deviceMemory);
+  return triangleBudgetFor(deviceMemoryGB());
 }
 
 /** Le fichier dépasse ce que le navigateur peut lire : le message s'adresse à l'utilisateur. */
 export class RevitTooLargeError extends Error {}
 
-/** Projet (.rvt), famille (.rfa), gabarit de projet (.rte), gabarit de famille (.rft) : même conteneur, même lecteur. */
-const REVIT_EXTENSION = /\.(rvt|rfa|rte|rft)$/i;
-
-/** Un fichier Revit : projet, famille ou gabarit de l'un ou de l'autre. */
-export function isRevitFile(name: string): boolean {
-  return REVIT_EXTENSION.test(name);
-}
-
 /** Le nom d'un fichier Revit sans son extension, et cette extension en minuscules (« rvt » à défaut). */
 export function splitRevitName(name: string): { base: string; extension: string } {
-  const match = REVIT_EXTENSION.exec(name);
-  return match ? { base: name.slice(0, match.index), extension: match[1].toLowerCase() } : { base: name, extension: 'rvt' };
+  return isRevitFile(name) ? { base: withoutExtension(name), extension: extensionOf(name)! } : { base: name, extension: 'rvt' };
 }
 
-const megabytes = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('fr-FR');
-
 /** Ce que dit l'erreur d'un worker, tel quel : son nom et son texte. */
-export interface RevitFailure {
+interface RevitFailure {
   name: string;
   message: string;
 }

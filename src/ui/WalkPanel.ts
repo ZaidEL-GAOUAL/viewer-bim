@@ -1,7 +1,7 @@
 import type { Viewer } from '../engine/Viewer.ts';
 import { isTyping } from '../engine/WalkControls.ts';
 import { formatSpeed } from '../engine/walkMath.ts';
-import { button, h } from './dom.ts';
+import { button, h, stored } from './dom.ts';
 
 const HELP_KEY = 'viewer-bim.walk-help';
 /** Durée d'affichage de la vitesse après un coup de molette. */
@@ -87,13 +87,7 @@ export class WalkPanel {
     // Une couche transparente sur la vue : la carte en haut à droite, la vitesse en bas au centre.
     this.el = h('div', { class: 'walk-layer', attrs: { hidden: '' } }, card, this.speed);
 
-    let dismissed = false;
-    try {
-      dismissed = localStorage.getItem(HELP_KEY) === 'hidden';
-    } catch {
-      // stockage indisponible : l'aide reste affichée
-    }
-    this.showHelp(!dismissed, false);
+    this.showHelp(stored.get(HELP_KEY) !== 'hidden', false);
 
     // V : même raccourci pour entrer et sortir, sauf pendant une saisie de texte ou dans une boîte de dialogue.
     window.addEventListener('keydown', (event) => {
@@ -123,11 +117,7 @@ export class WalkPanel {
     this.help.hidden = !shown;
     this.helpButton.setAttribute('aria-expanded', String(shown));
     if (!remember) return;
-    try {
-      localStorage.setItem(HELP_KEY, shown ? 'shown' : 'hidden');
-    } catch {
-      // stockage indisponible : le choix vaut pour la session
-    }
+    stored.set(HELP_KEY, shown ? 'shown' : 'hidden');
   }
 
   private sync(): void {

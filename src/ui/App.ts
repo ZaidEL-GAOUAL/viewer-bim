@@ -10,19 +10,22 @@ import { evaluateAppearanceRules, validateAppearanceRules, type AppearanceRule }
 import { updateGlbMetadata } from '../engine/updateGlbMetadata.ts';
 import { hexToRgb } from '../data/palette.ts';
 import { ModelBuilder, buildModel, gltfSource } from '../engine/buildModel.ts';
-import { ModelFileError, filesFromDrop, filesFromList, isModelFile, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
+import { ModelFileError, filesFromDrop, filesFromList, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
+import { extensionOf, isIfcFile, isJsonFile, isModelFile, isRevitFile, isUsdFile, withoutExtension } from '../engine/fileKinds.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
-import { IfcTooLargeError, convertIfc, isIfcFile, packageUsd } from '../ifc/convertIfc.ts';
-import { isUsdFile, loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
-import { isRevitFile, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
+import { IfcTooLargeError, convertIfc, packageUsd } from '../ifc/convertIfc.ts';
+import { loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
+import { isMemoryFailure, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
 import { describeRevitReport } from '../revit/revitReport.ts';
 import type { ModelSource, RawInput } from '../engine/buildModel.ts';
 import { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
 import { AXES } from '../engine/Sections.ts';
 import { STANDARD_VIEWS, VIEW_ORDER } from '../engine/views.ts';
-import { button, h, integer } from './dom.ts';
+import { button, download, h, stored } from './dom.ts';
+import { integer, plural, s } from '../data/text.ts';
 import { iconButton } from './icons.ts';
+import { combineNotices, type Notice } from './notices.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
 import { DimensionsCard } from './DimensionsCard.ts';
 import { MEASURES, MeasureMenu } from './MeasureMenu.ts';
@@ -39,35 +42,28 @@ import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-export type AppEvent = 'model' | 'selection' | 'visibility' | 'colors' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view';
-export type SelectionSource = 'view' | 'panel';
+type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view';
+type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
 /** « section » : le prochain clic sur une surface y pose un plan de coupe. */
-export type Tool = 'select' | MeasureTool | 'section';
+type Tool = 'select' | MeasureTool | 'section';
 
 /** Fenêtre étroite : les panneaux latéraux s'ouvrent par-dessus la vue 3D (même seuil que styles.css). */
 const NARROW_LAYOUT = '(max-width: 960px)';
 const SECTION_HINT = 'Cliquez une surface : un plan de coupe s’y pose, orienté comme elle, et retire ce qui est devant. Échap annule.';
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
-export type ModelFormat = 'glb' | 'usd';
+type ModelFormat = 'glb' | 'usd';
 
 /** Vrai pour les outils qui mesurent par clics dans la vue (les cotes, elles, sélectionnent). */
 const isPointMeasure = (tool: Tool): tool is MeasureKind => tool === 'distance' || tool === 'area' || tool === 'volume';
 
-// Laisse le navigateur afficher le message d'attente avant un calcul long. Le délai de secours
-// évite de rester bloqué quand l'onglet est en arrière-plan (les images y sont suspendues).
 /** Taille de fichier 3D au-delà de laquelle l'ouverture est refusée d'emblée. */
 const MAX_MODEL_BYTES = 1500e6;
 
-/** Vrai si l'erreur traduit un manque de mémoire du navigateur. */
-function isOutOfMemory(error: unknown): boolean {
-  const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
-  return /rangeerror|out of memory|allocation failed|invalid (typed )?array length|array buffer/i.test(message);
-}
-
-/** « 1 élément », « 2 éléments » : le singulier en dessous de 2, comme le veut le français (« 0 élément »). */
-const counted = (n: number, singular: string, plural = `${singular}s`) => `${integer.format(n)} ${n < 2 ? singular : plural}`;
+/** Vrai si l'erreur traduit un manque de mémoire du navigateur (même détection que pour la lecture Revit). */
+const isOutOfMemory = (error: unknown): boolean =>
+  isMemoryFailure(error instanceof Error ? { name: error.name, message: error.message } : { name: 'Error', message: String(error) });
 
 const tooHeavyMessage = (name: string) =>
   `« ${name} » est trop lourd pour la mémoire dont dispose le navigateur. Fermez d’autres onglets et réessayez, ou ouvrez un modèle plus léger (découpé par bâtiment ou par lot, par exemple).`;
@@ -78,6 +74,8 @@ const RAW_SAMPLES = new Map([['ifc', 'ifc-demo.ifc'], ['revit', 'revit-demo.rvt'
 const NO_MATCH =
   'Aucun identifiant du fichier JSON ne correspond aux éléments du modèle. Vérifiez le champ « extras.id » ou le nom des nœuds.';
 
+// Laisse le navigateur afficher le message d'attente avant un calcul long. Le délai de secours
+// évite de rester bloqué quand l'onglet est en arrière-plan (les images y sont suspendues).
 const nextFrame = () =>
   new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
@@ -107,7 +105,7 @@ export class App {
   private readonly toastEl: HTMLElement;
   private readonly busyEl: HTMLElement;
   private readonly emptyEl: HTMLElement;
-  private readonly toolButtons = new Map<Tool, HTMLButtonElement>();
+  private selectButton!: HTMLButtonElement;
   private readonly scratchBox = new Box3();
   private toastTimer = 0;
   private loadTicket = 0;
@@ -131,9 +129,9 @@ export class App {
    * déposé seul pendant la lecture y est ajouté au lieu de l'interrompre.
    */
   private revitReading: { controller: AbortController; candidates: Metadata[] } | null = null;
-  /** Fichiers produits par la dernière conversion d'IFC, proposés au téléchargement. */
-  private conversion: { name: string; model: Blob; extension: string; glb: ArrayBuffer } | null = null;
-  /** Nombre de valeurs modifiées dans le panneau Propriétés depuis le chargement du modèle. */
+  /** Nom de base de la dernière conversion d'IFC : les téléchargements s'appellent comme elle. */
+  private conversion: { name: string } | null = null;
+  /** Nombre d'étapes de modification (annulables) appliquées aux propriétés depuis le chargement : une étape peut toucher plusieurs valeurs, une valeur modifiée deux fois compte deux étapes. */
   edits = 0;
   /** Dernière modification, pour que les panneaux ne refassent que ce qui en dépend. */
   lastEdit: { path: string } | null = null;
@@ -170,7 +168,6 @@ export class App {
   private quickLookPreparing = false;
   private readonly applePreview = new ApplePreview();
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
-  private matched = 0;
   fileName = '';
 
   constructor(root: HTMLElement) {
@@ -213,7 +210,7 @@ export class App {
 
     // Sélection, puis le menu qui réunit les mesures (distance, surface, volume, cotes).
     const selectTool = iconButton('select', 'Sélection', () => this.setTool('select'), 'Sélection — cliquer un élément pour afficher ses propriétés');
-    this.toolButtons.set('select', selectTool);
+    this.selectButton = selectTool;
     const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el);
 
     const mapToggle = button('Carte', () => {
@@ -271,9 +268,9 @@ export class App {
         this.applePreview.show(this.quickLookUrl, this.fileName);
       }
     });
-    // Fichiers produits par la conversion d'un IFC : téléchargeables tant que ce modèle est affiché.
+    // Téléchargements du modèle affiché (le titre du bouton GLB/USD est posé par `syncDownloads`).
     this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
-      (this.modelDownload = button('GLB ↓', () => void this.download('model'), { title: 'Télécharger le fichier 3D issu de la conversion de l’IFC' })),
+      (this.modelDownload = button('GLB ↓', () => void this.download('model'))),
       (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger les métadonnées (JSON), modifications comprises' })),
       this.quickLookLink,
     );
@@ -291,11 +288,7 @@ export class App {
       this.formatButtons.set(format, element);
       formats.append(element);
     }
-    try {
-      if (localStorage.getItem('viewer-bim.format') === 'usd') this.format = 'usd';
-    } catch {
-      // stockage indisponible : on garde le format par défaut
-    }
+    if (stored.get('viewer-bim.format') === 'usd') this.format = 'usd';
     this.syncFormat();
 
     // Boutons de repli des panneaux latéraux, aux deux extrémités de la barre. Dans une fenêtre étroite (NARROW_LAYOUT, même
@@ -398,7 +391,7 @@ export class App {
     this.conversionEl = h('section', { class: 'card conversion-card', attrs: { hidden: '' } },
       h('div', { class: 'card-head' },
         this.conversionTitle,
-        button('×', () => (this.conversionEl.hidden = true), { class: 'measure-remove', title: 'Fermer' }),
+        button('×', () => (this.conversionEl.hidden = true), { class: 'close-button', title: 'Fermer' }),
       ),
       this.conversionText,
       h('div', { class: 'conversion-actions' },
@@ -626,7 +619,7 @@ export class App {
       if (appearance.color) model.state.setColor(i, ...hexToRgb(appearance.color));
       if (appearance.opacity !== undefined) model.state.setOpacity(i, appearance.opacity);
     }
-    model.state.commit(); this.viewer.invalidate(); this.emit('colors');
+    model.state.commit(); this.viewer.invalidate();
   }
   groupBy(paths: string[]): void {
     if (paths.some((path) => !this.store.paths.includes(path))) throw new Error('Une propriété de regroupement est introuvable.');
@@ -779,7 +772,7 @@ export class App {
   setTool(tool: Tool): void {
     this.tool = tool;
     this.measure.setTool(isPointMeasure(tool) ? tool : null);
-    for (const [id, element] of this.toolButtons) element.setAttribute('aria-pressed', String(id === tool));
+    this.selectButton.setAttribute('aria-pressed', String(tool === 'select'));
     this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section');
     this.measureHint.hidden = tool === 'select';
     this.measureHint.textContent = tool === 'section' ? SECTION_HINT : MEASURES.find((item) => item.id === tool)?.hint ?? '';
@@ -836,7 +829,7 @@ export class App {
     const byDepth = (matches: InputFile[]) => matches.sort((a, b) => depth(a) - depth(b));
     const modelFiles = byDepth(inputs.filter((input) => isModelFile(input.file.name) || isUsdFile(input.file.name)));
     const modelFile = modelFiles[0] as InputFile | undefined;
-    const jsonFiles = byDepth(inputs.filter((input) => /\.json$/i.test(input.file.name)));
+    const jsonFiles = byDepth(inputs.filter((input) => isJsonFile(input.file.name)));
     // Un IFC ou un fichier Revit n'est lu que si aucun modèle 3D (glb, gltf, usd) n'est fourni ; à profondeur égale, l'IFC passe d'abord.
     const sourceFile = byDepth([
       ...inputs.filter((input) => isIfcFile(input.file.name)),
@@ -855,6 +848,8 @@ export class App {
       const metadataFiles: { name: string; text: string }[] = [];
       const schedules: { name: string; schedule: Schedule }[] = [];
       let planningError = '';
+      // Tout ce que ce chargement a à dire : montré d'un coup à la fin, le plus grave d'abord.
+      const notices: Notice[] = [];
       // A planning JSON must never be interpreted as an object's metadata, even in a folder.
       for (const input of jsonFiles) {
         const text = await input.file.text();
@@ -886,7 +881,8 @@ export class App {
         await this.loadRevit(ticket, sourceFile.file, candidates, metadataError);
       } else if (!modelFile && sourceFile) {
         await this.loadIfc(ticket, sourceFile.file);
-        if (ticket === this.loadTicket) this.announceOpeningHidden();
+        const hiddenSentence = ticket === this.loadTicket ? this.openingHiddenSentence(false) : '';
+        if (hiddenSentence) notices.push({ text: hiddenSentence, error: false });
       } else if (modelFile) {
         const { candidates, metadataError } = readCandidates();
         // Au-delà de cette taille, le navigateur ne peut plus lire le fichier d'un seul bloc.
@@ -923,41 +919,38 @@ export class App {
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
         const installed = await this.installModel(ticket, loaded.source, candidates, modelFile.file.name);
         if (!installed) return;
-        if (/\.glb$/i.test(modelFile.file.name)) this.originalGlb = modelFile.file;
-        if (/\.usdz$/i.test(modelFile.file.name)) {
+        if (extensionOf(modelFile.file.name) === 'glb') this.originalGlb = modelFile.file;
+        if (extensionOf(modelFile.file.name) === 'usdz') {
           this.setQuickLook(modelFile.file.slice(0, modelFile.file.size, 'model/vnd.usdz+zip'));
         }
         const metadata = this.metadata;
+        if (!metadata && metadataError) notices.push({ text: `Modèle chargé sans métadonnées. ${metadataError}`, error: true });
         if (missingTextures.length > 0) {
-          this.toast(`Modèle affiché sans ${missingTextures.length > 1 ? 'ses textures' : 'sa texture'} (« ${missingTextures.join(' », « ')} ») : déposez le dossier complet pour ${missingTextures.length > 1 ? 'les' : 'la'} charger.`, true);
-        } else if (warnings.length > 0) {
-          this.toast(warnings.join(' '), true);
-        } else if (!metadata && metadataError) {
-          this.toast(`Modèle chargé sans métadonnées. ${metadataError}`, true);
-        } else if (modelFiles.length > 1) {
-          this.toast(`${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`);
-        } else {
-          this.announceOpeningHidden();
+          notices.push({ text: `Modèle affiché sans ${missingTextures.length > 1 ? 'ses textures' : 'sa texture'} (« ${missingTextures.join(' », « ')} ») : déposez le dossier complet pour ${missingTextures.length > 1 ? 'les' : 'la'} charger.`, error: true });
         }
+        if (warnings.length > 0) notices.push({ text: warnings.join(' '), error: true });
+        if (modelFiles.length > 1) notices.push({ text: `${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`, error: false });
+        const hiddenSentence = this.openingHiddenSentence(false);
+        if (hiddenSentence) notices.push({ text: hiddenSentence, error: false });
       } else if (metadataFiles.length && reading && this.revitReading === reading) {
         // La lecture a son propre JSON (celui du fichier) : ceux-ci sont départagés avec lui à la fin, par leurs identifiants.
         const { candidates, metadataError } = readCandidates();
         if (candidates.length === 0) {
-          this.toast(metadataError, true);
+          notices.push({ text: metadataError, error: true });
         } else {
           reading.candidates.push(...candidates);
           const names = candidates.map((candidate) => `« ${candidate.source ?? 'JSON'} »`).join(', ');
-          this.toast(`Métadonnées reçues (${names}) : elles seront appliquées quand la lecture du fichier Revit sera terminée.${metadataError ? ` ${metadataError}` : ''}`, metadataError !== '');
+          notices.push({ text: `Métadonnées reçues (${names}) : elles seront appliquées quand la lecture du fichier Revit sera terminée.${metadataError ? ` ${metadataError}` : ''}`, error: metadataError !== '' });
         }
       } else if (metadataFiles.length) {
         const metadata = this.readMetadata(metadataFiles[0].text, metadataFiles[0].name);
         if (ticket !== this.loadTicket) return;
         if (!this.model) {
           this.metadata = metadata;
-          this.toast('Métadonnées chargées. Déposez maintenant le fichier .glb ou .gltf.');
+          notices.push({ text: 'Métadonnées chargées. Déposez maintenant le fichier .glb ou .gltf.', error: false });
         } else if (this.countMatches(metadata) === 0) {
           // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
-          this.toast(NO_MATCH, true);
+          notices.push({ text: NO_MATCH, error: true });
         } else {
           this.propertyEdits?.import(metadata, this.model.keys);
           this.emit('selection');
@@ -965,10 +958,13 @@ export class App {
       }
       if (ticket !== this.loadTicket) return;
       if (schedules.length) {
-        this.planning.loadJson(schedules[0].schedule, schedules[0].name);
-        if (schedules.length > 1) this.toast(`${schedules.length} plannings fournis : seul « ${schedules[0].name} » est chargé.`);
+        this.planning.loadSchedule(schedules[0].schedule, schedules[0].name);
+        if (schedules.length > 1) notices.push({ text: `${schedules.length} plannings fournis : seul « ${schedules[0].name} » est chargé.`, error: false });
       }
-      if (planningError) this.toast(`Planning non chargé : ${planningError}`, true);
+      if (planningError) notices.push({ text: `Planning non chargé : ${planningError}`, error: true });
+      const notice = combineNotices(notices);
+      // Une simple information ne remplace pas une erreur déjà affichée (par exemple celle de l'association des métadonnées).
+      if (notice && (notice.error || !this.errorShown())) this.toast(notice.text, notice.error);
     } catch (error) {
       if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
     } finally {
@@ -981,7 +977,7 @@ export class App {
    * GLB et les métadonnées obtenus comme s'ils avaient été déposés.
    */
   private async loadIfc(ticket: number, file: File): Promise<void> {
-    const base = file.name.replace(/\.ifc$/i, '');
+    const base = withoutExtension(file.name);
     const result = await convertIfc(file, (message) => {
       if (ticket === this.loadTicket) this.busy(message);
     }).catch((error: unknown) => {
@@ -1017,11 +1013,11 @@ export class App {
     if (!(await this.installModel(ticket, source, [metadata], `${base}.${produced.extension}`))) return;
 
     this.originalGlb = result.glb;
-    this.conversion = { name: base, glb: result.glb, ...produced };
+    this.conversion = { name: base };
     this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
     const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
     const lines = [
-      `${counted(elements, 'élément')} ${elements < 2 ? 'converti' : 'convertis'} en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, ${elements < 2 ? 'relié à ses propriétés par son' : 'reliés à leurs propriétés par leur'} identifiant IFC.`,
+      `${plural(elements, 'élément')} ${elements < 2 ? 'converti' : 'convertis'} en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, ${elements < 2 ? 'relié à ses propriétés par son' : 'reliés à leurs propriétés par leur'} identifiant IFC.`,
     ];
     if (linework > 0) {
       lines.push(`${integer.format(linework)} ${linework > 1 ? 'objets sans volume (axes de trame, annotations) ont été laissés' : 'objet sans volume (axe de trame, annotation) a été laissé'} de côté : rien ne manque au bâtiment.`);
@@ -1082,7 +1078,7 @@ export class App {
           this.viewer.modelGrown();
         }
         const shown = builder.model.count;
-        this.busy(`${status} ${counted(shown, 'élément')} ${shown < 2 ? 'affiché' : 'affichés'}.`);
+        this.busy(`${status} ${plural(shown, 'élément')} ${shown < 2 ? 'affiché' : 'affichés'}.`);
       });
       if (ticket !== this.loadTicket) {
         discard();
@@ -1172,7 +1168,7 @@ export class App {
         const labels = new Map(model.keys.flatMap((id, i) => { const label = this.store.labelOf(i); return label ? [[id, label] as const] : []; }));
         const metadata = this.exportMetadata();
         const source = this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
-        const glb = updateGlbMetadata(source ?? writeGlb(model, 'viewer-bim', { properties }), properties, this.store.readOnly, {
+        const glb = updateGlbMetadata(source ?? writeGlb(model), properties, this.store.readOnly, {
           nodeKeys: source && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
         });
         if (this.format === 'usd' || kind === 'quicklook') {
@@ -1202,9 +1198,7 @@ export class App {
       }
       return;
     }
-    const link = h('a', { attrs: { href: URL.createObjectURL(blob), download: `${name}.${extension}` } });
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    download(blob, `${name}.${extension}`);
     if (currentExport) { this.propertyEdits?.markSaved(); this.emit('history'); }
   }
 
@@ -1324,14 +1318,10 @@ export class App {
     return metadata;
   }
 
-  /** Renvoie faux si le chargement a été abandonné au profit d'un plus récent. */
+  /** Choisit le format des téléchargements et de la conversion d'un IFC ; le choix est retenu d'une visite à l'autre. */
   setFormat(format: ModelFormat): void {
     this.format = format;
-    try {
-      localStorage.setItem('viewer-bim.format', format);
-    } catch {
-      // stockage indisponible : le choix vaut pour la session
-    }
+    stored.set('viewer-bim.format', format);
     this.syncFormat();
     this.syncDownloads();
   }
@@ -1386,7 +1376,6 @@ export class App {
     this.store = new PropertyStore(0);
     this.propertyEdits = null;
     this.edits = 0;
-    this.matched = 0;
     this.setQuickLook(null);
     this.syncDownloads();
     this.updateStats();
@@ -1395,7 +1384,10 @@ export class App {
     this.emit('visibility');
   }
 
-  /** Installe un modèle : construit d'une scène ou d'un modèle brut, ou déjà construit (lecture Revit par morceaux). */
+  /**
+   * Installe un modèle : construit d'une scène ou d'un modèle brut, ou déjà construit (lecture Revit par morceaux).
+   * Renvoie faux si le chargement a été abandonné au profit d'un plus récent.
+   */
   private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, candidates: Metadata[], name: string): Promise<boolean> {
     if (ticket !== this.loadTicket) return false;
     const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
@@ -1476,7 +1468,6 @@ export class App {
     this.store = store;
     this.propertyEdits = new PropertyEdits(store, (path) => this.afterPropertyEdit(path));
     this.edits = 0;
-    this.matched = store.matched;
     this.syncDownloads();
     for (let i = 0; i < model.count; i++) model.state.clearColor(i);
     model.state.commit();
@@ -1506,13 +1497,17 @@ export class App {
     const count = this.openingHiddenCount();
     if (count === 0) return '';
     const views = revit ? 'les vues 3D du fichier Revit' : 'les vues enregistrées du fichier';
-    return `${counted(count, 'élément')} ${count < 2 ? 'masqué' : 'masqués'} à l’ouverture, comme dans ${views} : « Tout afficher » ${count < 2 ? 'le montre' : 'les montre'}.`;
+    return `${plural(count, 'élément')} ${count < 2 ? 'masqué' : 'masqués'} à l’ouverture, comme dans ${views} : « Tout afficher » ${count < 2 ? 'le montre' : 'les montre'}.`;
   }
 
   /** Dit ce que l'ouverture a masqué dans un message, sans remplacer un message d'erreur déjà affiché (hors Revit : voir `loadRevit`). */
   private announceOpeningHidden(): void {
     const sentence = this.openingHiddenSentence(false);
-    if (sentence && !(!this.toastEl.hidden && this.toastEl.classList.contains('error'))) this.toast(sentence);
+    if (sentence && !this.errorShown()) this.toast(sentence);
+  }
+
+  private errorShown(): boolean {
+    return !this.toastEl.hidden && this.toastEl.classList.contains('error');
   }
 
   private reportMatching(): void {
@@ -1523,7 +1518,7 @@ export class App {
     if (matched === 0) {
       this.toast(NO_MATCH, true);
     } else if (matched < model.count) {
-      this.toast(`Métadonnées associées à ${counted(matched, 'élément')} sur ${integer.format(model.count)}.`);
+      this.toast(`Métadonnées associées à ${plural(matched, 'élément')} sur ${integer.format(model.count)}.`);
     }
   }
 
@@ -1552,17 +1547,17 @@ export class App {
     for (let i = 0; i < model.count; i++) if (!model.state.isVisible(i)) hidden++;
     const parts = [
       this.fileName,
-      counted(model.count, 'élément'),
-      counted(model.triangleCount, 'triangle'),
-      counted(model.chunks.length, 'lot'),
+      plural(model.count, 'élément'),
+      plural(model.triangleCount, 'triangle'),
+      plural(model.chunks.length, 'lot'),
     ];
     parts.push(
       this.metadata
-        ? `métadonnées : ${this.metadata.source ?? 'JSON'} (${integer.format(this.matched)} sur ${integer.format(model.count)})`
+        ? `métadonnées : ${this.metadata.source ?? 'JSON'} (${integer.format(this.store.matched)} sur ${integer.format(model.count)})`
         : 'sans fichier de métadonnées',
     );
-    if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''}`);
-    if (this.edits > 0) parts.push(`${integer.format(this.edits)} valeur${this.edits > 1 ? 's' : ''} modifiée${this.edits > 1 ? 's' : ''}`);
+    if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${s(hidden)}`);
+    if (this.edits > 0) parts.push(plural(this.edits, 'modification'));
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
     if (frameTime > 0) {

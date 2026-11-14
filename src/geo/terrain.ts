@@ -14,7 +14,7 @@ const TILE_PIXELS = 256;
 /** Sommets par côté de tuile envoyés au globe : un sur quatre pixels, comme les tuiles Cesium. */
 export const GRID = 65;
 const MAX_LEVEL = 15;
-export const TERRAIN_CREDIT = 'Relief : Terrain Tiles (AWS Open Data, Mapzen) — SRTM, ASTER GDEM, EU-DEM, ETOPO1…';
+const TERRAIN_CREDIT = 'Relief : Terrain Tiles (AWS Open Data, Mapzen) — SRTM, ASTER GDEM, EU-DEM, ETOPO1…';
 
 /** Hauteurs (m) d'une grille GRID × GRID échantillonnée dans les pixels RVBA d'une tuile terrarium. */
 export function decodeTerrarium(pixels: ArrayLike<number>, size = TILE_PIXELS): Float32Array {

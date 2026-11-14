@@ -1,13 +1,15 @@
 import type { ConvertMessage, ConvertRequest, UsdRequest } from './ifcWorker.ts';
 import { mergeGlb, mergeMetadata } from './mergeGlb.ts';
+import { megabytes } from '../data/text.ts';
+import { ASSUMED_MEMORY_GB, deviceMemoryGB } from '../engine/deviceMemory.ts';
 
-export interface FailedElement {
+interface FailedElement {
   id: string;
   class: string;
   name: string;
 }
 
-export interface IfcReport {
+interface IfcReport {
   elements: number;
   triangles: number;
   /** Axes de trame et annotations : des lignes sans volume, laissées de côté. */
@@ -21,7 +23,7 @@ export interface IfcReport {
   workers: number;
 }
 
-export interface IfcConversion {
+interface IfcConversion {
   glb: ArrayBuffer;
   /** Métadonnées au format du contrat (docs/contrat-metadonnees.md), en texte JSON. */
   metadata: string;
@@ -45,8 +47,6 @@ export const MAX_IFC_BYTES = 100e6;
 
 /** Le fichier dépasse ce que le navigateur peut convertir : le message s'adresse à l'utilisateur. */
 export class IfcTooLargeError extends Error {}
-
-const megabytes = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('fr-FR');
 
 function tooLarge(file: File, reason: string): IfcTooLargeError {
   return new IfcTooLargeError(
@@ -85,10 +85,6 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
   // Keep only completion in the queue, never the last model's large buffers.
   operations = next.then(() => undefined, () => undefined);
   return next;
-}
-
-export function isIfcFile(name: string): boolean {
-  return /\.ifc$/i.test(name);
 }
 
 /**
@@ -207,7 +203,7 @@ export async function convertIfc(file: File, onStatus: (message: string) => void
 
 async function convertIfcNow(file: File, onStatus: (message: string) => void): Promise<IfcConversion> {
   const started = performance.now();
-  const memoryGB = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
+  const memoryGB = deviceMemoryGB() ?? ASSUMED_MEMORY_GB;
   let count = workerCount(file.size, navigator.hardwareConcurrency || 2, memoryGB);
   const source = await file.arrayBuffer();
 

@@ -117,7 +117,7 @@ test('on entre à 1,70 m au-dessus du sol sous le pivot, à l’horizontale dans
   const direction = s.viewer.perspective.getWorldDirection(new Vector3());
   assert.ok(Math.abs(direction.y) < 1e-9, 'regard horizontal');
   assert.ok(direction.x < -0.5 && direction.z < -0.5, 'dans le sens où la caméra regardait (vers −X, −Z)');
-  const { feet, ground } = s.walk.heights;
+  const { feet, ground } = s.walk as unknown as { feet: number; ground: number | null };
   assert.ok(ground !== null && Math.abs(ground - feet) < 1e-9, 'le sol connu est celui sous les pieds');
 });
 

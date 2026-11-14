@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compactHistory, trimHistory, type Message } from '../src/assistant/client.ts';
+import { compactHistory, serviceLine, trimHistory, type Message } from '../src/assistant/client.ts';
 import { compileExpression } from '../src/assistant/expression.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
@@ -453,4 +453,11 @@ test('l’API des agents expose les outils du chat, en direct et par WebMCP', as
   assert.equal(JSON.parse(reply.content[0].text).result.count, 6);
   assert.equal(store.propsOf(5)?.Lot, 'A');
   assert.equal(registerWebMcp(api, undefined), 0);
+});
+
+test('serviceLine dit « injoignable » quand la vérification a échoué, au lieu de rester sur « connexion… »', () => {
+  assert.equal(serviceLine('', false), 'Service d’IA : connexion…');
+  assert.match(serviceLine('', true), /injoignable/);
+  assert.equal(serviceLine('Workers AI', false), 'Service : Workers AI');
+  assert.equal(serviceLine('Workers AI', true), 'Service : Workers AI', 'un fournisseur connu l’emporte');
 });

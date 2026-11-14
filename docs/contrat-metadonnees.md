@@ -127,12 +127,16 @@ plutôt que d'une saisie : la classe, le type, l'emplacement (site, bâtiment, n
 matériaux et les quantités calculées. Le nom, la description, le repère et les jeux de
 propriétés (`Pset_…`) restent modifiables.
 
-## 2 ter. Lecture seule pour l’assistant et règles de présentation
+## 2 ter. Modification par l’assistant et règles de présentation
 
-Seuls les contrôles manuels modifient les propriétés : ajout, valeur, date, suppression,
-annulation et rétablissement. L’assistant consulte les métadonnées et ne dispose d’aucun outil
-de modification des propriétés ou de la géométrie. Les coordonnées et mesures non présentes
-dans le JSON ne sont pas calculées depuis le maillage pour lui.
+Les propriétés se modifient par les contrôles manuels (ajout, valeur, date, suppression,
+annulation et rétablissement) et par l’assistant, qui n’a que deux outils d’écriture :
+`set_property` (une valeur fixe ou une formule par élément) et `plan_dates` (des dates de début
+et de fin, groupées et ordonnées). Ces écritures passent par la même étape annulable que les
+contrôles manuels et respectent `readOnly` ; l’assistant ne modifie jamais la géométrie. Les
+coordonnées et mesures absentes du JSON ne sont pas calculées depuis le maillage pour le
+modèle d’IA : `plan_dates` lit la hauteur des éléments dans la maquette pour les ordonner, et
+cette géométrie reste dans le navigateur, elle n’est jamais envoyée au modèle.
 
 Les règles de présentation lisent les propriétés sans les modifier. Leur ordre est significatif :
 la dernière règle correspondante gagne pour chaque attribut (couleur et opacité séparément).
@@ -147,6 +151,13 @@ Elles sont partagées par le panneau manuel et les outils de l’assistant.
 ```
 
 Les conditions d’une règle sont combinées par ET ; une liste vide concerne tous les éléments.
+Les conditions se lisent de la même façon dans les règles et dans les filtres de l’assistant
+(`equals`, `not_equals`, `contains`, `greater`, `less`, `greater_or_equal`, `less_or_equal`,
+`missing`, `present`). Les textes se comparent sans tenir compte de la casse ni des accents, et deux
+valeurs qui se lisent comme des nombres (« 1 200 », « 1200,0 », `1200`) sont égales. **Une valeur
+absente (propriété manquante, `null` ou texte vide) n’est égale à rien** : `not_equals` la retient,
+alors que `equals`, `contains` et les comparaisons numériques ne la retiennent jamais ; seuls
+`missing` et `present` parlent des valeurs absentes.
 Une opacité fixe utilise `opacity` entre 0 et 1. Pour `opacityBy`, l’échelle `percent` signifie
 0–100 et `fraction` signifie 0–1 ; les valeurs numériques ne sont pas devinées. Les valeurs
 absentes ou non numériques ne remplacent pas une opacité déjà définie. Les règles, comme les

@@ -1,14 +1,14 @@
-import { Box3, Vector3 } from 'three';
-import { PATH_SEP, formatValue, ownValue, type PropValue } from '../data/metadata.ts';
+import { plainNumber } from '../data/conditions.ts';
+import { PATH_SEP, formatValue, toPropertyPath, ownValue, type PropValue } from '../data/metadata.ts';
 import { formatLength } from '../engine/Measure.ts';
 import type { App } from './App.ts';
-import { button, clear, h, integer } from './dom.ts';
+import { button, clear, h } from './dom.ts';
+import { integer } from '../data/text.ts';
 
 const MULTI_LIMIT = 5000;
 const MIXED = '(valeurs multiples)';
 const ADD_TITLE = 'Ajouter une propriété';
 const LOCKED_HINT = 'Propriété verrouillée par le fichier de métadonnées : elle découle de la structure du modèle (classe, type, emplacement, matériaux, quantités) et ne se modifie pas ici.';
-const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 
 /** Une ligne de la fiche : la valeur commune aux éléments sélectionnés, ou `undefined` si elle diffère. */
 interface Row {
@@ -23,8 +23,7 @@ interface Row {
 function parseInput(text: string): PropValue {
   const trimmed = text.trim();
   if (trimmed === '') return null;
-  if (NUMBER.test(trimmed)) return Number(trimmed.replace(',', '.'));
-  return trimmed;
+  return plainNumber(trimmed) ?? trimmed;
 }
 
 /** Fiche de l'élément sélectionné : ses métadonnées, regroupées par catégorie, modifiables sauf verrou. */
@@ -105,7 +104,7 @@ export class PropertiesPanel {
 
     // Emprise selon les axes ; les cotes détaillées (longueur, largeur, surface, volume) sont
     // dans le menu Mesures → Cotes.
-    const size = model.boxOf(indices, new Box3()).getSize(new Vector3());
+    const size = model.sizeOf(indices);
     const geometry = h('dl', { class: 'props' });
     for (const [name, value] of [
       ['Emprise X', formatLength(size.x)],
@@ -236,7 +235,7 @@ export class PropertiesPanel {
     const valueType = h('select', { attrs: { 'aria-label': 'Type de la nouvelle propriété' } }, h('option', { text: 'Valeur', attrs: { value: 'text' } }), h('option', { text: 'Date', attrs: { value: 'date' } }));
     valueType.addEventListener('change', () => { value.type = valueType.value; value.value = ''; });
     const submit = () => {
-      const path = name.value.split('/').map((part) => part.trim()).filter(Boolean).join(PATH_SEP);
+      const path = toPropertyPath(name.value);
       if (!path) {
         name.focus();
         return;

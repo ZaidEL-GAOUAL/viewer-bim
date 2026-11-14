@@ -1,10 +1,12 @@
 import { suggestGrouping } from '../data/grouping.ts';
 import { categoryColor } from '../data/palette.ts';
 import { UNDEFINED_LABEL, ownValue, type PropValue } from '../data/metadata.ts';
-import { validateAppearanceRules, type AppearanceRule, type RuleCondition, type RuleOp } from '../data/appearanceRules.ts';
+import { validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
+import { plainNumber, type RuleCondition, type RuleOp } from '../data/conditions.ts';
 import { ELEMENT_FIELDS, fieldLabel, isElementField } from '../data/elementFields.ts';
 import type { App } from './App.ts';
-import { button, clear, h, integer } from './dom.ts';
+import { fold, integer, s } from '../data/text.ts';
+import { button, clear, h } from './dom.ts';
 import { PhasePanel } from './PhasePanel.ts';
 import './filter-panel.css';
 
@@ -83,11 +85,15 @@ export class FilterPanel {
     this.reset();
   }
 
+  private fillSelect(): void {
+    clear(this.select);
+    for (const path of this.app.store.paths) this.select.append(h('option', { text: path, attrs: { value: path } }));
+  }
+
   /** Après une modification de propriétés : mêmes choix, liste des propriétés et des valeurs à jour. */
   private refreshPaths(): void {
     const { store } = this.app;
-    clear(this.select);
-    for (const path of store.paths) this.select.append(h('option', { text: path, attrs: { value: path } }));
+    this.fillSelect();
     if (!store.paths.includes(this.path)) this.path = suggestGrouping(store) ?? store.paths[0] ?? '';
     this.select.value = this.path;
     this.select.disabled = this.app.model === null || !this.path;
@@ -100,8 +106,7 @@ export class FilterPanel {
     this.ruleForm.hidden = true;
     this.editingId = null;
     this.ruleLimit = 50;
-    clear(this.select);
-    for (const path of store.paths) this.select.append(h('option', { text: path, attrs: { value: path } }));
+    this.fillSelect();
     this.path = suggestGrouping(store) ?? store.paths[0] ?? '';
     this.palettePath = this.path;
     this.select.value = this.path;
@@ -163,10 +168,10 @@ export class FilterPanel {
     const render = () => {
       clear(values);
       const path = property.value, palette = this.palette(path), groups = this.app.store.groups(path);
-      const query = search.value.trim().toLocaleLowerCase('fr');
+      const query = fold(search.value);
       let matching = 0, shown = 0;
       for (const [label, elements] of groups) {
-        if (query && !label.toLocaleLowerCase('fr').includes(query)) continue;
+        if (query && !fold(label).includes(query)) continue;
         matching++;
         if (shown++ >= MAX_ROWS) continue;
         const swatch = h('input', { class: 'swatch', attrs: { type: 'color', value: palette.get(label)!, 'aria-label': `Couleur de ${label}` } });
@@ -175,7 +180,7 @@ export class FilterPanel {
       }
       note.textContent = matching > MAX_ROWS ? `${integer.format(matching - MAX_ROWS)} autres valeurs : précisez la recherche.` : matching === 0 ? 'Aucune valeur ne correspond.' : '';
       search.hidden = groups.size <= 12 && !query;
-      save.textContent = `Ajouter ${integer.format(groups.size)} règle${groups.size > 1 ? 's' : ''}`;
+      save.textContent = `Ajouter ${integer.format(groups.size)} règle${s(groups.size)}`;
       save.disabled = groups.size === 0;
     };
     const load = () => {
@@ -279,7 +284,7 @@ export class FilterPanel {
         const text = value.value.trim();
         let parsed: PropValue = text;
         if (text === 'true') parsed = true; else if (text === 'false') parsed = false;
-        else if (/^[+-]?\d+(?:[.,]\d+)?$/.test(text)) parsed = Number(text.replace(',', '.'));
+        else parsed = plainNumber(text) ?? text;
         return { property: property.value, op: op.value as RuleOp, ...(['missing', 'present'].includes(op.value) ? {} : { value: parsed }), numericScale: scale.value as RuleCondition['numericScale'] };
       } });
       conditions.append(row);
@@ -343,8 +348,8 @@ export class FilterPanel {
   }
 
   private matches(label: string): boolean {
-    const query = this.search.value.trim().toLocaleLowerCase('fr');
-    return query === '' || label.toLocaleLowerCase('fr').includes(query);
+    const query = fold(this.search.value);
+    return query === '' || fold(label).includes(query);
   }
 
   private renderValues(): void {
@@ -362,8 +367,7 @@ export class FilterPanel {
     }
 
     const groups = store.groups(this.path);
-    const query = this.search.value.trim().toLocaleLowerCase('fr');
-    this.search.hidden = groups.size <= 12 && query === '';
+    this.search.hidden = groups.size <= 12 && fold(this.search.value) === '';
     let shown = 0;
     let matching = 0;
 

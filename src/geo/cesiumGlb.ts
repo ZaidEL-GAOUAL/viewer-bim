@@ -5,42 +5,12 @@
 // l'origine du modèle (IFC, GLB, USD), c'est ce fichier qui part vers le globe.
 
 import type { BufferAttribute } from 'three';
+import { ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER, FLOAT, GlbBuffer, UNSIGNED_BYTE, UNSIGNED_INT, UNSIGNED_SHORT, encodeGlb } from '../engine/glbFile.ts';
 import type { Model } from '../engine/Model.ts';
-
-const FLOAT = 5126;
-const UNSIGNED_BYTE = 5121;
-const UNSIGNED_SHORT = 5123;
-const UNSIGNED_INT = 5125;
-const ARRAY_BUFFER = 34962;
-const ELEMENT_ARRAY_BUFFER = 34963;
-
-interface Accessor {
-  bufferView: number;
-  componentType: number;
-  count: number;
-  type: string;
-  normalized?: boolean;
-  min?: number[];
-  max?: number[];
-}
-
-function align(length: number): number {
-  return (length + 3) & ~3;
-}
 
 /** GLB à un maillage par lot du viewer, sommets en coordonnées locales recentrées. */
 export function writeCesiumGlb(model: Model): ArrayBuffer {
-  const bufferViews: { buffer: 0; byteOffset: number; byteLength: number; target: number }[] = [];
-  const accessors: Accessor[] = [];
-  const parts: ArrayBufferView[] = [];
-  let byteLength = 0;
-  const view = (data: ArrayBufferView, target: number): number => {
-    bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: data.byteLength, target });
-    parts.push(data);
-    byteLength = align(byteLength + data.byteLength);
-    return bufferViews.length - 1;
-  };
-  const accessor = (entry: Accessor): number => accessors.push(entry) - 1;
+  const buffer = new GlbBuffer();
 
   const materials: Record<string, unknown>[] = [];
   const primitives: Record<string, unknown>[] = [];
@@ -70,18 +40,17 @@ export function writeCesiumGlb(model: Model): ArrayBuffer {
     }
 
     const attributes: Record<string, number> = {
-      POSITION: accessor({ bufferView: view(positions, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC3', min, max }),
-      NORMAL: accessor({ bufferView: view(normals, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC3' }),
+      POSITION: buffer.add(positions, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'VEC3', min, max }),
+      NORMAL: buffer.add(normals, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'VEC3' }),
       // Indice d'élément par sommet : le même que celui que lisent nos shaders.
-      _FEATURE_ID_0: accessor({ bufferView: view(elementAttribute.array as Float32Array, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'SCALAR' }),
+      _FEATURE_ID_0: buffer.add(elementAttribute.array as Float32Array, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'SCALAR' }),
     };
     if (colorAttribute && colorAttribute.array instanceof Uint8Array) {
       // Couleurs gardées en octets sRGB (le shader Cesium les convertit, comme le nôtre).
-      attributes.COLOR_0 = accessor({ bufferView: view(colorAttribute.array, ARRAY_BUFFER), componentType: UNSIGNED_BYTE, count: vertexCount, type: colorAttribute.itemSize === 4 ? 'VEC4' : 'VEC3', normalized: true });
+      attributes.COLOR_0 = buffer.add(colorAttribute.array, ARRAY_BUFFER, { componentType: UNSIGNED_BYTE, count: vertexCount, type: colorAttribute.itemSize === 4 ? 'VEC4' : 'VEC3', normalized: true });
     }
     const index = chunk.index;
-    const indices = accessor({
-      bufferView: view(index, ELEMENT_ARRAY_BUFFER),
+    const indices = buffer.add(index, ELEMENT_ARRAY_BUFFER, {
       componentType: index instanceof Uint16Array ? UNSIGNED_SHORT : UNSIGNED_INT,
       count: index.length,
       type: 'SCALAR',
@@ -115,30 +84,9 @@ export function writeCesiumGlb(model: Model): ArrayBuffer {
     nodes: [{ name: 'Maquette', mesh: 0 }],
     meshes: [{ name: 'Maquette', primitives }],
     materials,
-    accessors,
-    bufferViews,
-    buffers: [{ byteLength }],
+    accessors: buffer.accessors,
+    bufferViews: buffer.bufferViews,
+    buffers: [{ byteLength: buffer.byteLength }],
   };
-  const json = new TextEncoder().encode(JSON.stringify(gltf));
-  const jsonLength = align(json.byteLength);
-  const total = 12 + 8 + jsonLength + 8 + byteLength;
-  const out = new ArrayBuffer(total);
-  const bytes = new Uint8Array(out);
-  const header = new DataView(out);
-  header.setUint32(0, 0x46546c67, true);
-  header.setUint32(4, 2, true);
-  header.setUint32(8, total, true);
-  header.setUint32(12, jsonLength, true);
-  header.setUint32(16, 0x4e4f534a, true);
-  bytes.set(json, 20);
-  bytes.fill(0x20, 20 + json.byteLength, 20 + jsonLength);
-  let at = 20 + jsonLength;
-  header.setUint32(at, byteLength, true);
-  header.setUint32(at + 4, 0x004e4942, true);
-  at += 8;
-  for (const part of parts) {
-    bytes.set(new Uint8Array(part.buffer, part.byteOffset, part.byteLength), at);
-    at = align(at + part.byteLength);
-  }
-  return out;
+  return encodeGlb(gltf, buffer.parts);
 }

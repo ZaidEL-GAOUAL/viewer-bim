@@ -1,5 +1,6 @@
 import { Color } from 'three';
 import { buildModel } from '../src/engine/buildModel.ts';
+import { encodeGlb } from '../src/engine/glbFile.ts';
 import { loadModelFiles } from '../src/engine/loadModel.ts';
 import type { Model } from '../src/engine/Model.ts';
 
@@ -73,16 +74,5 @@ export function makeGlb(nodes: object[], roots: number[], mesh: TestMesh = TRIAN
     buffers: [{ byteLength: bin.length }],
   };
   patch?.(gltf);
-  const json = pad(Buffer.from(JSON.stringify(gltf), 'utf8'), 0x20);
-  const header = Buffer.alloc(20);
-  header.writeUInt32LE(0x46546c67, 0);
-  header.writeUInt32LE(2, 4);
-  header.writeUInt32LE(28 + json.length + bin.length, 8);
-  header.writeUInt32LE(json.length, 12);
-  header.writeUInt32LE(0x4e4f534a, 16);
-  const binHeader = Buffer.alloc(8);
-  binHeader.writeUInt32LE(bin.length, 0);
-  binHeader.writeUInt32LE(0x004e4942, 4);
-  const glb = Buffer.concat([header, json, binHeader, bin]);
-  return glb.buffer.slice(glb.byteOffset, glb.byteOffset + glb.byteLength) as ArrayBuffer;
+  return encodeGlb(gltf, [bin]);
 }

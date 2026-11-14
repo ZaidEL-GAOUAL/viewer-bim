@@ -7,7 +7,7 @@ import { buildModel } from '../src/engine/buildModel.ts';
 import { loadModelFiles } from '../src/engine/loadModel.ts';
 
 // Fichiers produits par pipeline/ifc_to_glb.py à partir de public/samples/ifc-demo.ifc.
-const samples = new URL('../public/samples/', import.meta.url);
+const samples = new URL('./fixtures/', import.meta.url);
 const file = new File([readFileSync(new URL('ifc-demo.glb', samples))], 'ifc-demo.glb');
 const { gltf } = await loadModelFiles({ file, path: file.name }, []);
 const model = buildModel(gltf, { value: new Color() });

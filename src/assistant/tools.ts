@@ -1,25 +1,24 @@
 // Outils mis à disposition du LLM. Ils tournent dans le navigateur, sur les données déjà
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
-import { PATH_SEP, UNDEFINED_LABEL, compareValues, formatValue, ownValue, type PropValue, type PropertyStore } from '../data/metadata.ts';
-import { formatScheduleDate, parseScheduleDate } from '../data/schedule.ts';
-import { numericValue, validateAppearanceRules, type AppearanceRule, type RuleCondition } from '../data/appearanceRules.ts';
+import { PATH_SEP, UNDEFINED_LABEL, compareValues, formatValue, rankedValues, toPropertyPath, type PropValue, type PropertyStore } from '../data/metadata.ts';
+import { formatScheduleDate, parseDateInput } from '../data/schedule.ts';
+import { validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
+import { RULE_OPS, isMissing, matchesCondition, numericValue, valueAt, type ElementIdentity, type RuleCondition, type RuleOp } from '../data/conditions.ts';
+import { isRecord } from '../data/json.ts';
+import { fold, plural, s } from '../data/text.ts';
 import { ELEMENT_ID, ELEMENT_NAME, isElementField } from '../data/elementFields.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
 
-export type FilterOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less' | 'greater_or_equal' | 'less_or_equal';
-const FILTER_OPS: readonly string[] = ['equals', 'not_equals', 'contains', 'missing', 'present', 'greater', 'less', 'greater_or_equal', 'less_or_equal'];
 /** Opérateurs écrits en symboles par certains modèles (« = », « >= ») : ramenés aux noms attendus. */
 const OP_ALIASES: Record<string, string> = { '=': 'equals', '==': 'equals', '!=': 'not_equals', '<>': 'not_equals', '>': 'greater', '<': 'less', '>=': 'greater_or_equal', '<=': 'less_or_equal' };
 const opOf = (raw: unknown): string => { const op = String(raw ?? 'equals').trim(); return OP_ALIASES[op] ?? op; };
 
-export interface Filter {
-  property: string;
-  op: FilterOp;
-  value?: PropValue;
-}
-
-/** Tools read metadata, change presentation and write properties (undoable). No geometry access. */
+/**
+ * Tools read metadata, change presentation and write properties (undoable). They never write geometry, and
+ * geometry never reaches the model: code may use it to order things (`heightOf`, for plan_dates) but only
+ * properties, names and identifiers go into a tool result.
+ */
 export interface ToolContext {
   store: PropertyStore;
   count: number;
@@ -217,7 +216,7 @@ export const TOOL_DEFINITIONS = [
 ];
 
 /** Règles posées par « mettre en évidence », dans cet ordre : atténuation générale, puis les éléments visés. */
-export const HIGHLIGHT_IDS: readonly string[] = ['assistant-dim-others', 'assistant-highlight'];
+const HIGHLIGHT_IDS: readonly string[] = ['assistant-dim-others', 'assistant-highlight'];
 const isHighlightRule = (id: string) => id === HIGHLIGHT_IDS[0] || id.startsWith(HIGHLIGHT_IDS[1]);
 
 /**
@@ -242,11 +241,15 @@ const DETAIL_LIMIT = 20;
 const DETAIL_MAX = 50;
 const COUNT_LIMIT = 40;
 
-/** Metadata only: computed geometry is intentionally unavailable to the assistant. */
+const identities = new WeakMap<ToolContext, ElementIdentity>();
+/** What the model can read about an element: its properties, name and identifier, never computed geometry. */
 export function valueOf(context: ToolContext, index: number, path: string): PropValue | undefined {
-  if (path === ELEMENT_NAME) return context.labelOf(index);
-  if (path === ELEMENT_ID) return context.keys[index];
-  return ownValue(context.store.propsOf(index), path);
+  let identity = identities.get(context);
+  if (!identity) {
+    identity = { get keys() { return context.keys; }, label: (i) => context.labelOf(i) };
+    identities.set(context, identity);
+  }
+  return valueAt(context.store, identity, index, path);
 }
 
 /** Mots par lesquels on désigne le nom ou l'identifiant d'un élément, quand aucune propriété ne porte ce nom. */
@@ -254,10 +257,6 @@ const NAME_WORDS = new Set(['nom', 'name', 'label', 'libelle', 'nom de l’eleme
 const ID_WORDS = new Set(['id', 'identifiant', 'globalid', 'global id', 'guid', 'cle', 'key', 'ifc id']);
 
 // ------------------------------------------------------------- résolution
-
-function fold(text: string): string {
-  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('fr').trim();
-}
 
 /**
  * Retrouve le chemin exact d'une propriété à partir d'un nom approximatif : nom complet, puis
@@ -267,7 +266,7 @@ function fold(text: string): string {
 export function resolveProperty(store: PropertyStore, name: string): string | { error: string } {
   const paths = store.paths;
   if (paths.includes(name) || isElementField(name)) return name;
-  const wanted = fold(name.replace(/\s*\/\s*/g, PATH_SEP));
+  const wanted = fold(toPropertyPath(name));
   const exact = paths.filter((path) => fold(path) === wanted);
   if (exact.length === 1) return exact[0];
   const tails = paths.filter((path) => fold(path.slice(path.lastIndexOf(PATH_SEP) + PATH_SEP.length)) === wanted);
@@ -299,60 +298,16 @@ function existingValues(store: PropertyStore, filters: ResolvedFilter[]): { exis
   const out: Record<string, string[]> = {};
   for (const { path } of filters) {
     if (isElementField(path) || path in out) continue;
-    out[path] = [...store.groups(path).entries()]
-      .filter(([label]) => label !== UNDEFINED_LABEL)
-      .sort((a, b) => b[1].length - a[1].length)
+    out[path] = rankedValues(store, path)
       .slice(0, EXISTING_VALUES)
       .map(([label]) => label);
   }
   return Object.keys(out).length > 0 ? { existingValues: out } : {};
 }
 
-function isMissing(value: PropValue | undefined): boolean {
-  return value === undefined || value === null || value === '';
-}
-
-function sameValue(value: PropValue, wanted: PropValue): boolean {
-  if (typeof value === 'number' || typeof wanted === 'number') {
-    const a = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
-    const b = typeof wanted === 'number' ? wanted : Number(String(wanted).replace(',', '.'));
-    if (Number.isFinite(a) && Number.isFinite(b)) return a === b;
-  }
-  if (typeof value === 'boolean' || typeof wanted === 'boolean') return String(value) === String(wanted).toLowerCase();
-  return fold(String(value)) === fold(String(wanted));
-}
-
-function matches(value: PropValue | undefined, filter: Filter): boolean {
-  switch (filter.op) {
-    case 'missing':
-      return isMissing(value);
-    case 'present':
-      return !isMissing(value);
-    case 'equals':
-      return !isMissing(value) && filter.value !== undefined && sameValue(value!, filter.value);
-    case 'not_equals':
-      return isMissing(value) || filter.value === undefined || !sameValue(value!, filter.value);
-    case 'contains':
-      return !isMissing(value) && fold(String(value)).includes(fold(String(filter.value ?? '')));
-    case 'greater':
-    case 'less':
-    case 'greater_or_equal':
-    case 'less_or_equal': {
-      const a = numericValue(value);
-      const b = numericValue(filter.value);
-      if (a === undefined || b === undefined) return false;
-      if (filter.op === 'greater') return a > b;
-      if (filter.op === 'less') return a < b;
-      return filter.op === 'greater_or_equal' ? a >= b : a <= b;
-    }
-    default:
-      return false;
-  }
-}
-
 interface ResolvedFilter {
   path: string;
-  filter: Filter;
+  filter: RuleCondition;
 }
 
 /**
@@ -397,8 +352,8 @@ function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter
     if (typeof item !== 'object' || item === null) return { error: 'Chaque filtre doit être un objet {property, op, value}.' };
     const record = item as Record<string, unknown>;
     const property = typeof record.property === 'string' ? record.property : '';
-    const op = opOf(record.op) as FilterOp;
-    if (!FILTER_OPS.includes(op)) return { error: `Opérateur inconnu : ${op}` };
+    const op = opOf(record.op) as RuleOp;
+    if (!RULE_OPS.includes(op)) return { error: `Opérateur inconnu : ${op}` };
     const path = resolveProperty(store, property);
     if (typeof path !== 'string') return path;
     const value = record.value;
@@ -427,7 +382,7 @@ function compileFormula(store: PropertyStore, text: unknown): Expression | null 
  * dans un autre champ. Sinon la propriété est créée sous ce nom.
  */
 function writablePath(store: PropertyStore, raw: unknown): string | { error: string } {
-  const name = String(raw ?? '').trim().replace(/\s*\/\s*/g, PATH_SEP);
+  const name = toPropertyPath(String(raw ?? ''));
   if (!name) return { error: 'Nom de propriété manquant.' };
   if (isElementField(name)) return { error: `${name} n’est pas une propriété : le nom affiché et l’identifiant ne s’écrivent pas.` };
   let path = name;
@@ -445,17 +400,16 @@ function writablePath(store: PropertyStore, raw: unknown): string | { error: str
 /** Jour d'une date AAAA-MM-JJ, ou JJ/MM/AAAA comme on l'écrit en français. */
 function dayOf(raw: unknown, label: string): number {
   const text = String(raw ?? '').trim();
-  const french = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
   try {
-    return parseScheduleDate(french ? `${french[3]}-${french[2].padStart(2, '0')}-${french[1].padStart(2, '0')}` : text);
+    return parseDateInput(text);
   } catch {
     throw new Error(`${label} : date « ${text} » illisible, attendu AAAA-MM-JJ.`);
   }
 }
 
 function dayCount(raw: unknown, label: string): number {
-  const value = Number(typeof raw === 'string' ? raw.replace(',', '.') : raw);
-  if (!Number.isFinite(value) || value < 1) throw new Error(`${label} doit être un nombre de jours, au moins 1.`);
+  const value = numericValue(raw as PropValue);
+  if (value === undefined || value < 1) throw new Error(`${label} doit être un nombre de jours, au moins 1.`);
   return Math.round(value);
 }
 
@@ -469,14 +423,10 @@ function stableHash(text: string): number {
 const NO_WRITE = 'La modification des propriétés n’est pas disponible dans ce contexte.';
 
 /** Indices des éléments du périmètre qui vérifient tous les filtres. */
-export function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
+function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
   const base = inSelection(scope) ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
   if (filters.length === 0) return base;
-  return base.filter((index) => filters.every(({ path, filter }) => matches(valueOf(context, index, path), filter)));
-}
-
-function plural(count: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${count.toLocaleString('fr-FR')} ${count > 1 ? pluralForm : singular}`;
+  return base.filter((index) => filters.every(({ path, filter }) => matchesCondition(valueOf(context, index, path), filter)));
 }
 
 // ------------------------------------------------------------------- outils
@@ -509,7 +459,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const total = paths.length;
       // Le nom et l'identifiant de chaque élément se filtrent aussi : on les rappelle à chaque liste.
       const elementFields = { '#nom': 'nom affiché de l’élément', '#id': 'identifiant de l’élément' };
-      return { result: { total, properties, elementFields }, note: `${plural(total, 'propriété')} listée${total > 1 ? 's' : ''}` };
+      return { result: { total, properties, elementFields }, note: `${plural(total, 'propriété')} listée${s(total)}` };
     }
 
     case 'count_by': {
@@ -546,7 +496,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const indices = selectIndices(context, filters, args.scope);
       const limit = Math.min(DETAIL_MAX, Math.max(1, Number(args.limit) || DETAIL_LIMIT));
       const elements = indices.slice(0, limit).map((index) => elementSummary(context, index, wanted));
-      return { result: { count: indices.length, shown: elements.length, elements, ...(indices.length === 0 ? existingValues(store, filters) : {}) }, note: `${plural(indices.length, 'élément')} trouvé${indices.length > 1 ? 's' : ''}` };
+      return { result: { count: indices.length, shown: elements.length, elements, ...(indices.length === 0 ? existingValues(store, filters) : {}) }, note: `${plural(indices.length, 'élément')} trouvé${s(indices.length)}` };
     }
 
     case 'get_element': {
@@ -615,7 +565,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const indices = narrowing.indices;
       if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       context.setVisible(indices, visible);
-      return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${indices.length > 1 ? 's' : ''}` };
+      return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${s(indices.length)}` };
     }
 
     case 'compute': {
@@ -692,15 +642,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         return path;
       };
       const patched = rawRules.map((raw) => {
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Chaque règle doit être un objet.');
+        if (!isRecord(raw)) throw new Error('Chaque règle doit être un objet.');
         const rule = structuredClone(raw) as Record<string, unknown>;
         // Mêmes écarts des modèles que pour les autres outils : booléen ou nombre en texte, liste
         // réduite à un élément, opérateur en symbole. Une règle ajoutée sans « enabled » est active.
         rule.enabled = rule.enabled === undefined ? true : flag(rule.enabled) ?? rule.enabled;
-        if (typeof rule.opacity === 'string' && rule.opacity.trim() !== '' && Number.isFinite(Number(rule.opacity))) rule.opacity = Number(rule.opacity);
+        if (typeof rule.opacity === 'string' && numericValue(rule.opacity) !== undefined) rule.opacity = numericValue(rule.opacity);
         const conditions = asList(rule.conditions);
         if (Array.isArray(conditions)) rule.conditions = conditions.map((condition: unknown) => {
-          if (!condition || typeof condition !== 'object' || Array.isArray(condition)) throw new Error('Condition illisible.');
+          if (!isRecord(condition)) throw new Error('Condition illisible.');
           const c = condition as Record<string, unknown>;
           return { ...c, property: resolve(c.property), op: opOf(c.op) };
         });

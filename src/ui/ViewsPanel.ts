@@ -35,7 +35,7 @@ export class ViewsPanel {
     this.el = h('section', { class: 'card views-card', attrs: { hidden: '', 'aria-label': 'Vues enregistrées' } },
       h('div', { class: 'card-head' },
         h('h2', { class: 'card-title', text: 'Vues' }),
-        button('×', () => this.toggle(false), { class: 'measure-remove', title: 'Fermer', attrs: { 'aria-label': 'Fermer les vues' } }),
+        button('×', () => this.toggle(false), { class: 'close-button', title: 'Fermer', attrs: { 'aria-label': 'Fermer les vues' } }),
       ),
       this.list,
       h('p', { class: 'hint', text: 'Reprises : caméra (perspective, parallèle, champ), boîte de coupe, éléments et catégories masqués, phase et filtre de phase. Un plan d’étage s’ouvre vu du dessus, en 2D, coupé à la hauteur de coupe du plan. Les remplacements graphiques par catégorie, le niveau de détail et le style visuel ne le sont pas.' }),

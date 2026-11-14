@@ -1,4 +1,5 @@
 import { ownValue, type PropValue, type PropertyStore } from './metadata.ts';
+import { isRecord } from './json.ts';
 
 export interface ScheduleTask {
   id: string;
@@ -21,7 +22,6 @@ export interface Schedule {
 }
 
 export const ScheduleStatus = { context: 0, pending: 1, active: 2, complete: 3 } as const;
-export type ScheduleStatusValue = typeof ScheduleStatus[keyof typeof ScheduleStatus];
 
 export interface CompiledTask {
   task: ScheduleTask;
@@ -30,7 +30,7 @@ export interface CompiledTask {
   elements: number[];
 }
 
-export interface ScheduleReport {
+interface ScheduleReport {
   linkedElementCount: number;
   unlinkedElementCount: number;
   unlinkedTaskIds: string[];
@@ -52,12 +52,11 @@ export interface ScheduleFrame {
   tasks: Uint8Array;
 }
 
-const DAY_MS = 86_400_000;
-const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+export const DAY_MS = 86_400_000;
 
 /** Route schedule-shaped files to schedule validation, including invalid/empty documents. */
 export function isScheduleDocument(raw: unknown): boolean {
-  return record(raw) && ((Object.hasOwn(raw, 'type') && raw.type === 'bim-schedule') || (Object.hasOwn(raw, 'tasks') && Array.isArray(raw.tasks)));
+  return isRecord(raw) && ((Object.hasOwn(raw, 'type') && raw.type === 'bim-schedule') || (Object.hasOwn(raw, 'tasks') && Array.isArray(raw.tasks)));
 }
 
 /** A UTC integer day avoids daylight-saving changes and Date's permissive rollover. */
@@ -70,6 +69,13 @@ export function parseScheduleDate(value: unknown): number {
     throw new Error(`Date de planning invalide : ${value}.`);
   }
   return timestamp / DAY_MS;
+}
+
+/** Date saisie à la française (JJ/MM/AAAA) ou au format du planning (AAAA-MM-JJ). */
+export function parseDateInput(value: string): number {
+  const text = value.trim();
+  const french = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
+  return parseScheduleDate(french ? `${french[3]}-${french[2].padStart(2, '0')}-${french[1].padStart(2, '0')}` : text);
 }
 
 export function formatScheduleDate(day: number): string {
@@ -86,14 +92,14 @@ function text(value: unknown, label: string): string {
 
 /** Validate the whole document before returning a detached schedule (no partial import). */
 export function parseSchedule(raw: unknown): Schedule {
-  if (!record(raw)) throw new Error('Le planning doit contenir un objet JSON.');
+  if (!isRecord(raw)) throw new Error('Le planning doit contenir un objet JSON.');
   if (raw.type !== undefined && raw.type !== 'bim-schedule') throw new Error('Type de document de planning inconnu.');
   if (raw.version !== 1) throw new Error('Version du planning non prise en charge : version 1 attendue.');
   if (raw.name !== undefined && typeof raw.name !== 'string') throw new Error('Le nom du planning doit être un texte.');
   if (!Array.isArray(raw.tasks) || raw.tasks.length === 0) throw new Error('Le planning doit contenir au moins une tâche.');
   const ids = new Set<string>();
   const tasks: ScheduleTask[] = raw.tasks.map((item, index) => {
-    if (!record(item)) throw new Error(`Tâche ${index + 1} invalide.`);
+    if (!isRecord(item)) throw new Error(`Tâche ${index + 1} invalide.`);
     for (const field of ['action', 'type']) {
       if (item[field] !== undefined && item[field] !== 'construction') {
         throw new Error(`La tâche ${index + 1} utilise ${field}=${String(item[field])}. Ce lecteur 4D prend en charge uniquement la construction.`);
@@ -112,7 +118,7 @@ export function parseSchedule(raw: unknown): Schedule {
       task.elementIds = [...new Set(item.elementIds.map((value) => text(value, 'L’identifiant d’élément')))];
     }
     if (item.match !== undefined) {
-      if (!record(item.match) || !Array.isArray(item.match.values) || item.match.values.length === 0) {
+      if (!isRecord(item.match) || !Array.isArray(item.match.values) || item.match.values.length === 0) {
         throw new Error(`Le lien par propriété de la tâche ${id} nécessite une liste de valeurs.`);
       }
       const property = text(item.match.property, 'La propriété de liaison');
@@ -242,7 +248,7 @@ export interface MetadataScheduleOptions {
   name?: string;
 }
 
-export interface MetadataScheduleReport {
+interface MetadataScheduleReport {
   missingDateIds: string[];
   invalidDateIds: string[];
   missingTaskIdIds: string[];

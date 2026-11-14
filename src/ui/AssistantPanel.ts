@@ -1,4 +1,4 @@
-import { AssistantError, assistantUrl, fetchStatus, runTurn, type ApiSettings, type Message } from '../assistant/client.ts';
+import { AssistantError, assistantUrl, fetchStatus, runTurn, serviceLine, type ApiSettings, type Message } from '../assistant/client.ts';
 import { SessionUsage } from '../assistant/usage.ts';
 import { buildSystemPrompt } from '../assistant/prompt.ts';
 import { toolContext } from './toolContext.ts';
@@ -29,6 +29,8 @@ export class AssistantPanel {
   private messages: Message[] = [];
   private busy: AbortController | null = null;
   private provider = '';
+  /** La dernière vérification du service a échoué : l'état le dit au lieu de rester sur « connexion… ». */
+  private unreachable = false;
   private api: ApiSettings | null = null;
   private readonly usage = new SessionUsage();
   private readonly usageEl: HTMLElement;
@@ -52,6 +54,7 @@ export class AssistantPanel {
     this.settings = new AssistantSettings((settings) => {
       this.api = settings;
       this.provider = settings ? `${new URL(settings.endpoint).hostname} (${settings.model})` : '';
+      this.unreachable = false;
       this.reset();
       if (!settings) void this.checkService();
     });
@@ -82,8 +85,9 @@ export class AssistantPanel {
       const status = await fetchStatus(this.url);
       if (this.api) return;
       this.provider = status.providers.map((item) => item.name).join(', ');
+      this.unreachable = false;
     } catch {
-      if (!this.api) this.provider = '';
+      if (!this.api) { this.provider = ''; this.unreachable = true; }
     }
     this.syncStatus();
   }
@@ -96,8 +100,8 @@ export class AssistantPanel {
       this.status.textContent = 'Chargez un modèle pour interroger l’assistant.';
       this.status.classList.remove('warning');
     } else {
-      this.status.textContent = this.provider ? `Service : ${this.provider}` : 'Service d’IA : connexion…';
-      this.status.classList.remove('warning');
+      this.status.textContent = serviceLine(this.provider, this.unreachable);
+      this.status.classList.toggle('warning', this.unreachable && !this.provider);
     }
     const enabled = this.ready && this.busy === null;
     this.settings.setBusy(this.busy !== null);

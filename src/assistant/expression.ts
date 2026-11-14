@@ -4,6 +4,7 @@
 // Les propriétés sont entre crochets ; nombres, textes entre guillemets, true/false/null,
 // + - * /, comparaisons, and/or/not, abs/min/max/round. Rien n'est exécuté comme du code.
 
+import { numericValue } from '../data/conditions.ts';
 import type { PropValue } from '../data/metadata.ts';
 
 export type Value = number | string | boolean | null;
@@ -190,10 +191,7 @@ export interface Expression {
 function toNumber(value: Value): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'string') {
-    const parsed = Number(value.trim().replace(',', '.'));
-    return value.trim() === '' ? NaN : parsed;
-  }
+  if (typeof value === 'string') return numericValue(value) ?? NaN;
   return NaN;
 }
 

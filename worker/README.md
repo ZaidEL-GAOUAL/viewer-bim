@@ -38,8 +38,12 @@ l'indique) ; tout le reste fonctionne.
 ## Modèles et relais
 
 - Par défaut : **Workers AI**, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, dans le quota
-  gratuit de 10 000 neurones par jour (≈ 60 questions par jour : chaque question coûte deux appels d’environ 2 500 jetons). Au-delà, Cloudflare
-  refuse jusqu'au lendemain ; rien n'est facturé.
+  gratuit de 10 000 neurones par jour. Chaque appel envoie les définitions des outils (≈ 10 000
+  caractères) et le message système (≈ 5 000 caractères et plus, selon le modèle chargé), soit
+  environ 5 000 jetons avant même la question et l'historique ; une question fait au moins deux
+  appels, donc plus de 10 000 jetons. À ce poids, le quota couvre de l'ordre de 30 questions par
+  jour, non mesuré : le compteur de jetons de l'onglet Assistant et le tableau de bord Cloudflare
+  donnent la valeur réelle. Au-delà, Cloudflare refuse jusqu'au lendemain ; rien n'est facturé.
 - Relais facultatifs quand Workers AI refuse : **Groq** et **Cerebras** (paliers gratuits, sans
   carte). Créer une clé chez eux, puis dans Cloudflare → Workers & Pages → `viewer-bim`
   → Settings → Variables and Secrets : `GROQ_API_KEY`, `CEREBRAS_API_KEY`. Modèles dans

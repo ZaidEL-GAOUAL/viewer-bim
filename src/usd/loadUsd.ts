@@ -8,7 +8,7 @@ import { parseGeoreference } from '../geo/georeference.ts';
 import type { ModelSource } from '../engine/buildModel.ts';
 import { parseUsda, type UsdDictionary, type UsdLayer, type UsdPath, type UsdPrim, type UsdValue } from './usda.ts';
 
-export interface LoadedUsd {
+interface LoadedUsd {
   source: ModelSource;
   /** Métadonnées embarquées dans les prims (`customData`), s'il y en a. */
   metadata: Metadata | null;
@@ -17,10 +17,6 @@ export interface LoadedUsd {
 
 /** Z vers le haut (USD par défaut en construction) vers Y vers le haut (three.js). */
 const Z_UP_TO_Y_UP = new Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);
-
-export function isUsdFile(name: string): boolean {
-  return /\.(usdz|usda|usd|usdc)$/i.test(name);
-}
 
 // ------------------------------------------------------------------- usdz
 

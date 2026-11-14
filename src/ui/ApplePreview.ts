@@ -1,6 +1,6 @@
 import { button, h } from './dom.ts';
 
-export type ApplePreviewMode = 'quick-look' | 'model' | 'unavailable';
+type ApplePreviewMode = 'quick-look' | 'model' | 'unavailable';
 
 /** rel="ar" n'ouvre Quick Look que sur les appareils mobiles Apple, même si un Mac le reconnaît. */
 export function applePreviewMode(

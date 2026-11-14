@@ -4,13 +4,13 @@
 
 import { TOOL_DEFINITIONS, runTool, type ToolContext, type ToolOutcome } from './tools.ts';
 
-export interface AgentTool {
+interface AgentTool {
   name: string;
   description: string;
   inputSchema: object;
 }
 
-export interface ViewerApi {
+interface ViewerApi {
   readonly version: 1;
   /** Outils au format MCP : nom, description, schéma JSON des arguments. */
   readonly tools: readonly AgentTool[];

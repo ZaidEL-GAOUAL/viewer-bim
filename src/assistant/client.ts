@@ -28,12 +28,12 @@ export interface Reply {
   unreportedAttempts?: number;
 }
 
-export interface ServiceStatus {
+interface ServiceStatus {
   ok: boolean;
   providers: { name: string; model: string }[];
 }
 
-export interface TurnEvents {
+interface TurnEvents {
   /** Un outil vient d'être exécuté : ligne à afficher. */
   onTool(note: string, name: string): void;
   onProvider(provider: string, model: string): void;
@@ -71,6 +71,12 @@ async function readError(response: Response): Promise<AssistantError> {
     // pas de JSON : message générique
   }
   return new AssistantError(`Le service d’IA a répondu ${response.status}.`, response.status >= 500 ? 1 : 0);
+}
+
+/** Ligne d'état du service : son fournisseur, « injoignable » si la vérification a échoué, « connexion… » tant qu'elle n'a pas répondu. */
+export function serviceLine(provider: string, unreachable: boolean): string {
+  if (provider) return `Service : ${provider}`;
+  return unreachable ? 'Service d’IA injoignable : vérifiez la connexion, ou réessayez plus tard.' : 'Service d’IA : connexion…';
 }
 
 export async function fetchStatus(url: string, signal?: AbortSignal): Promise<ServiceStatus> {

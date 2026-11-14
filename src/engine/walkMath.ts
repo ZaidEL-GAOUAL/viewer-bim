@@ -17,14 +17,14 @@ export const BODY_RADIUS = 0.3;
 export const COLLISION_HEIGHTS: readonly number[] = [STEP_HEIGHT + 0.1, 1.2];
 
 /** Sensibilité du regard, en radians par pixel glissé. */
-export const LOOK_SENSITIVITY = 0.0022;
+const LOOK_SENSITIVITY = 0.0022;
 export const MAX_PITCH = (85 * Math.PI) / 180;
 
 export const GRAVITY = 9.81;
-export const MAX_FALL_SPEED = 30;
+const MAX_FALL_SPEED = 30;
 /** Raideur du lissage (par seconde) quand on monte une marche ou qu'on descend de moins d'une marche. */
 export const CLIMB_RATE = 14;
-export const DROP_RATE = 12;
+const DROP_RATE = 12;
 
 /** Un sol est cherché au plus toutes les 100 ms en marchant (et tous les 0,2 m), toutes les 250 ms à l'arrêt. */
 export const GROUND_INTERVAL = 0.1;
@@ -131,7 +131,7 @@ export function planarMove(yaw: number, forward: number, right: number, distance
   return { x: -sin * f + cos * r, z: -cos * f - sin * r };
 }
 
-export interface Vertical {
+interface Vertical {
   /** Hauteur des pieds. */
   feet: number;
   /** Vitesse de chute, positive vers le bas. */

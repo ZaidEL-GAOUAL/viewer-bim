@@ -8,7 +8,7 @@ export interface ScheduleTree {
   descendantTaskCounts: Uint32Array;
 }
 
-export interface ScheduleRow {
+interface ScheduleRow {
   index: number;
   depth: number;
   hasChildren: boolean;

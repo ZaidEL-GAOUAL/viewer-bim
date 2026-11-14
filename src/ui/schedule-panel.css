@@ -31,7 +31,7 @@
 .schedule-task-name { width: var(--task-width); flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 28px; padding-right: 8px; border-right: 1px solid var(--border); }
 .schedule-track { position: relative; flex: 1; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(25% - 1px), var(--border) calc(25% - 1px), var(--border) 25%); }
 .schedule-bar { position: absolute; top: 6px; height: 16px; min-width: 3px; background: #94a3b8; border-radius: 3px; }
-.schedule-row[data-status='2'] .schedule-bar { background: #f59e0b; }
+.schedule-row[data-status='2'] .schedule-bar { background: var(--schedule-in-progress); }
 .schedule-row[data-status='3'] .schedule-bar { background: #36a274; }
 .schedule-cursor { position: absolute; top: 25px; border-left: 2px solid var(--accent); width: 0; pointer-events: none; }
 .schedule-dialog { color: var(--text); background: var(--panel); border: 1px solid var(--border); border-radius: 10px; width: min(550px, calc(100vw - 30px)); max-height: 80dvh; padding: 16px; box-shadow: var(--shadow); }

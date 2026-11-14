@@ -4,7 +4,7 @@
 // au-dessus de l'ellipsoïde. Cette grille au demi-degré (EGM96 de la NGA, lue par PROJ, int16 en
 // centimètres, 520 ko) fait passer de l'une à l'autre : erreur sous 0,5 m en France, 2 m ailleurs.
 
-export const GEOID_STEP = 0.5;
+const GEOID_STEP = 0.5;
 export const GEOID_ROWS = 361;
 export const GEOID_COLS = 721;
 

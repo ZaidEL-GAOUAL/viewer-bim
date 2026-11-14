@@ -8,7 +8,7 @@ export interface UsdPath {
   path: string;
 }
 
-export interface UsdAttribute {
+interface UsdAttribute {
   type: string;
   value: UsdValue | undefined;
   /** Métadonnées entre parenthèses après la valeur (interpolation, par exemple). */

@@ -1,7 +1,7 @@
 // Message système envoyé au LLM : son rôle, les règles, et un résumé du modèle chargé (jamais
 // le fichier entier). Le résumé est borné pour tenir dans quelques milliers de caractères.
 
-import { PATH_SEP, UNDEFINED_LABEL, type PropertyStore } from '../data/metadata.ts';
+import { PATH_SEP, UNDEFINED_LABEL, rankedValues, type PropertyStore } from '../data/metadata.ts';
 
 const MAX_GENERAL = 40;
 const MAX_CATEGORIES = 30;
@@ -9,7 +9,7 @@ const VALUES_LISTED = 20;
 const LINE_CHARS = 320;
 const EXAMPLES = 4;
 
-export interface ModelSummary {
+interface ModelSummary {
   fileName: string;
   count: number;
   store: PropertyStore;
@@ -51,10 +51,7 @@ export function summarizeProperties(store: PropertyStore): string {
     const lock = store.isEditable(path) ? '' : ' [verrouillée]';
     if (distinct <= VALUES_LISTED) {
       const groups = store.groups(path);
-      const values = [...groups.entries()]
-        .filter(([label]) => label !== UNDEFINED_LABEL)
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([label, members]) => `${label} (${members.length})`);
+      const values = rankedValues(store, path).map(([label, members]) => `${label} (${members.length})`);
       const missing = groups.get(UNDEFINED_LABEL)?.length ?? 0;
       lines.push(`- ${path}${lock} : ${valuesLine(values)}${missing > 0 ? ` ; non défini (${missing})` : ''}`);
     } else {

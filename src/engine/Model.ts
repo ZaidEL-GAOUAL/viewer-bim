@@ -1,4 +1,4 @@
-import { Mesh, Vector3, type Box3, type Color, type Group, type IUniform, type Material, type Ray, type Texture } from 'three';
+import { Box3, Mesh, Vector3, type Color, type Group, type IUniform, type Material, type Ray, type Texture } from 'three';
 import { FLAG_OPEN, applyElementState, depthPriority, type ElementState } from './elementState.ts';
 import type { IndexArray, MeshPart } from './meshMath.ts';
 import { BLOCK_TRIANGLES } from './triangleBlocks.ts';
@@ -41,7 +41,7 @@ export interface PickHit {
  * Ce qu'un modèle partage avec sa cuisson (voir `ModelBuilder`, buildModel.ts) : des structures prolongées en
  * place à chaque morceau. Le modèle naît vide ; ses éléments et ses lots arrivent par `grow`.
  */
-export interface ModelData {
+interface ModelData {
   group: Group;
   ranges: ElementRange[][];
   state: ElementState;
@@ -57,7 +57,7 @@ export interface ModelData {
  * précédents, et ses lots. L'état des éléments, les plages et la boîte du modèle, partagés par référence, ont déjà
  * été prolongés par la cuisson ; les boîtes des éléments arrivent ici réallouées, anciens éléments compris.
  */
-export interface ModelGrowth {
+interface ModelGrowth {
   keys: string[];
   names: string[];
   extras: (Record<string, unknown> | undefined)[];
@@ -252,6 +252,11 @@ export class Model {
       if (b[at + 5] > target.max.z) target.max.z = b[at + 5];
     }
     return target;
+  }
+
+  /** Emprise d'un ensemble d'éléments sur chaque axe (Y est la hauteur), en mètres. */
+  sizeOf(indices: Iterable<number>): Vector3 {
+    return this.boxOf(indices, new Box3()).getSize(new Vector3());
   }
 
   /** Triangles d'un élément, sous la forme attendue par les calculs de meshMath. */

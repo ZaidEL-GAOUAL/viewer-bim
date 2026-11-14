@@ -11,7 +11,7 @@ export interface MeshPart {
   count: number;
 }
 
-export interface SolidInfo {
+interface SolidInfo {
   volume: number;
   area: number;
   /** Vrai si le maillage est une enveloppe fermée et orientée de façon cohérente. */
@@ -19,7 +19,7 @@ export interface SolidInfo {
   triangles: number;
 }
 
-export interface PlanarRegion {
+interface PlanarRegion {
   area: number;
   normal: [number, number, number];
   centroid: [number, number, number];

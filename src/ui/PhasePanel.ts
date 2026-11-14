@@ -1,6 +1,7 @@
 import { PHASE_STATUSES, resolveFilter, type PhaseStatus } from '../data/phases.ts';
 import type { App } from './App.ts';
-import { clear, h, integer } from './dom.ts';
+import { clear, h } from './dom.ts';
+import { integer, s } from '../data/text.ts';
 
 /** Les états d'un élément dans une phase (voir data/phases.ts), au pluriel, pour le bilan sous les listes. */
 const STATUS_LABELS: Record<PhaseStatus, string> = {
@@ -95,8 +96,8 @@ export class PhasePanel {
     let hidden = 0;
     for (const flag of evaluation.hidden) hidden += flag;
     const lines = [`Dans « ${selection.phase} » : ${parts.length > 0 ? parts.join(', ') : 'aucun élément lié aux phases'}.`];
-    if (hidden > 0) lines.push(`${integer.format(hidden)} masqué${hidden > 1 ? 's' : ''} par le filtre.`);
-    if (evaluation.unphased > 0) lines.push(`${integer.format(evaluation.unphased)} sans phase, affiché${evaluation.unphased > 1 ? 's' : ''} tel quel.`);
+    if (hidden > 0) lines.push(`${integer.format(hidden)} masqué${s(hidden)} par le filtre.`);
+    if (evaluation.unphased > 0) lines.push(`${integer.format(evaluation.unphased)} sans phase, affiché${s(evaluation.unphased)} tel quel.`);
     this.summary.textContent = lines.join(' ');
   }
 }

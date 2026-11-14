@@ -1,6 +1,10 @@
 import type { ApiSettings } from './client.ts';
 
-/** Accept either an OpenAI-compatible base URL or the full chat-completions URL. */
+/**
+ * Accept either an OpenAI-compatible base URL or the full chat-completions URL.
+ * Jumelle de `validateEndpoint` dans worker/src/index.ts (le client prévient, le relais refuse) : le worker est un
+ * paquet à part et ne peut pas importer `src/`, donc les deux règles d'adresse se modifient ensemble.
+ */
 export function normalizeApiSettings(endpoint: string, apiKey: string, model: string): ApiSettings {
   let url: URL;
   try { url = new URL(endpoint.trim()); }

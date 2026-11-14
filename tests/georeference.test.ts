@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { azimuthOf, degreesFromIfc, enuToLocal, enuVectorToLocal, georeferenceToJson, localToEnu, parseGeoreference, trueNorthFromAzimuth } from '../src/geo/georeference.ts';
+import { azimuthOf, enuToLocal, enuVectorToLocal, georeferenceToJson, localToEnu, parseGeoreference, trueNorthFromAzimuth } from '../src/geo/georeference.ts';
 
 const near = (a: number, b: number, tolerance = 1e-9) => assert.ok(Math.abs(a - b) < tolerance, `${a} ≠ ${b}`);
 
@@ -42,11 +42,4 @@ test('repère du viewer ↔ est-nord-haut : un aller-retour exact, y compris ave
   assert.deepEqual(localToEnu([1, 2, 3], [0, 0, 0], plain), [1, -3, 2]);
   assert.deepEqual(enuVectorToLocal([0, 1, 0], plain), [0, 0, -1]);
   assert.deepEqual(enuVectorToLocal([0, 0, 1], plain), [0, 1, 0]);
-});
-
-test('latitude IFC en degrés, minutes, secondes, millionièmes', () => {
-  near(degreesFromIfc([45, 44, 50, 634155])!, 45.747398376, 1e-9);
-  near(degreesFromIfc([-4, 41, 25])!, -(4 + 41 / 60 + 25 / 3600));
-  assert.equal(degreesFromIfc(null), null);
-  assert.equal(degreesFromIfc([1]), null);
 });

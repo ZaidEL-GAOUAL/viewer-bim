@@ -5,7 +5,7 @@
 // coupe deviennent des plans de découpe Cesium. Pendant ce temps, le modèle three.js est caché :
 // une seule maquette à l'écran, posée sur le relief et parmi les bâtiments du globe.
 
-import { FLAG_COLORED, FLAG_SELECTED } from '../engine/elementState.ts';
+import { FLAG_COLORED, FLAG_SELECTED, IN_PROGRESS_RGB } from '../engine/elementState.ts';
 import type { Model } from '../engine/Model.ts';
 import type { Viewer } from '../engine/Viewer.ts';
 import { writeCesiumGlb } from './cesiumGlb.ts';
@@ -29,7 +29,8 @@ void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
 }
 `;
 
-// Même logique que le shader du viewer (elementState.ts) : couleur imposée, orange des travaux en
+// Jumeau du shader du viewer (elementState.ts, `COLOR` et le fragment de three.js) : deux moteurs de rendu,
+// donc deux copies de la même logique, à modifier ensemble. Couleur imposée, orange des travaux en
 // cours, surbrillance de sélection, opacité imposée puis fondu ; éclairage de Lambert du viewer
 // (hémisphère et deux directionnelles fixes dans le repère de la maquette).
 const FRAGMENT = /* glsl */ `
@@ -39,7 +40,7 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
   vec4 vertexColor = fsInput.attributes.color_0;
   vec3 color = czm_srgbToLinear(vertexColor.rgb);
   if ((flags & ${FLAG_COLORED}) != 0) color = czm_srgbToLinear(v_bimState.rgb);
-  if (schedule == 2) color = czm_srgbToLinear(vec3(245.0, 158.0, 11.0) / 255.0);
+  if (schedule == 2) color = czm_srgbToLinear(vec3(${IN_PROGRESS_RGB.join('.0, ')}.0) / 255.0);
   if ((flags & ${FLAG_SELECTED}) != 0) color = mix(color, u_bimSelect, 0.8);
   float alpha = vertexColor.a;
   float opacity = v_bimExtra.r * 255.0;

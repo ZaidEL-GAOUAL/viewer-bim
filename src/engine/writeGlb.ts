@@ -3,17 +3,9 @@
 // les coordonnées du projet sont rendues par la translation des nœuds (voir Model.offset).
 // Les textures ne sont pas réécrites : la couleur de chaque sommet l'est.
 
+import { srgbByteToLinear } from './buildModel.ts';
+import { ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER, FLOAT, GlbBuffer, UNSIGNED_INT, UNSIGNED_SHORT, encodeGlb } from './glbFile.ts';
 import type { Model } from './Model.ts';
-
-interface Accessor {
-  bufferView: number;
-  componentType: number;
-  count: number;
-  type: string;
-  normalized?: boolean;
-  min?: number[];
-  max?: number[];
-}
 
 interface Primitive {
   attributes: Record<string, number>;
@@ -22,33 +14,13 @@ interface Primitive {
   mode?: number;
 }
 
-const FLOAT = 5126;
-const UNSIGNED_SHORT = 5123;
-const UNSIGNED_INT = 5125;
-const ARRAY_BUFFER = 34962;
-const ELEMENT_ARRAY_BUFFER = 34963;
-
-function align(length: number): number {
-  return (length + 3) & ~3;
-}
-
-export interface GlbExportOptions {
+interface GlbExportOptions {
   /** Propriétés actuelles par identifiant stable, en remplacement des extras du fichier source. */
   properties?: ReadonlyMap<string, Record<string, unknown>> | Record<string, Record<string, unknown>>;
 }
 
 export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExportOptions = {}): ArrayBuffer {
-  const bufferViews: { buffer: 0; byteOffset: number; byteLength: number; target: number }[] = [];
-  const accessors: Accessor[] = [];
-  const parts: ArrayBufferView[] = [];
-  let byteLength = 0;
-
-  const view = (data: ArrayBufferView, target: number): number => {
-    bufferViews.push({ buffer: 0, byteOffset: byteLength, byteLength: data.byteLength, target });
-    parts.push(data);
-    byteLength = align(byteLength + data.byteLength);
-    return bufferViews.length - 1;
-  };
+  const buffer = new GlbBuffer();
 
   // Un matériau par lot : couleur blanche multipliée par la couleur des sommets.
   const materials: Record<string, unknown>[] = [];
@@ -111,27 +83,23 @@ export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExp
           normals[local * 3 + axis] = Math.max(-1, srcNormals[v * 3 + axis] / 127);
         }
         for (let channel = 0; channel < 3; channel++) {
-          const value = srcColors[v * 4 + channel] / 255;
-          colors[local * 4 + channel] = value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+          colors[local * 4 + channel] = srgbByteToLinear(srcColors[v * 4 + channel]);
         }
         colors[local * 4 + 3] = srcColors[v * 4 + 3] / 255;
       });
       const indexData = vertexCount <= 65535 ? Uint16Array.from(indices) : indices;
 
-      const attributes: Record<string, number> = {};
-      accessors.push({ bufferView: view(positions, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC3', min, max });
-      attributes.POSITION = accessors.length - 1;
-      accessors.push({ bufferView: view(normals, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC3' });
-      attributes.NORMAL = accessors.length - 1;
-      accessors.push({ bufferView: view(colors, ARRAY_BUFFER), componentType: FLOAT, count: vertexCount, type: 'VEC4' });
-      attributes.COLOR_0 = accessors.length - 1;
-      accessors.push({
-        bufferView: view(indexData, ELEMENT_ARRAY_BUFFER),
+      const attributes: Record<string, number> = {
+        POSITION: buffer.add(positions, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'VEC3', min, max }),
+        NORMAL: buffer.add(normals, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'VEC3' }),
+        COLOR_0: buffer.add(colors, ARRAY_BUFFER, { componentType: FLOAT, count: vertexCount, type: 'VEC4' }),
+      };
+      const indicesAccessor = buffer.add(indexData, ELEMENT_ARRAY_BUFFER, {
         componentType: indexData instanceof Uint16Array ? UNSIGNED_SHORT : UNSIGNED_INT,
         count: indexData.length,
         type: 'SCALAR',
       });
-      primitives.push({ attributes, indices: accessors.length - 1, material: materialFor(chunk.transparent, chunk.doubleSided) });
+      primitives.push({ attributes, indices: indicesAccessor, material: materialFor(chunk.transparent, chunk.doubleSided) });
     }
 
     const key = model.keys[element];
@@ -148,6 +116,7 @@ export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExp
     nodes.push(node);
   }
 
+  const { byteLength, accessors, bufferViews } = buffer;
   const gltf = {
     asset: { version: '2.0', generator },
     scene: 0,
@@ -155,29 +124,5 @@ export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExp
     ...(nodes.length > 0 ? { nodes } : {}),
     ...(byteLength > 0 ? { meshes, materials, accessors, bufferViews, buffers: [{ byteLength }] } : {}),
   };
-
-  const json = new TextEncoder().encode(JSON.stringify(gltf));
-  const jsonLength = align(json.byteLength);
-  const total = 12 + 8 + jsonLength + (byteLength > 0 ? 8 + byteLength : 0);
-  const out = new ArrayBuffer(total);
-  const bytes = new Uint8Array(out);
-  const header = new DataView(out);
-  header.setUint32(0, 0x46546c67, true);
-  header.setUint32(4, 2, true);
-  header.setUint32(8, total, true);
-  header.setUint32(12, jsonLength, true);
-  header.setUint32(16, 0x4e4f534a, true);
-  bytes.set(json, 20);
-  bytes.fill(0x20, 20 + json.byteLength, 20 + jsonLength);
-  let at = 20 + jsonLength;
-  if (byteLength > 0) {
-    header.setUint32(at, byteLength, true);
-    header.setUint32(at + 4, 0x004e4942, true);
-    at += 8;
-    for (const part of parts) {
-      bytes.set(new Uint8Array(part.buffer, part.byteOffset, part.byteLength), at);
-      at = align(at + part.byteLength);
-    }
-  }
-  return out;
+  return encodeGlb(gltf, buffer.parts);
 }

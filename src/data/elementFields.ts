@@ -5,7 +5,7 @@
 export const ELEMENT_NAME = '#nom';
 export const ELEMENT_ID = '#id';
 export const ELEMENT_FIELDS: readonly string[] = [ELEMENT_NAME, ELEMENT_ID];
-export const ELEMENT_FIELD_LABELS: Readonly<Record<string, string>> = { [ELEMENT_NAME]: 'Nom de l’élément', [ELEMENT_ID]: 'Identifiant' };
+const ELEMENT_FIELD_LABELS: Readonly<Record<string, string>> = { [ELEMENT_NAME]: 'Nom de l’élément', [ELEMENT_ID]: 'Identifiant' };
 
 export function isElementField(path: string): boolean {
   return path === ELEMENT_NAME || path === ELEMENT_ID;

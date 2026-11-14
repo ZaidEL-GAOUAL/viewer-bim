@@ -1,8 +1,16 @@
 import { DataTexture, FloatType, NearestFilter, RedFormat, RGFormat, RGBAFormat, UnsignedByteType, type Color, type IUniform, type Material } from 'three';
 
-export const FLAG_VISIBLE = 1;
+const FLAG_VISIBLE = 1;
 export const FLAG_COLORED = 2;
 export const FLAG_SELECTED = 4;
+/**
+ * Orange des travaux « en cours » du planning 4D, en sRGB sur 8 bits. Une seule valeur pour les deux
+ * shaders (ici et geo/GlobeModel.ts) et pour la barre du Gantt (schedule-panel.css, via
+ * `--schedule-in-progress` posée par SchedulePanel).
+ */
+export const IN_PROGRESS_RGB: readonly [number, number, number] = [245, 158, 11];
+export const IN_PROGRESS_HEX = `#${IN_PROGRESS_RGB.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+const IN_PROGRESS_GLSL = `vec3( ${IN_PROGRESS_RGB.map((channel) => `${channel}.0`).join(', ')} )`;
 /** Élément dont le maillage n'est pas un solide fermé : exclu du remplissage des coupes. */
 export const FLAG_OPEN = 8;
 /** Bits 4 à 6 : priorité d'affichage (0 à 7) quand deux éléments ont des faces confondues. */
@@ -10,7 +18,7 @@ const PRIORITY_SHIFT = 4;
 const PRIORITY_MASK = 7;
 const SCHEDULE_FADE_MS = 240;
 
-export interface SchedulePresentationOptions {
+interface SchedulePresentationOptions {
   /** Fondu d'apparition uniquement pour les éléments précédemment « à venir ». */
   animate?: boolean;
   /** Horloge monotone partagée avec requestAnimationFrame ; injectable pour les tests. */
@@ -212,6 +220,7 @@ export class ElementState {
     return this.hasScheduleFade;
   }
 
+  /** Lu par les tests seulement (état de sélection d'un élément) ; l'application suit sa sélection ailleurs. */
   isSelected(index: number): boolean {
     return (this.data[index * 4 + 3] & FLAG_SELECTED) !== 0;
   }
@@ -273,6 +282,7 @@ export class ElementState {
     for (const notify of this.onOpacityChange) notify();
   }
 
+  /** Appelé par les tests seulement ; l'application passe par `setOpacity(index, null)`. */
   clearOpacity(index: number): void { this.setOpacity(index, null); }
 
   /** Envoie les modifications au GPU (une seule fois après un lot de changements). */
@@ -324,7 +334,7 @@ vBimFlat = 0.0;
 	}
 	vColor.rgb = bimSRGBToLinear( vColor.rgb );
 	if ( bimSchedule == 2 ) {
-		vColor.rgb = bimSRGBToLinear( vec3( 245.0, 158.0, 11.0 ) / 255.0 );
+		vColor.rgb = bimSRGBToLinear( ${IN_PROGRESS_GLSL} / 255.0 );
 		vBimFlat = 1.0;
 	}
 	if ( ( bimFlags & ${FLAG_SELECTED} ) != 0 ) {

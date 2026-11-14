@@ -1,6 +1,8 @@
 // Réunit plusieurs GLB produits par pipeline/ifc_to_glb.py (un par tranche d'éléments, quand la
 // conversion est répartie sur plusieurs cœurs) en un seul fichier.
 
+import { align, encodeGlb, parseGlb } from '../engine/glbFile.ts';
+
 interface Gltf {
   asset: unknown;
   extras?: Record<string, unknown>;
@@ -19,18 +21,9 @@ interface GltfNode extends Record<string, unknown> {
   children?: number[];
 }
 
-const MAGIC = 0x46546c67;
-const JSON_CHUNK = 0x4e4f534a;
-const BIN_CHUNK = 0x004e4942;
-
 function parse(glb: ArrayBuffer): { json: Gltf; bin: Uint8Array } {
-  const view = new DataView(glb);
-  if (glb.byteLength < 20 || view.getUint32(0, true) !== MAGIC) throw new Error('Fichier GLB invalide.');
-  const jsonLength = view.getUint32(12, true);
-  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))) as Gltf;
-  const binHeader = 20 + jsonLength;
-  const bin = binHeader + 8 <= glb.byteLength ? new Uint8Array(glb, binHeader + 8, view.getUint32(binHeader, true)) : new Uint8Array(0);
-  return { json, bin };
+  const { json, bin } = parseGlb(glb);
+  return { json: json as Gltf, bin };
 }
 
 /**
@@ -60,7 +53,7 @@ export function mergeGlb(parts: ArrayBuffer[]): ArrayBuffer {
 
   for (const { json, bin } of parsed) {
     const binOffset = binLength;
-    binLength += bin.byteLength + ((4 - (bin.byteLength % 4)) % 4);
+    binLength += align(bin.byteLength);
     const viewBase = merged.bufferViews.length;
     const accessorBase = merged.accessors.length;
     const meshBase = merged.meshes.length;
@@ -101,32 +94,10 @@ export function mergeGlb(parts: ArrayBuffer[]): ArrayBuffer {
   }
   merged.buffers[0].byteLength = binLength;
 
-  // Écriture : en-tête, bloc JSON complété par des espaces, bloc binaire.
+  // Écriture : bloc JSON, puis les blocs binaires des parties bout à bout.
   const document: Record<string, unknown> = { ...merged };
   if (merged.meshes.length === 0) for (const key of ['meshes', 'materials', 'accessors', 'bufferViews', 'buffers']) delete document[key];
-  const text = new TextEncoder().encode(JSON.stringify(document));
-  const jsonLength = text.byteLength + ((4 - (text.byteLength % 4)) % 4);
-  const total = 12 + 8 + jsonLength + (binLength > 0 ? 8 + binLength : 0);
-  const out = new Uint8Array(total);
-  const view = new DataView(out.buffer);
-  view.setUint32(0, MAGIC, true);
-  view.setUint32(4, 2, true);
-  view.setUint32(8, total, true);
-  view.setUint32(12, jsonLength, true);
-  view.setUint32(16, JSON_CHUNK, true);
-  out.fill(0x20, 20, 20 + jsonLength);
-  out.set(text, 20);
-  if (binLength > 0) {
-    let at = 20 + jsonLength;
-    view.setUint32(at, binLength, true);
-    view.setUint32(at + 4, BIN_CHUNK, true);
-    at += 8;
-    for (const { bin } of parsed) {
-      out.set(bin, at);
-      at += bin.byteLength + ((4 - (bin.byteLength % 4)) % 4);
-    }
-  }
-  return out.buffer;
+  return encodeGlb(document, parsed.map(({ bin }) => bin));
 }
 
 /** Réunit les métadonnées de plusieurs tranches en un seul document du contrat. */

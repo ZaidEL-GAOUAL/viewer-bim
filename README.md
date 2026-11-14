@@ -243,7 +243,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
 - **Panneaux repliables** : les boutons aux deux extrémités de la barre d'outils masquent ou
   affichent le panneau de gauche et celui de droite.
 - **Assistant sur les données** : recherches, comptages et calculs utilisent exclusivement les
-  métadonnées ; l’assistant n’accède pas aux maillages et ne modifie aucun objet 3D. Il peut
+  métadonnées ; aucune géométrie n’est envoyée au modèle d’IA (seul le navigateur lit la hauteur des
+  objets, pour ordonner un planning) et l’assistant ne modifie aucun objet 3D. Il peut
   ajouter ou modifier des propriétés (« ajoute une propriété Lot = Gros œuvre aux murs »,
   valeur fixe ou formule par élément) et préparer un planning prévisionnel : « ajoute une date
   de début et une date de fin à chaque objet, chantier du 04/01/2026 au 12/12/2027, 15 à 45 jours
@@ -294,6 +295,7 @@ bancaire), déployé par le même workflow quand les secrets `CLOUDFLARE_API_TOK
 src/
   data/      métadonnées : lecture du JSON, index des propriétés, regroupements, palette
   engine/    moteur 3D : chargement, fusion de la géométrie, rendu, picking, coupes, mesures
+  geo/       carte : globe Cesium sous la maquette, géoréférencement, relief, bâtiments OSM
   ifc/       lancement du convertisseur IFC dans le navigateur (fil d'exécution séparé)
   revit/     lecture des .rvt dans le navigateur : worker, module WebAssembly livré dans pkg/, rapport
   usd/       lecture des fichiers USD (usda, usdz)
@@ -303,7 +305,11 @@ pipeline/    convertisseur IFC → GLB ou USD + JSON (Python, IfcOpenShell) et s
 revit/       lecteur de fichiers Revit (Rust, rvt-rs) compilé en WebAssembly, ses tests et ses échantillons
 worker/      service de l'assistant (Cloudflare Workers) : relais vers le modèle de langage
 tests/       tests des modules de données et du moteur
-scripts/     générateur du modèle de démonstration
+scripts/     outils du dépôt (sept fichiers) : génération du modèle et du planning de démonstration
+             (`make-sample.mjs`, `make-demo-planning.mjs`), compilation du lecteur Revit
+             (`build-revit.mjs`), ses échantillons et son catalogue (`fetch-revit-samples.mjs`,
+             `gen-revit-catalog.mjs`), fichiers de licence publiés avec le site (`licence-files.mjs`
+             et son `.d.mts`)
 ```
 
 ### Pourquoi c'est rapide
@@ -410,7 +416,11 @@ supplémentaires sont libérés après la conversion et le dernier après 30 sec
   Sketchfab, s'affiche, se coupe et se mesure, mais ses morceaux ne correspondent à aucun objet réel.
 
 - Les mesures supposent des modèles en mètres, comme l'impose glTF.
-- Fichiers Revit : limite de taille, refus avant Revit 2012, formes approchées
+- Taille des fichiers : un IFC est refusé au-delà de 100 Mo (conversion dans le navigateur), un
+  glTF, un GLB ou un USD au-delà de 1 500 Mo ; un fichier Revit n'a pas de limite de taille (le
+  budget de triangles borne le modèle ; seule la reconstruction par l'export IFC est refusée
+  au-delà de 150 Mo).
+- Fichiers Revit : refus avant Revit 2012, formes approchées
   signalées par « Source de la géométrie », copie locale d'un modèle partagé lue telle qu'enregistrée. Liste complète dans [docs/lecture-revit.md](docs/lecture-revit.md).
 - Le volume est calculé à partir du maillage. Si celui-ci n'est pas un solide fermé, la valeur
   est signalée comme indicative.

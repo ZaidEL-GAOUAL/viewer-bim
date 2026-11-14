@@ -1,7 +1,6 @@
+import { integer, oneDecimal } from '../data/text.ts';
 import type { RevitReport } from './readRevit.ts';
 
-const integer = new Intl.NumberFormat('fr-FR');
-const oneDecimal = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 
 /** « 1 forme Revit », « 958 formes Revit » : un seul au singulier, zéro compris, comme partout dans l'interface. */
 const count = (n: number, one: string, many: string) => `${integer.format(n)} ${n > 1 ? many : one}`;

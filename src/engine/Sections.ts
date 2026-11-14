@@ -3,7 +3,7 @@ import { Box3, Plane, Vector3 } from 'three';
 export type Axis = 0 | 1 | 2;
 
 /** Une boîte de coupe : coins avant rotation, et rotation autour de la verticale (degrés). */
-export interface BoxCut {
+interface BoxCut {
   min: [number, number, number];
   max: [number, number, number];
   rotation: number;

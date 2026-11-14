@@ -1,9 +1,9 @@
-import { ELEMENT_ID, ELEMENT_NAME, isElementField } from './elementFields.ts';
+import { NUMERIC_OPS, RULE_OPS, isMissing, matchesCondition, numericValue, valueAt, type ElementIdentity, type NumericScale, type RuleCondition, type RuleOp } from './conditions.ts';
+import { isElementField } from './elementFields.ts';
+import { isRecord } from './json.ts';
 import { ownValue, type PropValue, type PropertyStore } from './metadata.ts';
+import { fold } from './text.ts';
 
-export type RuleOp = 'equals' | 'not_equals' | 'contains' | 'missing' | 'present' | 'greater' | 'less' | 'greater_or_equal' | 'less_or_equal';
-export type NumericScale = 'number' | 'percent' | 'fraction';
-export interface RuleCondition { property: string; op: RuleOp; value?: PropValue; numericScale?: NumericScale }
 export interface AppearanceRule {
   id: string;
   name?: string;
@@ -16,54 +16,12 @@ export interface AppearanceRule {
   opacityBy?: { property: string; scale: 'percent' | 'fraction' };
 }
 export interface ElementAppearance { color?: string; opacity?: number }
-const OPS: readonly RuleOp[] = ['equals', 'not_equals', 'contains', 'missing', 'present', 'greater', 'less', 'greater_or_equal', 'less_or_equal'];
-const NUMERIC = new Set<RuleOp>(['greater', 'less', 'greater_or_equal', 'less_or_equal']);
-const fold = (value: unknown) => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr').trim();
-const missing = (value: PropValue | undefined) => value === undefined || value === null || value === '';
-
-/** No inference between 0..1 and 0..100: the rule declares how bare numbers are encoded. */
-export function numericValue(value: PropValue | undefined, scale: NumericScale = 'number'): number | undefined {
-  if (missing(value) || typeof value === 'boolean') return undefined;
-  const text = String(value).trim();
-  const hasPercent = text.endsWith('%');
-  const cleaned = text.replace(/%$/, '').trim().replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
-  if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(cleaned)) return undefined;
-  const number = Number(cleaned);
-  if (!Number.isFinite(number)) return undefined;
-  return scale === 'percent' || (scale === 'fraction' && hasPercent) ? number / 100 : number;
-}
-
-export function matchesCondition(value: PropValue | undefined, condition: RuleCondition): boolean {
-  if (condition.op === 'missing') return missing(value);
-  if (condition.op === 'present') return !missing(value);
-  if (missing(value)) return false;
-  if (condition.op === 'contains') return fold(value).includes(fold(condition.value ?? ''));
-  const scale = condition.numericScale ?? 'number';
-  const a = numericValue(value, scale), b = numericValue(condition.value, scale);
-  if (NUMERIC.has(condition.op)) {
-    if (a === undefined || b === undefined) return false;
-    if (condition.op === 'greater') return a > b;
-    if (condition.op === 'less') return a < b;
-    if (condition.op === 'greater_or_equal') return a >= b;
-    return a <= b;
-  }
-  const equal = a !== undefined && b !== undefined ? a === b : fold(value) === fold(condition.value);
-  return condition.op === 'not_equals' ? !equal : equal;
-}
-
-/** Ce qui identifie un élément hors de ses métadonnées : son identifiant et son nom affiché. */
-export interface ElementIdentity {
-  keys: readonly string[];
-  label(index: number): string;
-}
-
 /**
  * Last matching rule wins independently for color and opacity. Neither metadata nor visibility is mutated.
  * Conditions may also read the element's displayed name (#nom) and identifier (#id) when `element` is given.
  */
 export function evaluateAppearanceRules(store: PropertyStore, rules: readonly AppearanceRule[], element?: ElementIdentity): Map<number, ElementAppearance> {
-  const valueAt = (index: number, property: string): PropValue | undefined =>
-    property === ELEMENT_ID ? element?.keys[index] : property === ELEMENT_NAME ? element?.label(index) ?? store.labelOf(index) : ownValue(store.propsOf(index), property);
+  const read = (index: number, property: string): PropValue | undefined => valueAt(store, element, index, property);
   const result = new Map<number, ElementAppearance>();
   const active = rules.filter((rule) => rule.enabled);
   const indexes = new Map<string, Map<string, number[]>>();
@@ -79,8 +37,8 @@ export function evaluateAppearanceRules(store: PropertyStore, rules: readonly Ap
     if (!groups) {
       groups = new Map(); indexes.set(key, groups);
       for (let index = 0; index < store.count; index++) {
-        const value = valueAt(index, equal.property);
-        if (missing(value)) continue;
+        const value = read(index, equal.property);
+        if (isMissing(value)) continue;
         const bucketKey = keyOf(value, scale), bucket = groups.get(bucketKey);
         if (bucket) bucket.push(index); else groups.set(bucketKey, [index]);
       }
@@ -91,7 +49,7 @@ export function evaluateAppearanceRules(store: PropertyStore, rules: readonly Ap
   for (const rule of active) {
     for (const index of candidates(rule.conditions)) {
       const props = store.propsOf(index);
-      if (!rule.conditions.every((condition) => matchesCondition(valueAt(index, condition.property), condition))) continue;
+      if (!rule.conditions.every((condition) => matchesCondition(read(index, condition.property), condition))) continue;
       let appearance = result.get(index);
       if (rule.color !== undefined) (appearance ??= {}).color = rule.color;
       if (rule.opacity !== undefined) (appearance ??= {}).opacity = rule.opacity;
@@ -105,9 +63,6 @@ export function evaluateAppearanceRules(store: PropertyStore, rules: readonly Ap
   }
   return result;
 }
-export const calculateAppearance = evaluateAppearanceRules;
-
-function record(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 
 /**
  * Returns detached, normalized rules. Omit store when managing a saved stack: deleted
@@ -124,7 +79,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
     return value;
   };
   return raw.map((value) => {
-    if (!record(value) || typeof value.id !== 'string' || !value.id.trim()) throw new Error('Chaque règle nécessite un identifiant.');
+    if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim()) throw new Error('Chaque règle nécessite un identifiant.');
     if (ids.has(value.id)) throw new Error(`Identifiant de règle en double : ${value.id}.`);
     ids.add(value.id);
     const saved = retainedById.get(value.id);
@@ -134,7 +89,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
     if (value.name !== undefined && typeof value.name !== 'string') throw new Error('Le nom de la règle doit être un texte.');
     if (!Array.isArray(value.conditions)) throw new Error('conditions doit être une liste (vide pour tous les éléments).');
     const conditions: RuleCondition[] = value.conditions.map((condition) => {
-      if (!record(condition) || !OPS.includes(condition.op as RuleOp)) throw new Error('Opérateur de condition inconnu.');
+      if (!isRecord(condition) || !RULE_OPS.includes(condition.op as RuleOp)) throw new Error('Opérateur de condition inconnu.');
       const result: RuleCondition = { property: property(condition.property, retained), op: condition.op as RuleOp };
       if (condition.numericScale !== undefined) {
         if (!['number', 'percent', 'fraction'].includes(String(condition.numericScale))) throw new Error('Échelle numérique inconnue.');
@@ -144,7 +99,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
         const v = condition.value;
         if (!(v === null || typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v)))) throw new Error('Valeur de condition invalide.');
         result.value = v;
-        if (NUMERIC.has(result.op) && numericValue(v, result.numericScale) === undefined) throw new Error('Une comparaison numérique nécessite un nombre.');
+        if (NUMERIC_OPS.has(result.op) && numericValue(v, result.numericScale) === undefined) throw new Error('Une comparaison numérique nécessite un nombre.');
       }
       return result;
     });
@@ -158,7 +113,7 @@ export function validateAppearanceRules(raw: unknown, store?: PropertyStore, ret
       rule.opacity = value.opacity;
     }
     if (value.opacityBy !== undefined) {
-      if (!record(value.opacityBy) || !['percent', 'fraction'].includes(String(value.opacityBy.scale))) throw new Error('L’opacité par propriété nécessite une échelle percent (0–100) ou fraction (0–1).');
+      if (!isRecord(value.opacityBy) || !['percent', 'fraction'].includes(String(value.opacityBy.scale))) throw new Error('L’opacité par propriété nécessite une échelle percent (0–100) ou fraction (0–1).');
       rule.opacityBy = { property: property(value.opacityBy.property, retained), scale: value.opacityBy.scale as 'percent' | 'fraction' };
       if (isElementField(rule.opacityBy.property)) throw new Error('L’opacité doit suivre une propriété numérique, pas le nom ou l’identifiant.');
       if (rule.opacity !== undefined) throw new Error('Choisissez une opacité fixe ou liée à une propriété dans une même règle.');

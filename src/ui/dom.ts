@@ -28,4 +28,29 @@ export function clear(element: Element): void {
   element.replaceChildren();
 }
 
-export const integer = new Intl.NumberFormat('fr-FR');
+/** Fait télécharger `blob` par le navigateur sous ce nom de fichier. */
+export function download(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  h('a', { attrs: { href: url, download: filename } }).click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** `localStorage` sans exception : en navigation privée ou stockage bloqué, rien n'est lu ni gardé et le choix ne vaut que pour la session. */
+export const stored = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  /** Une valeur vide (ou null) efface la clé. */
+  set(key: string, value: string | null): void {
+    try {
+      if (value) localStorage.setItem(key, value);
+      else localStorage.removeItem(key);
+    } catch {
+      // stockage indisponible
+    }
+  },
+};

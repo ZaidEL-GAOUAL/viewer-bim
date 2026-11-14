@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { evaluateAppearanceRules, numericValue, validateAppearanceRules, type AppearanceRule } from '../src/data/appearanceRules.ts';
+import { evaluateAppearanceRules, validateAppearanceRules, type AppearanceRule } from '../src/data/appearanceRules.ts';
+import { numericValue } from '../src/data/conditions.ts';
 import { PropertyStore } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
 import { runTool, TOOL_DEFINITIONS, type ToolContext } from '../src/assistant/tools.ts';

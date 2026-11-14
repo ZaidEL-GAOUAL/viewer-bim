@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildTree, suggestGrouping } from '../src/data/grouping.ts';
-import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, isReadOnly, mergeProperties, parseMetadata, unflattenProperties } from '../src/data/metadata.ts';
+import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, isReadOnly, mergeProperties, parseMetadata, rankedValues, toPropertyPath, unflattenProperties } from '../src/data/metadata.ts';
 
 test('flattenProperties aplatit les objets imbriqués et les tableaux', () => {
   const flat = flattenProperties({ Type: 'Mur', Dimensions: { Longueur: 4.2, Détail: { Unité: 'm' } }, Tags: ['a', 'b'], Vide: null });
@@ -195,13 +195,12 @@ test('parseMetadata lit la liste readOnly et l’export la restitue avec les mod
   assert.equal(store.matched, 3);
   assert.ok(store.paths.includes('Chantier / Lot'));
   assert.deepEqual([...store.groups('Chantier / Lot').entries()], [['Gros œuvre', [1, 2]], [UNDEFINED_LABEL, [0]]]);
-  store.setLabel(0, 'Mur A bis');
 
   const exported = store.export(['a', 'b', 'c']) as { version: number; readOnly: string[]; elements: Record<string, { label?: string; properties: Record<string, unknown> }> };
   assert.equal(exported.version, 1);
   assert.deepEqual(exported.readOnly, ['Classe IFC', 'Qto_*']);
   assert.deepEqual(exported.elements.a, {
-    label: 'Mur A bis',
+    label: 'Mur A',
     properties: { 'Classe IFC': 'IfcWall', Nom: 'Mur A', Pset_WallCommon: { IsExternal: false }, Qto_WallBaseQuantities: { NetVolume: 5.6 } },
   });
   assert.deepEqual(exported.elements.b, { properties: { 'Classe IFC': 'IfcDoor', Chantier: { Lot: 'Gros œuvre' } } });
@@ -228,4 +227,20 @@ test('parseMetadata lit le bloc georeference et l’ignore s’il est inutilisab
   assert.ok(Math.abs(placed.georeference!.trueNorth[0] - 1) < 1e-9 && Math.abs(placed.georeference!.trueNorth[1]) < 1e-9);
   assert.equal(parseMetadata({ ...base, georeference: { latitude: 'nord' } }).georeference, undefined);
   assert.equal(parseMetadata(base).georeference, undefined);
+});
+
+test('toPropertyPath normalise « Catégorie/Nom » et ignore les segments vides', () => {
+  assert.equal(toPropertyPath('Pset/FireRating'), 'Pset / FireRating');
+  assert.equal(toPropertyPath('  Pset  /  FireRating '), 'Pset / FireRating');
+  assert.equal(toPropertyPath('A//B/'), 'A / B');
+  assert.equal(toPropertyPath('Seul'), 'Seul');
+  assert.equal(toPropertyPath(' / '), '');
+});
+
+test('rankedValues : valeurs définies, les plus fréquentes d’abord, sans « non défini »', () => {
+  const store = new PropertyStore(5);
+  store.set(0, { Niveau: 'R1' }); store.set(1, { Niveau: 'RDC' }); store.set(2, { Niveau: 'RDC' }); store.set(3, { Niveau: 'RDC' }); store.set(4, { Autre: 1 });
+  store.finalize();
+  const ranked = rankedValues(store, 'Niveau');
+  assert.deepEqual(ranked.map(([label, members]) => [label, members.length]), [['RDC', 3], ['R1', 1]]);
 });

@@ -43,7 +43,7 @@ const DEFAULT_DIRECTION = new Vector3(1, 0.7, 1).normalize();
 
 export type Projection = 'perspective' | 'orthographic';
 
-export interface FrameStats {
+interface FrameStats {
   calls: number;
   triangles: number;
 }

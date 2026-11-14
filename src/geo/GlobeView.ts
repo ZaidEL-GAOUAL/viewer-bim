@@ -31,7 +31,7 @@ export const TERRAINS: { id: TerrainKind; label: string; hint: string; needsIon?
   { id: 'ion', label: 'Cesium World Terrain (clé ion)', hint: 'Relief détaillé de Cesium ion ; demande un jeton ion (compte gratuit).', needsIon: true },
 ];
 
-export type OsmStatus = 'off' | 'loading' | 'on' | 'error';
+type OsmStatus = 'off' | 'loading' | 'on' | 'error';
 
 /** Niveau de tuile lu pour la hauteur du sol sur le relief gratuit (son plus fin). */
 const TERRARIUM_SAMPLE_LEVEL = 15;
@@ -44,7 +44,7 @@ const IGN_WMTS = 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSIO
 let cesiumPromise: Promise<Cesium> | null = null;
 
 /** Charge Cesium une seule fois ; ses fichiers d'exécution sont servis sous `cesium/` (voir vite.config.ts). */
-export function loadCesium(): Promise<Cesium> {
+function loadCesium(): Promise<Cesium> {
   if (!cesiumPromise) {
     (window as unknown as { CESIUM_BASE_URL: string }).CESIUM_BASE_URL = new URL(`${import.meta.env.BASE_URL}cesium/`, document.baseURI).href;
     cesiumPromise = Promise.all([import('cesium'), import('cesium/Build/Cesium/Widgets/widgets.css')]).then(([module]) => module);

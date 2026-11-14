@@ -1,13 +1,15 @@
-import { compileSchedule, evaluateSchedule, formatScheduleDate, parseSchedule, parseScheduleDate, scheduleFromMetadata, type CompiledSchedule, type MetadataScheduleOptions, type Schedule, type ScheduleFrame } from '../data/schedule.ts';
+import { DAY_MS, compileSchedule, evaluateSchedule, formatScheduleDate, parseSchedule, parseScheduleDate, scheduleFromMetadata, type CompiledSchedule, type MetadataScheduleOptions, type Schedule, type ScheduleFrame } from '../data/schedule.ts';
 import type { App } from './App.ts';
+import { IN_PROGRESS_HEX } from '../engine/elementState.ts';
 import type { Model } from '../engine/Model.ts';
-import { button, h, integer } from './dom.ts';
+import { button, download, h } from './dom.ts';
+import { integer, s } from '../data/text.ts';
 import './schedule-panel.css';
 import { buildScheduleTree, collectTaskElements, visibleScheduleRows, type ScheduleTree } from '../data/scheduleTree.ts';
 
 const ROW = 28;
 const STATUS = ['Hors planning', 'À venir', 'En cours', 'Terminé'];
-const dateLabel = (day: number) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(day * 86400000));
+const dateLabel = (day: number) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(day * DAY_MS));
 
 /** Local construction playback. Tasks and links are separate from the immutable model. */
 export class SchedulePanel {
@@ -66,7 +68,7 @@ export class SchedulePanel {
       try { this.seek(parseScheduleDate(this.date.value)); } catch { this.date.value = formatScheduleDate(this.day); }
     });
     this.slider.addEventListener('input', () => this.seek(Number(this.slider.value)));
-    for (const n of [1, 7, 30]) this.speed.append(h('option', { text: `${n} jour${n > 1 ? 's' : ''}/s`, attrs: { value: String(n) } }));
+    for (const n of [1, 7, 30]) this.speed.append(h('option', { text: `${n} jour${s(n)}/s`, attrs: { value: String(n) } }));
     this.speed.value = '7';
     this.input.addEventListener('change', () => {
       const file = this.input.files?.[0]; this.input.value = '';
@@ -93,6 +95,7 @@ export class SchedulePanel {
       h('p', { class: 'schedule-legend', text: 'Prévision de construction · À venir : masqué · En cours : orange · Terminé : couleurs habituelles. Les filtres manuels restent prioritaires.' }));
     this.el = h('section', { class: 'schedule-panel', attrs: { 'aria-label': 'Planning 4D' } },
       h('div', { class: 'schedule-heading' }, this.toggle, this.title), this.body, this.input);
+    this.el.style.setProperty('--schedule-in-progress', IN_PROGRESS_HEX);
     new ResizeObserver(() => this.renderRows()).observe(this.scroll);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause(); });
     app.on('model', () => {
@@ -106,7 +109,11 @@ export class SchedulePanel {
 
   /** Invalid imports leave the previous planning and view untouched. */
   loadJson(raw: unknown, source = 'Planning JSON'): void {
-    const schedule = parseSchedule(raw);
+    this.loadSchedule(parseSchedule(raw), source);
+  }
+
+  /** Un planning déjà lu et validé (par `parseSchedule`). */
+  loadSchedule(schedule: Schedule, source: string): void {
     const compiled = compileSchedule(schedule, this.app.model?.keys ?? [], this.app.store);
     this.ticket++; this.pause(); this.stopFade();
     this.compiled = compiled; this.frame = undefined; this.model = this.app.model; this.source = source;
@@ -247,7 +254,7 @@ export class SchedulePanel {
     const { report } = compiled;
     this.tree = buildScheduleTree(compiled.tasks);
     const groups = this.tree.children.size, tasks = compiled.tasks.length - groups;
-    const info = `${integer.format(tasks)} tâche${tasks > 1 ? 's' : ''}${groups ? ` · ${integer.format(groups)} groupe${groups > 1 ? 's' : ''}` : ''} · ${integer.format(report.linkedElementCount)} objet${report.linkedElementCount > 1 ? 's liés' : ' lié'} · ${integer.format(report.unlinkedElementCount)} hors planning`;
+    const info = `${integer.format(tasks)} tâche${s(tasks)}${groups ? ` · ${integer.format(groups)} groupe${s(groups)}` : ''} · ${integer.format(report.linkedElementCount)} objet${report.linkedElementCount > 1 ? 's liés' : ' lié'} · ${integer.format(report.unlinkedElementCount)} hors planning`;
     this.summary.append(info, ' ', button('Détail des liaisons', () => this.showLinks(), { class: 'subtle' }));
     if (this.metadataNote) this.summary.append(h('span', { text: this.metadataNote }));
     this.date.min = formatScheduleDate(this.minimum); this.date.max = formatScheduleDate(this.maximum);
@@ -280,7 +287,7 @@ export class SchedulePanel {
     for (let at = start; at < end; at++) {
       const { index, depth, hasChildren } = this.order[at], { task, startDay, endDay, elements } = this.compiled.tasks[index];
       const descendants = this.tree.descendantTaskCounts[index];
-      const label = hasChildren ? `${task.name} · ${descendants} sous-tâche${descendants > 1 ? 's' : ''}` : `${task.name} · ${elements.length} objet${elements.length > 1 ? 's' : ''}`;
+      const label = hasChildren ? `${task.name} · ${descendants} sous-tâche${s(descendants)}` : `${task.name} · ${elements.length} objet${s(elements.length)}`;
       const row = h('div', { class: `schedule-row${hasChildren ? ' schedule-group' : ''}${this.selectedTask === index ? ' selected' : ''}`, attrs: { style: `top:${at * ROW}px` } });
       const select = button('', () => {
         if (this.bindingError) return;
@@ -358,7 +365,6 @@ export class SchedulePanel {
   private download(): void {
     const template: Schedule = { version: 1, name: 'Planning de construction', tasks: [{ id: 'T001', name: 'Exemple de tâche', start: '2026-01-05', end: '2026-01-16', match: { property: 'Planning / Code tâche', values: ['T001'] } }] };
     const blob = new Blob([JSON.stringify({ type: 'bim-schedule', ...(this.compiled?.schedule ?? template) }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob), link = h('a', { attrs: { href: url, download: this.compiled ? 'planning.json' : 'planning-modele.json' } });
-    link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    download(blob, this.compiled ? 'planning.json' : 'planning-modele.json');
   }
 }

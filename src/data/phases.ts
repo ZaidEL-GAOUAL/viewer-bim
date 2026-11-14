@@ -4,15 +4,16 @@
 
 import type { ElementAppearance } from './appearanceRules.ts';
 import type { PropValue } from './metadata.ts';
+import { isRecord } from './json.ts';
 
 /** État d'un élément dans la phase d'une vue : de l'ordre « avant » à « après ». */
 export const PHASE_STATUSES = ['past', 'existing', 'demolished', 'new', 'temporary', 'future'] as const;
 export type PhaseStatus = (typeof PHASE_STATUSES)[number];
 
 /** Ce que le filtre fait d'un état : le dessiner tel quel, avec son remplacement graphique, ou le masquer. */
-export type PhasePresentation = 'normal' | 'overridden' | 'hidden';
+type PhasePresentation = 'normal' | 'overridden' | 'hidden';
 
-export interface PhaseFilter {
+interface PhaseFilter {
   name: string;
   /** Filtre des vues neuves. */
   default: boolean;
@@ -20,7 +21,7 @@ export interface PhaseFilter {
 }
 
 /** Remplacement graphique d'un état (couleur #rrggbb, opacité 0 à 1). */
-export interface PhaseOverride {
+interface PhaseOverride {
   color?: string;
   opacity?: number;
 }
@@ -50,10 +51,6 @@ export const DEFAULT_OVERRIDES: Readonly<Record<PhaseStatus, PhaseOverride>> = {
 };
 
 const PRESENTATIONS: readonly PhasePresentation[] = ['normal', 'overridden', 'hidden'];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 /**
  * Lit la section `phases`. Une section illisible est ignorée (le reste du fichier garde son sens) : il faut au moins

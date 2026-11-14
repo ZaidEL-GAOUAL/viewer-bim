@@ -72,7 +72,7 @@ interface SourceMaterial {
 }
 
 /** Les trois priorités de profondeur de l'octet 6 de la table des matériaux d'un modèle brut (`revit/src/geometry/pack.rs`, `Depth`). */
-export const DEPTH_ORDINARY = 0;
+const DEPTH_ORDINARY = 0;
 /** L'image d'un contenu RPC et les imports CAD du projet : devant les hôtes. */
 export const DEPTH_OVERLAY = 1;
 /** Les hôtes système (murs, sols, toitures, plafonds, topographie, plateformes) : devant ce qui leur est coplanaire. */
@@ -174,7 +174,7 @@ function linearToSRGBByte(value: number): number {
   return Math.max(0, Math.min(255, Math.round(c * 255)));
 }
 
-function srgbByteToLinear(byte: number): number {
+export function srgbByteToLinear(byte: number): number {
   const c = byte / 255;
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }

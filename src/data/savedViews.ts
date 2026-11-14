@@ -6,11 +6,12 @@
 // recentre en retranchant `Model.offset`.
 
 import type { PropValue } from './metadata.ts';
+import { isRecord } from './json.ts';
 
 export type Vec3 = [number, number, number];
-export type CameraProjection = 'perspective' | 'orthographic';
+type CameraProjection = 'perspective' | 'orthographic';
 
-export interface SavedViewCamera {
+interface SavedViewCamera {
   position: Vec3;
   /** Sens du regard, unitaire (calculé depuis `target` si le fichier ne donne que celle-ci). */
   direction: Vec3;
@@ -22,24 +23,24 @@ export interface SavedViewCamera {
   size?: [number, number];
 }
 
-export interface SectionBoxSpec {
+interface SectionBoxSpec {
   min: Vec3;
   max: Vec3;
   /** Rotation autour de la verticale (Y), en degrés, positive dans le sens anti-horaire vu d'en haut. */
   rotation: number;
 }
 
-export interface HiddenCategories {
+interface HiddenCategories {
   /** Propriété des éléments qui porte la catégorie. */
   property: string;
   values: string[];
 }
 
 /** `'plan'` : un plan d'étage (vu de dessus, coupé à sa hauteur de coupe) ; `'3d'` : toute autre vue, par défaut. */
-export type ViewKind = '3d' | 'plan';
+type ViewKind = '3d' | 'plan';
 
 /** L'étendue verticale d'un plan d'étage, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). */
-export interface PlanRange {
+interface PlanRange {
   /** La profondeur de vue : le plan ne montre rien de plus bas. Absente quand elle est illimitée. */
   bottom?: number;
   /** Le plan de coupe : le plan ne montre rien de plus haut. */
@@ -62,10 +63,6 @@ export interface SavedView {
   /** Phase et filtre de phase (noms de la section `phases`). */
   phase?: string;
   phaseFilter?: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function vec3(value: unknown): Vec3 | undefined {
@@ -171,7 +168,7 @@ export interface CameraPose {
 }
 
 /** La sphère englobante du modèle, dans le repère recentré. */
-export interface Bounds {
+interface Bounds {
   center: Vec3;
   radius: number;
 }

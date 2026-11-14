@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PropertyStore } from '../src/data/metadata.ts';
 import {
-  compileSchedule, evaluateSchedule, formatScheduleDate, isScheduleDocument, parseSchedule, parseScheduleDate,
+  compileSchedule, evaluateSchedule, formatScheduleDate, isScheduleDocument, parseDateInput, parseSchedule, parseScheduleDate,
   scheduleFromMetadata, ScheduleStatus as status, type ScheduleTask,
 } from '../src/data/schedule.ts';
 
@@ -186,4 +186,14 @@ test('metadata dates can become individual tasks and an entirely invalid mapping
   assert.deepEqual(result.report.missingDateIds, ['b']);
   store.update(0, 'Start', 'yesterday');
   assert.equal(scheduleFromMetadata(['a', 'b'], store, options).schedule, null);
+});
+
+test('parseDateInput lit AAAA-MM-JJ et JJ/MM/AAAA, et refuse le reste', () => {
+  const day = parseScheduleDate('2026-03-05');
+  assert.equal(parseDateInput('2026-03-05'), day);
+  assert.equal(parseDateInput(' 05/03/2026 '), day);
+  assert.equal(parseDateInput('5/3/2026'), day);
+  assert.throws(() => parseDateInput('31/02/2026'), /invalide/);
+  assert.throws(() => parseDateInput('2026/03/05'), /AAAA-MM-JJ/);
+  assert.throws(() => parseDateInput('demain'), /AAAA-MM-JJ/);
 });

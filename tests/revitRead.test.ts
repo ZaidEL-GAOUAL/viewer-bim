@@ -6,10 +6,11 @@ import { ownValue, parseMetadata } from '../src/data/metadata.ts';
 import { evaluatePhases } from '../src/data/phases.ts';
 import { cameraPose, hiddenByView } from '../src/data/savedViews.ts';
 import { buildModel, type RawModel } from '../src/engine/buildModel.ts';
+import { isRevitFile } from '../src/engine/fileKinds.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
 import { initSync, readRevit as readRevitWasm, type RevitChunk, type RevitOutput } from '../src/revit/pkg/revit.js';
 import {
-  PRUDENT_WARNING, RevitTooLargeError, deviceTriangleBudget, triangleBudgetFor, isMemoryFailure, isPanicFailure, isRevitFile, metadataFromChunks, rawFromChunk, rawFromOutput, readRevit, revitFailureToError, splitRevitName, type RevitReport,
+  PRUDENT_WARNING, RevitTooLargeError, deviceTriangleBudget, triangleBudgetFor, isMemoryFailure, isPanicFailure, metadataFromChunks, rawFromChunk, rawFromOutput, readRevit, revitFailureToError, splitRevitName, type RevitReport,
 } from '../src/revit/readRevit.ts';
 import { describeRevitReport } from '../src/revit/revitReport.ts';
 
