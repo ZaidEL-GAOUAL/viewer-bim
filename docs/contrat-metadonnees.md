@@ -182,7 +182,10 @@ annulation et rétablissement) et par l’assistant, qui n’a que deux outils d
 `set_property` (une valeur fixe ou une formule par élément) et `plan_dates` (des dates de début
 et de fin, groupées et ordonnées). Ces écritures passent par la même étape annulable que les
 contrôles manuels, respectent `readOnly` et gardent le type de la propriété comme une saisie dans
-la fiche ; elles font partie des modifications que « Modifications ↓ » télécharge. L’assistant
+la fiche ; elles font partie des modifications que « Modifications ↓ » télécharge. Dans
+l’onglet Assistant, une écriture sur plus de 200 éléments ou sur toute la maquette est d’abord
+montrée et n’a lieu qu’après « Appliquer » ; par `window.viewerBim`, `dryRun: true` donne le
+même aperçu sans rien écrire. L’assistant
 ne modifie jamais la géométrie. Les
 coordonnées et mesures absentes du JSON ne sont pas calculées depuis le maillage pour le
 modèle d’IA : `plan_dates` lit la hauteur des éléments dans la maquette pour les ordonner, et

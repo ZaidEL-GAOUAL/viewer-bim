@@ -1,0 +1,9 @@
+{
+  "source": "hand-written",
+  "note": "Écrit à la main d'après les formes déjà vues dans ce projet (worker/src/index.ts, tests du relais) ; pas un enregistrement. scripts/record-assistant.ts enregistre les vraies réponses à côté, dans recorded/.",
+  "dialect": "JSON invalide (guillemets simples, virgule finale) : refusé, jamais un appel à arguments vides.",
+  "raw": "{'tool': 'select_elements', 'args': {'filters': [],},}",
+  "expect": {
+    "error": "JSON invalide"
+  }
+}

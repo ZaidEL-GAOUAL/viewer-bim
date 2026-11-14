@@ -2,13 +2,17 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { normalizeUsage, SessionUsage } from '../src/assistant/usage.ts';
 import { normalizeApiSettings } from '../src/assistant/settings.ts';
-import { runTurn, type Message } from '../src/assistant/client.ts';
-import type { ToolContext } from '../src/assistant/tools.ts';
+import { runTurn, type Message, type TurnEvents } from '../src/assistant/client.ts';
+import { runTool, type ToolContext } from '../src/assistant/tools.ts';
 import { PropertyStore } from '../src/data/metadata.ts';
 import worker, { validateEndpoint } from '../worker/src/index.ts';
 
 const ORIGIN = 'https://viewer.example.com';
 const context = (): ToolContext => ({ store: new PropertyStore(0), count: 0, keys: [], labelOf: String, selection: new Set(), select: () => {} });
+const events = (onUsage: (value: unknown) => void): TurnEvents => {
+  const tools = context();
+  return { execute: (name, args) => ({ outcome: runTool(name, args, tools) }), onProvider: () => {}, onUsage };
+};
 const env = () => ({ ALLOWED_ORIGINS: ORIGIN, MODEL: 'mock-model', AI: { async run() { return { response: 'Réponse locale', usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 } }; } } });
 function request(api?: unknown) {
   return new Request('https://worker.example.com/chat', { method: 'POST', headers: { Origin: ORIGIN, 'Content-Type': 'application/json' },
@@ -34,13 +38,13 @@ test('tool rounds count every measured response and never place API credentials 
     assert.equal(body.api.apiKey, secret);
     assert.equal(JSON.stringify(body.messages).includes(secret), false);
     calls++;
-    return Response.json({ content: calls === 1 ? '' : 'Terminé.', tool_calls: calls === 1 ? [{ id: 'one', name: 'list_properties', arguments: {} }] : [],
+    return Response.json({ content: calls === 1 ? '{"tool":"list_properties","args":{}}' : '{"answer":"Terminé."}',
       provider: 'mock', model: 'offline', usage: { inputTokens: calls * 10, outputTokens: 2, totalTokens: calls * 10 + 2 } });
   });
   const usage = new SessionUsage(), messages: Message[] = [];
-  const answer = await runTurn('https://worker.example.com', messages, 'Lister', context(), { onProvider: () => {}, onTool: () => {}, onUsage: (value) => usage.add(value) }, undefined,
+  const turn = await runTurn('https://worker.example.com', messages, 'Lister', events((value) => usage.add(value)), undefined,
     { endpoint: 'https://api.openai.com/v1/chat/completions', apiKey: secret, model: 'offline' });
-  assert.equal(answer, 'Terminé.');
+  assert.equal(turn.answer, 'Terminé.');
   assert.equal(calls, 2);
   assert.deepEqual(usage.totals, { inputTokens: 30, outputTokens: 4, totalTokens: 34 });
   assert.equal(JSON.stringify(messages).includes(secret), false);
@@ -56,7 +60,7 @@ test('fallback attempts and missing provider counters remain visibly unknown', a
   t.mock.method(globalThis, 'fetch', async () => Response.json({ content: 'Terminé.', tool_calls: [], provider: 'mock', model: 'offline',
     usage: { inputTokens: 20, outputTokens: 4, totalTokens: 24 }, unreportedAttempts: 1 }));
   const usage = new SessionUsage();
-  await runTurn('https://worker.example.com', [], 'Lister', context(), { onProvider: () => {}, onTool: () => {}, onUsage: (value) => usage.add(value) });
+  await runTurn('https://worker.example.com', [], 'Lister', events((value) => usage.add(value)));
   assert.equal(usage.calls, 2);
   assert.equal(usage.display('totalTokens'), '24 + ?');
   assert.deepEqual(usage.missing, { inputTokens: 1, outputTokens: 1, totalTokens: 1 });
@@ -65,7 +69,7 @@ test('fallback attempts and missing provider counters remain visibly unknown', a
 test('an endpoint rejected before a provider call adds no token usage', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ error: 'Endpoint non autorisé.' }, { status: 400 }));
   const usage = new SessionUsage();
-  await assert.rejects(runTurn('https://worker.example.com', [], 'Lister', context(), { onProvider: () => {}, onTool: () => {}, onUsage: (value) => usage.add(value) }), /non autorisé/);
+  await assert.rejects(runTurn('https://worker.example.com', [], 'Lister', events((value) => usage.add(value))), /non autorisé/);
   assert.equal(usage.calls, 0);
 });
 

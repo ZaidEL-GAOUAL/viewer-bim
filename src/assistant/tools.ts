@@ -2,17 +2,15 @@
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
 import { PATH_SEP, UNDEFINED_LABEL, coerceTo, compareValues, formatValue, ownValue, rankedValues, toPropertyPath, type PropValue, type PropertyStore } from '../data/metadata.ts';
-import { formatScheduleDate, parseDateInput } from '../data/schedule.ts';
+import { formatScheduleDate, parseScheduleDate } from '../data/schedule.ts';
 import { validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
-import { RULE_OPS, isMissing, matchesCondition, numericValue, valueAt, type ElementIdentity, type RuleCondition, type RuleOp } from '../data/conditions.ts';
-import { isRecord } from '../data/json.ts';
+import { isMissing, matchesCondition, valueAt, type ElementIdentity, type RuleCondition, type RuleOp } from '../data/conditions.ts';
 import { fold, plural, s } from '../data/text.ts';
 import { ELEMENT_ID, ELEMENT_NAME, isElementField } from '../data/elementFields.ts';
 import { ExpressionError, compileExpression, type Expression, type Value } from './expression.ts';
+import { coerceArgs } from './schema.ts';
 
-/** Opérateurs écrits en symboles par certains modèles (« = », « >= ») : ramenés aux noms attendus. */
-const OP_ALIASES: Record<string, string> = { '=': 'equals', '==': 'equals', '!=': 'not_equals', '<>': 'not_equals', '>': 'greater', '<': 'less', '>=': 'greater_or_equal', '<=': 'less_or_equal' };
-const opOf = (raw: unknown): string => { const op = String(raw ?? 'equals').trim(); return OP_ALIASES[op] ?? op; };
+export { TOOL_DEFINITIONS } from './schema.ts';
 
 /**
  * Tools read metadata, change presentation and write properties (undoable). They never write geometry, and
@@ -51,170 +49,6 @@ export interface ToolOutcome {
   note: string;
 }
 
-/** Définitions au format OpenAI (comprises par Workers AI, Groq, Cerebras). Renvoyées à chaque appel : courtes. */
-const FILTERS = {
-  type: 'array',
-  description: 'Filtres combinés par ET : {property, op, value}. op : equals, not_equals, contains, missing, present, greater, less, greater_or_equal, less_or_equal. Liste vide = tous. property peut aussi être "#nom" (nom affiché de l’élément) ou "#id" (son identifiant).',
-  items: { type: 'object', description: 'Filtre {property, op, value}.' },
-};
-const SCOPE = { type: 'string', description: '"model" (défaut) ou "selection" (éléments sélectionnés).' };
-
-export const TOOL_DEFINITIONS = [
-  {
-    type: 'function',
-    function: {
-      name: 'list_properties',
-      description: 'Propriétés du modèle avec leur nombre de valeurs distinctes.',
-      parameters: { type: 'object', properties: { search: { type: 'string', description: 'Texte cherché dans les noms (facultatif).' } } },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'count_by',
-      description: 'Répartition des éléments par valeur d’une propriété.',
-      parameters: { type: 'object', properties: { property: { type: 'string', description: 'Nom de la propriété.' }, scope: SCOPE }, required: ['property'] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'find_elements',
-      description: 'Éléments vérifiant les filtres : total et premiers éléments avec les propriétés demandées.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          properties: { type: 'array', description: 'Propriétés à renvoyer (facultatif).', items: { type: 'string', description: 'Nom de propriété.' } },
-          scope: SCOPE,
-          limit: { type: 'number', description: 'Éléments détaillés (défaut 20, max 50).' },
-        },
-        required: ['filters'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_element',
-      description: 'Toutes les propriétés d’un élément, par nom ou identifiant (même partiel).',
-      parameters: { type: 'object', properties: { query: { type: 'string', description: 'Nom ou identifiant.' } }, required: ['query'] },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'select_elements',
-      description: 'Sélectionne et cadre dans la vue 3D les éléments vérifiant les filtres. isolate=true : n’affiche que ces éléments, le reste devient invisible (« n’affiche que X », « masque tout sauf X »). highlight=true : met en évidence (« mets en évidence X », « fais ressortir X ») : surbrillance et le reste atténué.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          scope: SCOPE,
-          isolate: { type: 'boolean', description: 'N’afficher que ces éléments ; le reste est masqué.' },
-          highlight: { type: 'boolean', description: 'Mettre en évidence : le reste de la maquette est atténué (opacité 0,15).' },
-        },
-        required: ['filters'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'set_visibility',
-      description: 'Masque (visible=false) ou réaffiche (visible=true) les éléments vérifiant les filtres, sans changer la sélection ; showAll=true réaffiche toute la maquette. Pour « n’afficher que X », préférer select_elements avec isolate=true.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          scope: SCOPE,
-          visible: { type: 'boolean', description: 'false pour masquer, true pour réafficher.' },
-          showAll: { type: 'boolean', description: 'true : tout réafficher (les filtres sont ignorés).' },
-        },
-        required: ['filters'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'compute',
-      description: 'Calcule une formule sur chaque élément vérifiant les filtres (le viewer fait le calcul, pas toi) : somme, moyenne, min, max, et les éléments où une condition est vraie. Propriétés entre crochets : [Qto_WallBaseQuantities / NetVolume] - [Length] * [Height] * 0.2 ; condition : [LoadBearing] == true and [FireRating] == null. Opérateurs : + - * / < <= > >= == != and or not, abs() min() max() round().',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          scope: SCOPE,
-          expression: { type: 'string', description: 'Formule numérique par élément (facultatif si where est donné).' },
-          where: { type: 'string', description: 'Condition par élément ; renvoie les éléments où elle est vraie (facultatif).' },
-        },
-        required: ['filters'],
-      },
-    },
-  },
-  {
-    type: 'function', function: {
-      name: 'get_view_settings',
-      description: 'Règles de couleur/opacité actives et regroupement de l’arborescence, dans leur ordre.',
-      parameters: { type: 'object', properties: {} },
-    },
-  },
-  {
-    type: 'function', function: {
-      name: 'update_view',
-      description: 'Change seulement la présentation. Ajoute/remplace des règles par id, retire des ids, réordonne la pile et/ou regroupe l’arbre. Dernière règle correspondante prioritaire, séparément pour couleur et opacité. Les propriétés et la géométrie ne changent pas.',
-      parameters: {
-        type: 'object',
-        properties: {
-          rules: { type: 'array', description: 'Règles à ajouter/remplacer ; les autres restent.', items: { type: 'object', description: '{id,name?,enabled:true,conditions:[{property,op,value?,numericScale?}],color?:"#rrggbb",opacity?:0..1,opacityBy?:{property,scale:"percent"|"fraction"}}. Conditions ET, vide=tous. op: equals,not_equals,contains,missing,present,greater,less,greater_or_equal,less_or_equal. opacityBy percent:100→1,50→0.5; fraction:1→1,0.5→0.5. Choisir opacity ou opacityBy.' } },
-          removeRuleIds: { type: 'array', description: 'Identifiants des règles à retirer.', items: { type: 'string', description: 'Identifiant de règle.' } },
-          ruleOrder: { type: 'array', description: 'Tous les ids restants dans l’ordre souhaité ; dernier prioritaire.', items: { type: 'string', description: 'Identifiant de règle.' } },
-          groupBy: { type: 'array', description: 'Propriétés formant la hiérarchie de l’arbre, dans l’ordre ; [] pour supprimer le regroupement.', items: { type: 'string', description: 'Nom exact d’une propriété.' } },
-        },
-      },
-    },
-  },
-  {
-    type: 'function', function: {
-      name: 'set_property',
-      description: 'Ajoute ou modifie une propriété des éléments vérifiant les filtres. La propriété est créée si elle n’existe pas ; dans une catégorie, écrire « Catégorie / Nom ». value : la même valeur pour tous ; expression : formule calculée par élément, comme compute ([Longueur] * 2). Modification annulable par l’utilisateur.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          scope: SCOPE,
-          property: { type: 'string', description: 'Nom de la propriété à écrire.' },
-          value: { type: 'string', description: 'Valeur à écrire (texte, nombre ou booléen).' },
-          expression: { type: 'string', description: 'Formule par élément, à la place de value.' },
-        },
-        required: ['filters', 'property'],
-      },
-    },
-  },
-  {
-    type: 'function', function: {
-      name: 'plan_dates',
-      description: 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent groupe par groupe d’orderBy (ex. le niveau ou code étage), du plus bas au plus haut d’après la maquette quels que soient les noms, répartis régulièrement de start (premier début) à end (dernière fin) ; chaque élément dure entre minDays et maxDays jours. Annulable par l’utilisateur.',
-      parameters: {
-        type: 'object',
-        properties: {
-          filters: FILTERS,
-          scope: SCOPE,
-          start: { type: 'string', description: 'Début du chantier, AAAA-MM-JJ.' },
-          end: { type: 'string', description: 'Fin du chantier, AAAA-MM-JJ.' },
-          minDays: { type: 'number', description: 'Durée minimale d’un élément, en jours.' },
-          maxDays: { type: 'number', description: 'Durée maximale d’un élément, en jours.' },
-          orderBy: { type: 'array', description: 'Propriétés qui ordonnent les tâches, la première d’abord.', items: { type: 'string', description: 'Nom de propriété.' } },
-          order: { type: 'array', description: 'Seulement si l’utilisateur a dicté lui-même l’ordre des valeurs de la première propriété d’orderBy ; ne le devine jamais. Sans order, l’outil range les groupes du plus bas au plus haut d’après la maquette.', items: { type: 'string', description: 'Valeur.' } },
-          startProperty: { type: 'string', description: 'Propriété de début (défaut « Planning / Date début »).' },
-          endProperty: { type: 'string', description: 'Propriété de fin (défaut « Planning / Date fin »).' },
-        },
-        required: ['start', 'end', 'minDays', 'maxDays'],
-      },
-    },
-  },
-];
-
 /** Règles posées par « mettre en évidence », dans cet ordre : atténuation générale, puis les éléments visés. */
 const HIGHLIGHT_IDS: readonly string[] = ['assistant-dim-others', 'assistant-highlight'];
 const isHighlightRule = (id: string) => id === HIGHLIGHT_IDS[0] || id.startsWith(HIGHLIGHT_IDS[1]);
@@ -235,9 +69,13 @@ function narrowToMentioned(context: ToolContext, filters: ResolvedFilter[], indi
 }
 
 /** Fin d'action : le modèle a ce qu'il faut pour répondre ; une seconde action remplacerait la première. */
-const DONE = 'Action faite. Réponds maintenant à l’utilisateur, sans autre appel, sauf si sa demande comporte une autre action distincte.';
+const DONE = 'Action faite, le viewer en rend compte. Termine sans autre appel ({"answer": ""}), sauf si la demande comporte une autre action distincte.';
 
 const DETAIL_LIMIT = 20;
+/** Éléments montrés dans un aperçu d'écriture (dryRun). */
+const PREVIEW_SAMPLE = 5;
+/** Mise en évidence d'une cible hors filtres : une règle par élément, donc bornée. */
+const HIGHLIGHT_MAX = 50;
 const DETAIL_MAX = 50;
 const COUNT_LIMIT = 40;
 
@@ -310,54 +148,13 @@ interface ResolvedFilter {
   filter: RuleCondition;
 }
 
-/**
- * Booléen d'un argument d'outil. Certains modèles (Llama 3.3 en particulier) envoient « "true" » en
- * texte : comparé à `true`, il était ignoré, et « n'affiche que X » ne faisait que sélectionner X.
- */
-function flag(value: unknown): boolean | undefined {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  if (typeof value !== 'string') return undefined;
-  const text = fold(value);
-  if (['true', '1', 'oui', 'vrai', 'yes'].includes(text)) return true;
-  if (['false', '0', 'non', 'faux', 'no'].includes(text)) return false;
-  return undefined;
-}
-
-/**
- * Une liste attendue, telle que les modèles l'envoient parfois : en texte JSON, ou réduite à son
- * seul élément ({property, op, value} au lieu de [{…}], "Niveau" au lieu de ["Niveau"]).
- */
-function asList(raw: unknown): unknown {
-  let value = raw;
-  if (typeof value === 'string') {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      // un texte simple : un seul élément
-    }
-  }
-  return value === undefined || value === null || value === '' || Array.isArray(value) ? value : [value];
-}
-
-/** Périmètre « selection », même écrit « sélection » ou « Selection ». */
-const inSelection = (scope: unknown): boolean => typeof scope === 'string' && fold(scope) === 'selection';
-
-function parseFilters(store: PropertyStore, rawFilters: unknown): ResolvedFilter[] | { error: string } {
-  const raw = asList(rawFilters);
-  if (raw === undefined || raw === null || raw === '') return [];
-  if (!Array.isArray(raw)) return { error: 'filters doit être une liste.' };
+/** Filtres déjà ramenés au schéma par `coerceArgs` : seules les propriétés restent à résoudre. */
+function parseFilters(store: PropertyStore, raw: unknown): ResolvedFilter[] | { error: string } {
   const out: ResolvedFilter[] = [];
-  for (const item of raw) {
-    if (typeof item !== 'object' || item === null) return { error: 'Chaque filtre doit être un objet {property, op, value}.' };
-    const record = item as Record<string, unknown>;
-    const property = typeof record.property === 'string' ? record.property : '';
-    const op = opOf(record.op) as RuleOp;
-    if (!RULE_OPS.includes(op)) return { error: `Opérateur inconnu : ${op}` };
+  for (const { property, op, value } of (raw ?? []) as { property: string; op: RuleOp; value?: PropValue }[]) {
     const path = resolveProperty(store, property);
     if (typeof path !== 'string') return path;
-    const value = record.value;
-    out.push({ path, filter: { property, op, value: value === undefined || value === null ? undefined : (value as PropValue) } });
+    out.push({ path, filter: { property, op, value: value ?? undefined } });
   }
   return out;
 }
@@ -397,19 +194,8 @@ function writablePath(store: PropertyStore, raw: unknown): string | { error: str
   return store.isEditable(path) ? path : { error: `La propriété « ${path} » est verrouillée : elle ne se modifie pas.` };
 }
 
-/** Jour d'une date AAAA-MM-JJ, ou JJ/MM/AAAA comme on l'écrit en français. */
-function dayOf(raw: unknown, label: string): number {
-  const text = String(raw ?? '').trim();
-  try {
-    return parseDateInput(text);
-  } catch {
-    throw new Error(`${label} : date « ${text} » illisible, attendu AAAA-MM-JJ.`);
-  }
-}
-
-function dayCount(raw: unknown, label: string): number {
-  const value = numericValue(raw as PropValue);
-  if (value === undefined || value < 1) throw new Error(`${label} doit être un nombre de jours, au moins 1.`);
+function dayCount(value: unknown, label: string): number {
+  if (typeof value !== 'number' || value < 1) throw new Error(`${label} doit être un nombre de jours, au moins 1.`);
   return Math.round(value);
 }
 
@@ -422,12 +208,16 @@ function stableHash(text: string): number {
 
 const NO_WRITE = 'La modification des propriétés n’est pas disponible dans ce contexte.';
 
-/** Indices des éléments du périmètre qui vérifient tous les filtres. */
-function selectIndices(context: ToolContext, filters: ResolvedFilter[], scope: unknown): number[] {
-  const base = inSelection(scope) ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
-  if (filters.length === 0) return base;
-  return base.filter((index) => filters.every(({ path, filter }) => matchesCondition(valueOf(context, index, path), filter)));
+/**
+ * Éléments du périmètre qui vérifient tous les filtres, ramenés aux éléments cités par l'utilisateur
+ * quand le filtre attrape aussi leurs homonymes (tous les outils qui prennent des filtres).
+ */
+function targets(context: ToolContext, filters: ResolvedFilter[], scope: unknown): { indices: number[]; narrowed: number } {
+  const base = scope === 'selection' ? [...context.selection] : Array.from({ length: context.count }, (_, i) => i);
+  const indices = filters.length === 0 ? base : base.filter((index) => filters.every(({ path, filter }) => matchesCondition(valueOf(context, index, path), filter)));
+  return narrowToMentioned(context, filters, indices);
 }
+const narrowedNote = (narrowed: number) => (narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowed} homonyme(s) écarté(s).` } : {});
 
 // ------------------------------------------------------------------- outils
 
@@ -437,9 +227,12 @@ function elementSummary(context: ToolContext, index: number, paths: string[]): R
   return out;
 }
 
-export function runTool(name: string, args: Record<string, unknown>, context: ToolContext): ToolOutcome {
+/** Exécute un outil. Les arguments passent d'abord par le schéma (`coerceArgs`) : chat, commandes et agents ont la même tolérance. */
+export function runTool(name: string, raw: unknown, context: ToolContext): ToolOutcome {
   if (context.isCurrent?.() === false) return { result: { error: 'Le modèle a changé. Relancez votre demande.' }, note: 'Ancien modèle : opération abandonnée' };
-  try { return executeTool(name, args, context); }
+  const checked = coerceArgs(name, raw);
+  if ('error' in checked) return { result: { error: checked.error }, note: checked.error };
+  try { return executeTool(name, checked.args, context); }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { result: { error: message }, note: message };
@@ -466,7 +259,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const path = resolveProperty(store, String(args.property ?? ''));
       if (typeof path !== 'string') return { result: path, note: path.error };
       if (isElementField(path)) return { result: { error: `${path} distingue chaque élément : utilisez find_elements avec un filtre sur ${path}.` }, note: 'Répartition impossible sur le nom ou l’identifiant' };
-      const scope = inSelection(args.scope) ? context.selection : null;
+      const scope = args.scope === 'selection' ? context.selection : null;
       const counts = new Map<string, number>();
       for (const [label, members] of store.groups(path)) {
         const count = scope ? members.filter((index) => scope.has(index)).length : members.length;
@@ -485,18 +278,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const wanted: string[] = [];
-      const requested = asList(args.properties);
-      if (Array.isArray(requested)) {
-        for (const item of requested) {
-          const path = resolveProperty(store, String(item));
-          if (typeof path === 'string') wanted.push(path);
-        }
+      for (const item of (args.properties ?? []) as string[]) {
+        const path = resolveProperty(store, item);
+        if (typeof path === 'string') wanted.push(path);
       }
       for (const { path } of filters) if (!wanted.includes(path)) wanted.push(path);
-      const indices = selectIndices(context, filters, args.scope);
+      const { indices, narrowed } = targets(context, filters, args.scope);
       const limit = Math.min(DETAIL_MAX, Math.max(1, Number(args.limit) || DETAIL_LIMIT));
       const elements = indices.slice(0, limit).map((index) => elementSummary(context, index, wanted));
-      return { result: { count: indices.length, shown: elements.length, elements, ...(indices.length === 0 ? existingValues(store, filters) : {}) }, note: `${plural(indices.length, 'élément')} trouvé${s(indices.length)}` };
+      return { result: { count: indices.length, shown: elements.length, elements, ...narrowedNote(narrowed), ...(indices.length === 0 ? existingValues(store, filters) : {}) }, note: `${plural(indices.length, 'élément')} trouvé${s(indices.length)}` };
     }
 
     case 'get_element': {
@@ -514,27 +304,25 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
     case 'select_elements': {
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
-      const indices = narrowing.indices;
-      const isolate = flag(args.isolate) === true;
-      const highlight = flag(args.highlight) === true;
+      const { indices, narrowed } = targets(context, filters, args.scope);
+      const isolate = args.isolate === true;
       if (indices.length === 0) return { result: { count: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       context.select(indices, isolate);
-      let dimmed = false;
-      if (highlight && context.setAppearanceRules && !inSelection(args.scope)) {
-        // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité.
-        // Deux règles empilées, reconnaissables à leur identifiant pour pouvoir les retirer.
-        // Cible réduite aux éléments cités : une règle par identifiant (les conditions se combinent par ET).
-        const targets: RuleCondition[][] = narrowing.narrowed > 0
+      // Mise en évidence : tout est atténué, puis les éléments visés reprennent leur opacité. Deux règles
+      // empilées, reconnaissables à leur identifiant pour pouvoir les retirer. Une cible que les filtres
+      // n'expriment pas (éléments cités, sélection) devient une règle par identifiant, au plus HIGHLIGHT_MAX.
+      const byId = narrowed > 0 || args.scope === 'selection';
+      const highlight = args.highlight === true && context.setAppearanceRules !== undefined && (!byId || indices.length <= HIGHLIGHT_MAX);
+      if (highlight) {
+        const conditions: RuleCondition[][] = byId
           ? indices.map((index) => [{ property: ELEMENT_ID, op: 'equals', value: context.keys[index] }])
           : [filters.map(({ path, filter }) => ({ property: path, op: filter.op, ...(filter.value !== undefined ? { value: filter.value } : {}) }))];
         const kept = (context.appearanceRules ?? []).filter((rule) => !isHighlightRule(rule.id)).map((rule) => structuredClone(rule));
-        context.setAppearanceRules([
+        context.setAppearanceRules!([
           ...kept,
           { id: HIGHLIGHT_IDS[0], name: 'Mise en évidence : reste atténué', enabled: true, conditions: [], opacity: 0.15 },
-          ...targets.map((conditions, i): AppearanceRule => ({ id: i === 0 ? HIGHLIGHT_IDS[1] : `${HIGHLIGHT_IDS[1]}-${i + 1}`, name: 'Mise en évidence', enabled: true, conditions, opacity: 1 })),
+          ...conditions.map((list, i): AppearanceRule => ({ id: i === 0 ? HIGHLIGHT_IDS[1] : `${HIGHLIGHT_IDS[1]}-${i + 1}`, name: 'Mise en évidence', enabled: true, conditions: list, opacity: 1 })),
         ]);
-        dimmed = true;
       }
       const many = indices.length > 1;
       const verb = isolate ? (many ? 'isolés' : 'isolé') : highlight ? 'mis en évidence' : many ? 'sélectionnés' : 'sélectionné';
@@ -544,8 +332,9 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
           ...namesOf(context, indices),
           isolated: isolate,
           highlighted: highlight,
-          ...(dimmed ? { rules: (context.appearanceRules ?? []).filter((rule) => isHighlightRule(rule.id)).map((rule) => rule.id) } : {}),
-          ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}),
+          ...(highlight ? { rules: (context.appearanceRules ?? []).filter((rule) => isHighlightRule(rule.id)).map((rule) => rule.id) } : {}),
+          ...(args.highlight === true && !highlight ? { notHighlighted: `Mise en évidence impossible ici (plus de ${HIGHLIGHT_MAX} éléments hors filtres, ou règles indisponibles) : les éléments sont seulement sélectionnés.` } : {}),
+          ...narrowedNote(narrowed),
           next: DONE,
         },
         note: `${plural(indices.length, 'élément')} ${verb}`,
@@ -554,18 +343,19 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
 
     case 'set_visibility': {
       if (!context.setVisible || !context.showAll) throw new Error('La visibilité n’est pas réglable dans ce contexte.');
-      if (flag(args.showAll) === true) {
+      if (args.showAll === true) {
         context.showAll();
         return { result: { shown: context.count }, note: 'Toute la maquette est réaffichée' };
       }
+      // Sans visible, « masquer » ou « réafficher » serait deviné : on demande.
+      if (typeof args.visible !== 'boolean') return { result: { error: 'Indiquez visible (false pour masquer, true pour réafficher) ou showAll: true.' }, note: 'Masquer ou réafficher ? Non précisé' };
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const visible = flag(args.visible) !== false;
-      const narrowing = narrowToMentioned(context, filters, selectIndices(context, filters, args.scope));
-      const indices = narrowing.indices;
+      const visible = args.visible;
+      const { indices, narrowed } = targets(context, filters, args.scope);
       if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       context.setVisible(indices, visible);
-      return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...(narrowing.narrowed > 0 ? { narrowed: `Réduit à l’identifiant cité par l’utilisateur : ${narrowing.narrowed} homonyme(s) écarté(s).` } : {}), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${s(indices.length)}` };
+      return { result: { changed: indices.length, ...namesOf(context, indices), visible, ...narrowedNote(narrowed), next: DONE }, note: `${plural(indices.length, 'élément')} ${visible ? 'réaffiché' : 'masqué'}${s(indices.length)}` };
     }
 
     case 'compute': {
@@ -577,7 +367,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (where && 'error' in where) return { result: where, note: where.error };
       if (!expression && !where) return { result: { error: 'Donnez expression et/ou where.' }, note: 'Formule manquante' };
 
-      const indices = selectIndices(context, filters, args.scope);
+      const { indices, narrowed } = targets(context, filters, args.scope);
       const stats = { elements: indices.length, computed: 0, skipped: 0, sum: 0, min: Infinity, max: -Infinity };
       const matching: number[] = [];
       const values = new Map<number, number>();
@@ -608,7 +398,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         if (values.has(index)) summary.value = Number(values.get(index)!.toPrecision(10));
         return summary;
       });
-      const result: Record<string, unknown> = { elements: indices.length, shown: examples.length, examples };
+      const result: Record<string, unknown> = { elements: indices.length, shown: examples.length, examples, ...narrowedNote(narrowed) };
       if (where) result.matching = matching.length;
       if (expression) {
         Object.assign(result, {
@@ -633,36 +423,20 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
 
     case 'update_view': {
       if (!context.setAppearanceRules || !context.groupBy) throw new Error('Les réglages de vue ne sont pas disponibles dans ce contexte.');
-      const rawRules = asList(args.rules ?? []);
-      if (!Array.isArray(rawRules)) throw new Error('rules doit être une liste.');
       // Resolve displayed property paths before shared validation; never silently change an ambiguous field.
-      const resolve = (name: unknown): string => {
-        const path = resolveProperty(store, String(name ?? ''));
+      const resolve = (name: string): string => {
+        const path = resolveProperty(store, name);
         if (typeof path !== 'string') throw new Error(path.error);
         return path;
       };
-      const patched = rawRules.map((raw) => {
-        if (!isRecord(raw)) throw new Error('Chaque règle doit être un objet.');
-        const rule = structuredClone(raw) as Record<string, unknown>;
-        // Mêmes écarts des modèles que pour les autres outils : booléen ou nombre en texte, liste
-        // réduite à un élément, opérateur en symbole. Une règle ajoutée sans « enabled » est active.
-        rule.enabled = rule.enabled === undefined ? true : flag(rule.enabled) ?? rule.enabled;
-        if (typeof rule.opacity === 'string' && numericValue(rule.opacity) !== undefined) rule.opacity = numericValue(rule.opacity);
-        const conditions = asList(rule.conditions);
-        if (Array.isArray(conditions)) rule.conditions = conditions.map((condition: unknown) => {
-          if (!isRecord(condition)) throw new Error('Condition illisible.');
-          const c = condition as Record<string, unknown>;
-          return { ...c, property: resolve(c.property), op: opOf(c.op) };
-        });
-        if (rule.opacityBy && typeof rule.opacityBy === 'object' && !Array.isArray(rule.opacityBy)) {
-          const opacityBy = rule.opacityBy as Record<string, unknown>;
-          rule.opacityBy = { ...opacityBy, property: resolve(opacityBy.property) };
-        }
-        return rule;
-      });
+      // Types, listes et opérateurs sont déjà ramenés au schéma ; restent les noms de propriétés.
+      const patched = ((args.rules ?? []) as Record<string, unknown>[]).map((rule) => ({
+        ...rule,
+        conditions: ((rule.conditions ?? []) as { property: string }[]).map((condition) => ({ ...condition, property: resolve(condition.property) })),
+        ...(rule.opacityBy ? { opacityBy: { ...(rule.opacityBy as { property: string }), property: resolve((rule.opacityBy as { property: string }).property) } } : {}),
+      }));
       const updates = validateAppearanceRules(patched, store);
-      const removed = asList(args.removeRuleIds ?? []);
-      if (!Array.isArray(removed) || !removed.every((id) => typeof id === 'string')) throw new Error('removeRuleIds doit contenir des identifiants.');
+      const removed = (args.removeRuleIds ?? []) as string[];
       if (updates.some((rule) => removed.includes(rule.id))) throw new Error('Une règle ne peut pas être retirée et remplacée simultanément.');
       let rules = (context.appearanceRules ?? []).filter((rule) => !removed.includes(rule.id)).map((rule) => structuredClone(rule));
       for (const update of updates) {
@@ -671,17 +445,15 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         else rules[at] = update;
       }
       if (args.ruleOrder !== undefined) {
-        const order = asList(args.ruleOrder);
-        if (!Array.isArray(order) || !order.every((id) => typeof id === 'string') || new Set(order).size !== rules.length || order.length !== rules.length || order.some((id) => !rules.some((rule) => rule.id === id))) {
+        const order = args.ruleOrder as string[];
+        if (new Set(order).size !== rules.length || order.length !== rules.length || order.some((id) => !rules.some((rule) => rule.id === id))) {
           throw new Error('ruleOrder doit contenir chaque identifiant restant exactement une fois.');
         }
         rules = order.map((id) => rules.find((rule) => rule.id === id)!);
       }
       let grouping: string[] | undefined;
       if (args.groupBy !== undefined) {
-        const paths = asList(args.groupBy);
-        if (!Array.isArray(paths) || !paths.every((path) => typeof path === 'string')) throw new Error('groupBy doit être une liste de propriétés.');
-        grouping = [...new Set(paths.map(resolve))];
+        grouping = [...new Set((args.groupBy as string[]).map(resolve))];
       }
       const changesRules = args.rules !== undefined || args.removeRuleIds !== undefined || args.ruleOrder !== undefined;
       if (!changesRules && grouping === undefined) throw new Error('Indiquez les règles ou le regroupement à modifier.');
@@ -700,7 +472,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (formula && 'error' in formula) return { result: formula, note: formula.error };
       const constant = args.value;
       if (!formula && (constant === undefined || (constant !== null && typeof constant === 'object'))) return { result: { error: 'Donnez value ou expression.' }, note: 'Valeur manquante' };
-      const indices = selectIndices(context, filters, args.scope);
+      const { indices, narrowed } = targets(context, filters, args.scope);
       if (indices.length === 0) return { result: { changed: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
       const created = !store.paths.includes(path);
       const updates: [number, string, PropValue][] = [];
@@ -712,10 +484,14 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         updates.push([index, path, typeof value === 'number' ? Number(value.toPrecision(12)) : value]);
       }
       if (updates.length === 0) return { result: { changed: 0, error: 'La formule ne donne aucune valeur pour ces éléments (propriétés absentes ?).' }, note: 'Aucune valeur calculée' };
-      const changed = context.writeProperties(updates);
       const skipped = indices.length - updates.length;
+      if (args.dryRun === true) {
+        const sample = updates.slice(0, PREVIEW_SAMPLE).map(([index, , value]) => ({ element: context.labelOf(index), before: ownValue(store.propsOf(index), path) ?? null, after: value }));
+        return { result: { dryRun: true, property: path, created, count: updates.length, ...(skipped > 0 ? { skipped } : {}), sample, ...narrowedNote(narrowed) }, note: `Aperçu : « ${path} » sur ${plural(updates.length, 'élément')}, rien n’est écrit` };
+      }
+      const changed = context.writeProperties(updates);
       return {
-        result: { property: path, created, count: updates.length, ...(skipped > 0 ? { skipped } : {}), ...(changed ? {} : { unchanged: 'Ces éléments avaient déjà cette valeur.' }), ...namesOf(context, updates.map(([index]) => index)), next: DONE },
+        result: { property: path, created, count: updates.length, ...(skipped > 0 ? { skipped } : {}), ...(changed ? {} : { unchanged: 'Ces éléments avaient déjà cette valeur.' }), ...namesOf(context, updates.map(([index]) => index)), ...narrowedNote(narrowed), next: DONE },
         note: `« ${path} » ${created ? 'ajoutée' : 'modifiée'} sur ${plural(updates.length, 'élément')}`,
       };
     }
@@ -724,8 +500,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (!context.writeProperties) throw new Error(NO_WRITE);
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
-      const first = dayOf(args.start, 'start');
-      const last = dayOf(args.end, 'end');
+      const first = parseScheduleDate(args.start);
+      const last = parseScheduleDate(args.end);
       if (last < first) throw new Error('La fin du chantier précède son début.');
       const total = last - first + 1;
       const shortest = dayCount(args.minDays, 'minDays');
@@ -738,17 +514,16 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       if (typeof endPath !== 'string') return { result: endPath, note: endPath.error };
       if (startPath === endPath) throw new Error('Les propriétés de début et de fin doivent être différentes.');
       const orderBy: string[] = [];
-      const requested = asList(args.orderBy);
-      for (const name of Array.isArray(requested) ? requested : []) {
-        const path = resolveProperty(store, String(name));
+      for (const name of (args.orderBy ?? []) as string[]) {
+        const path = resolveProperty(store, name);
         if (typeof path !== 'string') return { result: path, note: path.error };
         orderBy.push(path);
       }
-      const listed = asList(args.order);
       const rank = new Map<string, number>();
-      for (const value of Array.isArray(listed) ? listed : []) if (!rank.has(fold(String(value)))) rank.set(fold(String(value)), rank.size);
+      for (const value of (args.order ?? []) as string[]) if (!rank.has(fold(value))) rank.set(fold(value), rank.size);
 
-      const indices = selectIndices(context, filters, args.scope).sort((a, b) => a - b);
+      const { indices, narrowed } = targets(context, filters, args.scope);
+      indices.sort((a, b) => a - b);
       if (indices.length === 0) return { result: { elements: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
 
       // On construit du bas vers le haut : un étage se place à la hauteur médiane du bas de ses
@@ -835,6 +610,16 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         finish = Math.max(finish, to);
         periods.push({ value: group.values.join(' · ') || 'tous', elements: group.members.length, from: formatScheduleDate(from), to: formatScheduleDate(to) });
       }
+      const summary = {
+        elements: indices.length, startProperty: startPath, endProperty: endPath,
+        from: formatScheduleDate(first), to: formatScheduleDate(finish),
+        ...(orderBy.length > 0 ? { orderBy } : {}),
+        ...(bottom.size > 0 ? { sequence: `${rank.size > 0 ? 'Ordre dicté, puis d' : 'D'}u plus bas au plus haut, d’après la maquette.` } : {}),
+        ...(placed > 0 ? { placedByHeight: `Sans « ${orderBy[0]} », ${plural(placed, 'élément')} : chacun rangé avec l’étage où il se trouve.` } : {}),
+        periods: periods.slice(0, 30), ...(periods.length > 30 ? { morePeriods: periods.length - 30 } : {}),
+        ...narrowedNote(narrowed),
+      };
+      if (args.dryRun === true) return { result: { dryRun: true, ...summary }, note: `Aperçu : dates sur ${plural(indices.length, 'élément')} (${plural(periods.length, 'période')}), rien n’est écrit` };
       const changed = context.writeProperties(updates);
       let planning: Record<string, unknown> = { opened: false };
       if (context.openPlanning) {
@@ -845,16 +630,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         }
       }
       return {
-        result: {
-          elements: indices.length, startProperty: startPath, endProperty: endPath,
-          from: formatScheduleDate(first), to: formatScheduleDate(finish),
-          ...(orderBy.length > 0 ? { orderBy } : {}),
-          ...(bottom.size > 0 ? { sequence: `${rank.size > 0 ? 'Ordre dicté, puis d' : 'D'}u plus bas au plus haut, d’après la maquette.` } : {}),
-          ...(placed > 0 ? { placedByHeight: `Sans « ${orderBy[0]} », ${plural(placed, 'élément')} : chacun rangé avec l’étage où il se trouve.` } : {}),
-          periods: periods.slice(0, 30), ...(periods.length > 30 ? { morePeriods: periods.length - 30 } : {}),
-          ...(changed ? {} : { unchanged: 'Ces dates étaient déjà écrites.' }),
-          planning, next: DONE,
-        },
+        result: { ...summary, ...(changed ? {} : { unchanged: 'Ces dates étaient déjà écrites.' }), planning, next: DONE },
         note: `Dates de planning écrites sur ${plural(indices.length, 'élément')} (${plural(periods.length, 'période')})`,
       };
     }

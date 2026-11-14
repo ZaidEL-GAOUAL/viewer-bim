@@ -19,6 +19,8 @@ export class PropertyEdits {
   get count(): number { return this.cursor; }
   get canUndo(): boolean { return this.cursor > 0; }
   get canRedo(): boolean { return this.cursor < this.changes.length; }
+  /** The step `undo` would revert, as an opaque token: lets a caller undo its own step only if nothing came after it. */
+  get lastChange(): object | null { return this.changes[this.cursor - 1] ?? null; }
   private entry(i: number): Entry { const props = this.store.propsOf(i); return { props: props ? { ...props } : undefined, label: this.store.labelOf(i) }; }
   private apply(entries: Map<number, Entry>, readOnly?: string[]): void {
     for (const [i, entry] of entries) this.store.set(i, entry.props ? { ...entry.props } : undefined, entry.label);

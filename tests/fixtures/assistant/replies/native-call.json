@@ -1,0 +1,12 @@
+{
+  "source": "hand-written",
+  "note": "Écrit à la main d'après les formes déjà vues dans ce projet (worker/src/index.ts, tests du relais) ; pas un enregistrement. scripts/record-assistant.ts enregistre les vraies réponses à côté, dans recorded/.",
+  "dialect": "Appel natif OpenAI recopié en texte : arguments en chaîne JSON.",
+  "raw": "{\"id\": \"call_7\", \"type\": \"function\", \"function\": {\"name\": \"count_by\", \"arguments\": \"{\\\"property\\\": \\\"Niveau\\\"}\"}}",
+  "expect": {
+    "tool": "count_by",
+    "args": {
+      "property": "Niveau"
+    }
+  }
+}

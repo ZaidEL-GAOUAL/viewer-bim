@@ -1,6 +1,12 @@
 // Relais entre le viewer et un LLM. Le worker garde les clés et protège le quota ; il ne voit
 // passer que la conversation (résumé du modèle, résultats d'outils), jamais le fichier entier.
 // Le format est celui des « chat completions » d'OpenAI, compris par Workers AI, Groq et Cerebras.
+//
+// Deux sortes de requêtes :
+// - avec `tools` (le site déjà déployé) : appel d'outils natif, comme avant ;
+// - sans `tools` (le viewer actuel) : simple conversation, le modèle répond par un objet JSON en
+//   texte, mode JSON demandé aux fournisseurs compatibles OpenAI ; `provider` épingle le
+//   fournisseur de la première étape pour tout le tour.
 import { normalizeUsage, type TokenUsage } from '../../src/assistant/usage.ts';
 import { describeFailure, failureMessage, type ProviderFailure } from './diagnostics.ts';
 
@@ -34,13 +40,16 @@ interface Reply {
 interface Provider {
   name: string;
   model: string;
-  run(messages: unknown[], tools: unknown[]): Promise<Reply>;
+  /** `json` : réponse attendue en un objet JSON (mode JSON du fournisseur s'il en a un). */
+  run(messages: unknown[], tools: unknown[], json: boolean): Promise<Reply>;
 }
 
 const MAX_BODY_BYTES = 256_000;
 const MAX_MESSAGES = 80;
 const MAX_TOOLS = 20;
 const MAX_TOKENS = 1024;
+/** Délai accordé à chaque fournisseur ; le navigateur attend 60 s au plus par étape. */
+const PROVIDER_TIMEOUT_MS = 25_000;
 
 // ------------------------------------------------------------------- outils
 
@@ -48,31 +57,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseArguments(raw: unknown): Record<string, unknown> {
+/** Arguments d'un appel ; null s'ils sont illisibles (jamais un objet vide qui viserait tout le modèle). */
+function parseArguments(raw: unknown): Record<string, unknown> | null {
+  if (raw === undefined || raw === null || raw === '') return {};
   if (isRecord(raw)) return raw;
   if (typeof raw === 'string') {
     try {
       const parsed: unknown = JSON.parse(raw);
       if (isRecord(parsed)) return parsed;
     } catch {
-      // arguments illisibles : l'outil recevra un objet vide et le dira
+      // illisible : signalé ci-dessous
     }
   }
-  return {};
+  return null;
 }
 
-/** Appels d'outils, quel que soit le dialecte : OpenAI ({function:{name,arguments}}) ou Workers AI ({name,arguments}). */
-function normalizeToolCalls(raw: unknown): ToolCall[] {
-  if (!Array.isArray(raw)) return [];
-  const calls: ToolCall[] = [];
+/** Identifiant propre à une réponse : deux étapes d'un même tour n'ont jamais le même. */
+const callPrefix = () => `call_${crypto.randomUUID().slice(0, 8)}`;
+
+/** Appels d'outils, quel que soit le dialecte : OpenAI ({function:{name,arguments}}) ou Workers AI ({name,arguments}). Les illisibles sont écartés et nommés. */
+function normalizeToolCalls(raw: unknown, prefix = callPrefix()): { calls: ToolCall[]; unreadable: string[] } {
+  const calls: ToolCall[] = [], unreadable: string[] = [];
+  if (!Array.isArray(raw)) return { calls, unreadable };
   raw.forEach((item: unknown, index) => {
     if (!isRecord(item)) return;
     const fn = isRecord(item.function) ? item.function : item;
     if (typeof fn.name !== 'string') return;
     // Llama nomme les arguments « parameters » dans son format natif.
-    calls.push({ id: typeof item.id === 'string' ? item.id : `call_${index}`, name: fn.name, arguments: parseArguments(fn.arguments ?? fn.parameters) });
+    const args = parseArguments(fn.arguments ?? fn.parameters);
+    if (args === null) unreadable.push(fn.name);
+    else calls.push({ id: typeof item.id === 'string' && item.id ? item.id : `${prefix}_${index}`, name: fn.name, arguments: args });
   });
-  return calls;
+  return { calls, unreadable };
 }
 
 function textOf(content: unknown): string {
@@ -89,7 +105,7 @@ function textOf(content: unknown): string {
  * précédé de <|python_tag|>, ou déjà relu en objet par Workers AI). Sans cela, le viewer affichait
  * ce JSON comme réponse et rien n'était fait. Seuls les outils proposés sont reconnus.
  */
-function toolCallInText(content: unknown, tools: unknown[]): ToolCall | null {
+function toolCallInText(content: unknown, tools: unknown[], prefix: string): { calls: ToolCall[]; unreadable: string[] } | null {
   let value = content;
   if (typeof value === 'string') {
     const text = value.trim().replace(/^<\|python_tag\|>/, '').trim();
@@ -97,16 +113,26 @@ function toolCallInText(content: unknown, tools: unknown[]): ToolCall | null {
     try { value = JSON.parse(text); } catch { return null; }
   }
   if (!isRecord(value)) return null;
-  const call = normalizeToolCalls([value])[0];
-  const offered = tools.some((tool) => isRecord(tool) && isRecord(tool.function) && tool.function.name === call?.name);
-  return call && offered ? { ...call, id: 'call_text_0' } : null;
+  const name = isRecord(value.function) ? value.function.name : value.name;
+  const offered = tools.some((tool) => isRecord(tool) && isRecord(tool.function) && tool.function.name === name);
+  return offered ? normalizeToolCalls([{ ...value, id: `${prefix}_text` }], prefix) : null;
 }
 
-/** Contenu et appels d'outils d'une réponse, quel que soit le fournisseur. */
+/**
+ * Contenu et appels d'outils d'une réponse, quel que soit le fournisseur. Sans outils proposés
+ * (protocole texte), un appel natif éventuel est rendu en texte : le viewer le relit lui-même.
+ */
 function replyParts(content: unknown, rawCalls: unknown, tools: unknown[]): Pick<Reply, 'content' | 'tool_calls'> {
-  const calls = normalizeToolCalls(rawCalls);
-  const inText = calls.length === 0 ? toolCallInText(content, tools) : null;
-  return inText ? { content: '', tool_calls: [inText] } : { content: textOf(content), tool_calls: calls };
+  if (tools.length === 0) {
+    const text = textOf(content);
+    return { content: text || (Array.isArray(rawCalls) && rawCalls.length > 0 ? JSON.stringify(rawCalls[0]) : ''), tool_calls: [] };
+  }
+  const prefix = callPrefix();
+  const native = normalizeToolCalls(rawCalls, prefix);
+  const { calls, unreadable } = native.calls.length === 0 && native.unreadable.length === 0 ? toolCallInText(content, tools, prefix) ?? native : native;
+  // Des arguments illisibles ne deviennent jamais un appel à arguments vides : le viewer reçoit un message.
+  if (calls.length === 0 && unreadable.length > 0) return { content: `Le modèle a demandé l’outil ${unreadable[0]} avec des arguments illisibles ; rien n’a été fait. Reformulez la demande.`, tool_calls: [] };
+  return calls.length > 0 && native.calls.length === 0 ? { content: '', tool_calls: calls } : { content: textOf(content), tool_calls: calls };
 }
 
 // -------------------------------------------------------------- fournisseurs
@@ -116,6 +142,7 @@ function workersAi(env: Env): Provider {
   return {
     name: 'Cloudflare Workers AI',
     model,
+    // Mode JSON de Workers AI non utilisé : sa prise en charge par ce modèle n'est pas vérifiée, et le protocole s'en passe.
     async run(messages, tools) {
       // OpenAI autorise content: null lors d'un appel d'outil ; le binding Workers AI
       // exige une chaîne. Garder les appels et leurs identifiants pour relier les résultats.
@@ -136,19 +163,26 @@ function openAiCompatible(name: string, url: string, key: string, model: string)
   return {
     name,
     model,
-    async run(messages, tools) {
+    async run(messages, tools, json) {
       const body: Record<string, unknown> = { model, messages, max_tokens: MAX_TOKENS, temperature: 0.2 };
       if (tools.length > 0) {
         body.tools = tools;
         body.tool_choice = 'auto';
-      }
-      const response = await fetch(url, {
+      } else if (json) body.response_format = { type: 'json_object' };
+      const post = (payload: Record<string, unknown>) => fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
         redirect: 'error',
         credentials: 'omit',
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
       });
+      let response = await post(body);
+      // Mode JSON refusé (option inconnue de ce service, ou JSON que le modèle n'a pas su produire) : une fois sans.
+      if (response.status === 400 && body.response_format) {
+        delete body.response_format;
+        response = await post(body);
+      }
       // Upstream error text can contain request data or credentials: never return or log it.
       if (!response.ok) throw Object.assign(new Error('Upstream HTTP error'), { status: response.status });
       const output: unknown = await response.json();
@@ -203,6 +237,13 @@ function customProvider(raw: unknown, env: Env): Provider | null {
 
 // ------------------------------------------------------------------- HTTP
 
+/** Abandonne un fournisseur qui ne répond pas à temps (le binding Workers AI n'accepte pas de signal). */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(Object.assign(new Error(`Provider timed out after ${ms / 1000} s`), { name: 'TimeoutError' })), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function corsHeaders(origin: string): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': origin,
@@ -251,16 +292,21 @@ export default {
     if (!isRecord(body) || !Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > MAX_MESSAGES) {
       return json(400, { error: 'Requête invalide.' }, headers);
     }
-    const tools = Array.isArray(body.tools) ? body.tools.slice(0, MAX_TOOLS) : [];
+    // Avec `tools` : le dialogue d'avant (site déjà déployé). Sans : protocole texte, réponse en JSON.
+    const legacy = Array.isArray(body.tools);
+    const tools = legacy ? (body.tools as unknown[]).slice(0, MAX_TOOLS) : [];
     let custom: Provider | null;
     try { custom = customProvider(body.api, env); }
     catch (error) { return json(400, { error: error instanceof Error ? error.message : 'Configuration de l’API invalide.' }, headers); }
 
-    // Chaque fournisseur est tenté dans l'ordre ; le premier qui répond l'emporte.
+    // Chaque fournisseur est tenté dans l'ordre ; le premier qui répond l'emporte. Un fournisseur
+    // épinglé par le tour en cours est le seul tenté : un tour ne change pas de modèle en route.
+    const configured = custom ? [custom] : providers(env);
+    const pinned = typeof body.provider === 'string' ? configured.filter(({ name }) => name === body.provider) : [];
     const errors: ProviderFailure[] = [];
-    for (const provider of custom ? [custom] : providers(env)) {
+    for (const provider of pinned.length > 0 ? pinned : configured) {
       try {
-        const reply = await provider.run(body.messages, tools);
+        const reply = await withTimeout(provider.run(body.messages, tools, !legacy), PROVIDER_TIMEOUT_MS);
         return json(200, { ...reply, ...(errors.length ? { unreportedAttempts: errors.length } : {}) }, headers);
       } catch (error) {
         errors.push(describeFailure(provider.name, error));

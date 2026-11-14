@@ -36,3 +36,29 @@ export function toolContext(app: App): ToolContext {
     },
   };
 }
+
+/**
+ * État de la vue avant une action de l'assistant (sélection, visibilité, isolement, règles,
+ * regroupement) : la fonction rendue le rétablit, c'est l'action inverse du bouton « Annuler ».
+ */
+export function snapshotView(app: App): () => void {
+  const model = app.model;
+  if (!model) return () => {};
+  const selection = [...app.selection];
+  const visible = Array.from({ length: model.count }, (_, i) => model.state.isVisible(i));
+  const isolated = app.isolated;
+  const rules = app.appearanceRules.map((rule) => structuredClone(rule));
+  const grouping = [...app.grouping];
+  return () => {
+    if (app.model !== model) return;
+    // Un isolement posé par l'action se quitte d'abord : l'affichage d'avant revient, puis chaque élément est remis tel quel.
+    if (app.isolated && !isolated) app.toggleIsolate();
+    const show: number[] = [], hide: number[] = [];
+    visible.forEach((was, i) => { if (model.state.isVisible(i) !== was) (was ? show : hide).push(i); });
+    if (show.length > 0) app.setVisible(show, true);
+    if (hide.length > 0) app.setVisible(hide, false);
+    app.select(selection, 'panel');
+    app.setAppearanceRules(rules);
+    if (grouping.join('\u0000') !== app.grouping.join('\u0000')) app.groupBy(grouping.filter((path) => app.store.paths.includes(path)));
+  };
+}

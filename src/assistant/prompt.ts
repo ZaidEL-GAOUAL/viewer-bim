@@ -1,7 +1,8 @@
-// Message système envoyé au LLM : son rôle, les règles, et un résumé du modèle chargé (jamais
-// le fichier entier). Le résumé est borné pour tenir dans quelques milliers de caractères.
+// Message système envoyé au LLM : le protocole, un résumé du modèle chargé (jamais le fichier
+// entier) et les outils en une ligne chacun. Le résumé est borné à quelques milliers de caractères.
 
 import { PATH_SEP, UNDEFINED_LABEL, rankedValues, type PropertyStore } from '../data/metadata.ts';
+import { FORMAT, TOOL_RESULT_PREFIX, toolLines } from './protocol.ts';
 
 const MAX_GENERAL = 40;
 const MAX_CATEGORIES = 30;
@@ -97,6 +98,11 @@ export function summarizeProperties(store: PropertyStore): string {
   return text;
 }
 
+/**
+ * Message système du traducteur (couche 2) : le protocole JSON, le résumé du modèle, une ligne par
+ * outil. Les schémas complets ne partent qu'en seconde chance (protocol.ts) ; la correspondance des
+ * phrases courantes (« isole », « masque »…) est traitée par les commandes (intent.ts), sans modèle.
+ */
 export function buildSystemPrompt({ fileName, count, store }: ModelSummary): string {
   const locked = store.readOnly.length > 0 ? store.readOnly.join(', ') : 'aucune';
   // Un exemple tiré du modèle : un gabarit comme « Catégorie / Nom » était recopié tel quel.
@@ -105,29 +111,27 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
     ? `Une propriété rangée dans une catégorie s’écrit en entier, catégorie comprise, par exemple « ${nested} ».`
     : 'Les propriétés n’ont pas de catégorie.';
   return [
-    'Tu es l’assistant d’un viewer BIM. Tu lis les métadonnées JSON et aides à les analyser, à les compléter et à présenter la maquette.',
+    'Tu traduis les demandes faites à un viewer BIM en requêtes pour ses outils. Le viewer vérifie la requête, exécute l’outil et écrit lui-même le compte rendu à l’utilisateur.',
+    FORMAT,
+    `Le résultat d’un outil te revient dans un message « ${TOOL_RESULT_PREFIX}outil] … » ; continue (4 étapes au plus) ou termine par {"answer": "…"}. Après une action réussie, termine par {"answer": ""} sauf si la demande comporte une autre action distincte.`,
     '',
     `Modèle chargé : « ${fileName} », ${count.toLocaleString('fr-FR')} éléments, ${store.matched.toLocaleString('fr-FR')} avec des propriétés. ${nesting}`,
-    'Chaque élément a aussi un nom affiché et un identifiant, qui ne sont pas des propriétés : ils se filtrent avec property "#nom" et "#id" (dans tous les outils et les règles de couleur).',
-    `Champs verrouillés dans l’interface manuelle : ${locked}.`,
+    'Chaque élément a aussi un nom affiché et un identifiant, qui ne sont pas des propriétés : ils se filtrent avec property "#nom" et "#id".',
+    `Champs verrouillés (non modifiables) : ${locked}.`,
     '',
     summarizeProperties(store),
     '',
+    'Outils (« ? » : facultatif) :',
+    toolLines(),
+    'filters : liste de {property, op, value} combinés par ET, [] pour tous ; op : equals (défaut), not_equals, contains, missing, present, greater, less, greater_or_equal, less_or_equal. scope : "model" (défaut) ou "selection".',
+    'Formules (compute, set_property) : propriétés entre crochets, ex. [Longueur] * [Hauteur] ; condition : [Porteur] == true and [FireRating] == null.',
+    'update_view : rules = [{id, conditions: filters, color: "#rrggbb" ou opacity: 0..1}], groupBy = [propriétés].',
+    '',
     'Règles :',
-    '- Réponds en français, brièvement et concrètement.',
-    '- Tu peux écrire des propriétés avec set_property (ajouter ou modifier une propriété) et plan_dates (dates de début et de fin d’un planning prévisionnel, puis ouverture du Planning 4D). Ces modifications restent dans l’onglet : l’utilisateur peut les annuler, et les fichiers ne changent que s’il les exporte. Les champs verrouillés ne s’écrivent pas. Tu ne modifies pas les objets 3D et tu ne lis pas la géométrie : si une mesure ou coordonnée manque dans les métadonnées, dis-le.',
-    '- Pour vérifier une valeur, un nombre ou un identifiant, appelle les outils. Ne devine aucune donnée.',
-    '- Un identifiant donné par l’utilisateur suffit : le viewer le signale entre crochets à la fin de la demande. Filtre alors uniquement sur "#id" (equals), une seule fois, même si le nom est cité aussi. Sans identifiant, un élément nommé (« Mur pignon est ») se filtre sur "#nom" ; plusieurs éléments peuvent porter le même nom (un par niveau, par exemple) : si le résultat en contient plusieurs alors qu’il en vise un, précise avec une propriété (Niveau…) ou demande lequel.',
-    '- Une nouvelle sélection, mise en évidence ou visibilité remplace la précédente : ne refais pas une action déjà réussie avec un autre filtre.',
-    '- Les résultats de select_elements et set_visibility listent les noms des éléments touchés : vérifie qu’ils correspondent à la demande. Si c’est le cas, réponds directement sans autre appel ; sinon corrige le filtre.',
-    '- Pour les calculs, utilise compute : le navigateur effectue les sommes, moyennes et comparaisons sur les métadonnées, pas toi.',
-    '- Les noms de propriétés doivent correspondre au résumé ou à list_properties. Si le champ ou le périmètre est ambigu, pose une question courte.',
-    '- Correspondance des demandes de vue : « n’affiche que X », « affiche que X » (à l’oral, sans « ne »), « affiche seulement X », « montre uniquement X », « garde que X », « masque tout sauf X », « isole X », « le reste invisible » → select_elements avec isolate:true (le booléen true, pas le texte "true") ; « sélectionne X » seul → select_elements sans isolate ; « masque X » / « réaffiche X » → set_visibility (visible:false/true) ; « tout afficher » → set_visibility showAll:true ; « mets en évidence X », « surligne X », « fais ressortir X » → select_elements avec highlight:true ; « colorie X en vert », « rends X transparent » → update_view (règles) ; « regroupe l’arbre par … » → update_view groupBy ; « ajoute une propriété X = Y », « renseigne X à Y », « mets X à Y » → set_property ; dates de début et de fin, planning, durées « entre N et M jours » → plan_dates (orderBy : la propriété qui groupe les tâches, par exemple le niveau ou le code étage ; l’outil range lui-même les étages du plus bas au plus haut d’après la maquette, quels que soient leurs noms ; ne fournis order que si l’utilisateur a dicté lui-même l’ordre des valeurs).',
-    '- Pour désigner un groupe (« le bâtiment A », « le niveau R+1 »), traduis-le en filtres sur une propriété du résumé, souvent rangée dans une catégorie ; si la demande nomme cette catégorie, cherche la propriété dedans. En cas de doute sur la valeur exacte, vérifie avec count_by, puis agis.',
-    '- Les règles de présentation se cumulent : la dernière règle correspondante gagne séparément pour couleur et opacité. Consulte get_view_settings avant de modifier une pile existante. rules ajoute/remplace par id ; les autres restent. removeRuleIds retire des règles et ruleOrder contient tous les ids restants.',
-    '- Une règle a des conditions combinées par ET ; [] signifie tous les éléments. Les couleurs utilisent #rrggbb. Une opacité fixe est entre 0 et 1. Pour l’avancement, opacityBy avec scale:"percent" signifie 100→1 et 50→0.5 ; scale:"fraction" signifie 1→1 et 0.5→0.5. Vérifie les valeurs de la propriété avant de choisir l’échelle ; ne la devine pas si elle est ambiguë.',
-    '- groupBy est la liste ordonnée des propriétés de regroupement : par exemple Bâtiment, puis Niveau, puis Classe IFC. Une liste vide supprime le regroupement.',
-    '- Après une action de présentation, indique brièvement les règles ou niveaux appliqués. N’annonce une modification de données que si le résultat d’un outil la confirme, et rappelle qu’elle s’annule avec le bouton Annuler.',
-    '- Décris ce que l’outil a réellement fait, d’après son résultat : n’écris « isolés » que si isolated vaut true, « mis en évidence » que si highlighted vaut true ; sinon dis « sélectionnés ».',
+    '- Ne devine aucune donnée : les noms de propriétés viennent du résumé ou de list_properties, les valeurs se vérifient (count_by). Les calculs se font avec compute.',
+    '- Un identifiant cité par l’utilisateur est signalé entre crochets à la fin de sa demande : filtre alors uniquement sur "#id".',
+    '- Tu n’écris des propriétés qu’avec set_property et plan_dates (annulables). Tu ne lis ni ne modifies la géométrie : si une mesure manque dans les métadonnées, dis-le.',
+    '- Si la propriété, la valeur ou le périmètre est ambigu, pose une question courte avec {"answer": "…"}.',
+    '- Réponds en français.',
   ].join('\n');
 }

@@ -1,0 +1,19 @@
+{
+  "source": "hand-written",
+  "note": "Écrit à la main d'après les formes déjà vues dans ce projet (worker/src/index.ts, tests du relais) ; pas un enregistrement. scripts/record-assistant.ts enregistre les vraies réponses à côté, dans recorded/.",
+  "dialect": "Format demandé : un seul objet JSON.",
+  "raw": "{\"tool\": \"select_elements\", \"args\": {\"filters\": [{\"property\": \"Niveau\", \"op\": \"equals\", \"value\": \"R+1\"}], \"isolate\": true}}",
+  "expect": {
+    "tool": "select_elements",
+    "args": {
+      "filters": [
+        {
+          "property": "Niveau",
+          "op": "equals",
+          "value": "R+1"
+        }
+      ],
+      "isolate": true
+    }
+  }
+}

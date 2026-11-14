@@ -1,0 +1,1805 @@
+{
+ "about": "Phrases du corpus des commandes (couche 1, sans modèle de langage) : français, anglais, style dicté avec fautes. expect : l'appel d'outil attendu, les choix d'une question (ambiguity), l'annulation (undo), ou null quand la couche 1 doit refuser et laisser la demande au modèle. scripts/scorecard-assistant.ts compare aussi les réponses enregistrées des modèles à ces attentes.",
+ "models": {
+  "exemple": {
+   "description": "Le modèle de tests/assistant.test.ts : IFC francisé, niveaux RDC et R+1.",
+   "readOnly": [
+    "Classe IFC",
+    "Niveau",
+    "Matériaux",
+    "Qto_*"
+   ],
+   "elements": [
+    {
+     "key": "a",
+     "label": "Mur A",
+     "props": {
+      "Classe IFC": "IfcWall",
+      "Nom": "Mur A",
+      "Niveau": "RDC",
+      "Matériaux": "Béton",
+      "Pset_WallCommon / FireRating": "REI 120",
+      "Qto_WallBaseQuantities / NetVolume": 5.6
+     }
+    },
+    {
+     "key": "b",
+     "label": "Mur B",
+     "props": {
+      "Classe IFC": "IfcWall",
+      "Nom": "Mur B",
+      "Niveau": "RDC",
+      "Pset_WallCommon / FireRating": "",
+      "Qto_WallBaseQuantities / NetVolume": 2.1
+     }
+    },
+    {
+     "key": "c",
+     "label": "Porte 1",
+     "props": {
+      "Classe IFC": "IfcDoor",
+      "Nom": "Porte 1",
+      "Niveau": "R+1",
+      "Matériaux": "Bois"
+     }
+    },
+    {
+     "key": "d",
+     "label": "Dalle",
+     "props": {
+      "Classe IFC": "IfcSlab",
+      "Nom": "Dalle",
+      "Niveau": "R+1",
+      "Matériaux": "Béton"
+     }
+    },
+    {
+     "key": "e",
+     "label": "Poteau",
+     "props": {
+      "Classe IFC": "IfcColumn",
+      "Nom": "Poteau",
+      "Niveau": "RDC",
+      "Matériaux": "Béton"
+     }
+    },
+    {
+     "key": "f",
+     "label": null,
+     "props": null
+    }
+   ]
+  },
+  "etages": {
+   "description": "Export Revit francisé : codes d'étage GF/1F/2F/RF/F.G.L, niveaux RDC/R+1/R+2 dans « Niveau » (sols, portes, fenêtres) et dans « Contraintes / Contrainte inférieure » (murs, poteaux), deux bâtiments.",
+   "readOnly": [],
+   "elements": [
+    {
+     "key": "EL-0001",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "GF",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0002",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "GF",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "B",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0003",
+     "label": "Mur intérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "GF",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": false,
+      "Dimensions / Épaisseur (mm)": 100,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0004",
+     "label": "Dalle",
+     "props": {
+      "Catégorie": "Sols",
+      "Code étage": "GF",
+      "Niveau": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0005",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "GF",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0006",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "GF",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "B",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0007",
+     "label": "Porte",
+     "props": {
+      "Catégorie": "Portes",
+      "Code étage": "GF",
+      "Niveau": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Bois",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0008",
+     "label": "Fenêtre",
+     "props": {
+      "Catégorie": "Fenêtres",
+      "Code étage": "GF",
+      "Niveau": "RDC",
+      "Bâtiment": "B",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0009",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "1F",
+      "Contraintes / Contrainte inférieure": "R+1",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0010",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "1F",
+      "Contraintes / Contrainte inférieure": "R+1",
+      "Bâtiment": "B",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0011",
+     "label": "Mur intérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "1F",
+      "Contraintes / Contrainte inférieure": "R+1",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": false,
+      "Dimensions / Épaisseur (mm)": 100,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0012",
+     "label": "Dalle",
+     "props": {
+      "Catégorie": "Sols",
+      "Code étage": "1F",
+      "Niveau": "R+1",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0013",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "1F",
+      "Contraintes / Contrainte inférieure": "R+1",
+      "Bâtiment": "A",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0014",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "1F",
+      "Contraintes / Contrainte inférieure": "R+1",
+      "Bâtiment": "B",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0015",
+     "label": "Porte",
+     "props": {
+      "Catégorie": "Portes",
+      "Code étage": "1F",
+      "Niveau": "R+1",
+      "Bâtiment": "A",
+      "Matériau": "Bois",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0016",
+     "label": "Fenêtre",
+     "props": {
+      "Catégorie": "Fenêtres",
+      "Code étage": "1F",
+      "Niveau": "R+1",
+      "Bâtiment": "B",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0017",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "2F",
+      "Contraintes / Contrainte inférieure": "R+2",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0018",
+     "label": "Mur extérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "2F",
+      "Contraintes / Contrainte inférieure": "R+2",
+      "Bâtiment": "B",
+      "Matériau": "Béton",
+      "Porteur": true,
+      "Dimensions / Épaisseur (mm)": 200,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0019",
+     "label": "Mur intérieur",
+     "props": {
+      "Catégorie": "Murs",
+      "Code étage": "2F",
+      "Contraintes / Contrainte inférieure": "R+2",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Porteur": false,
+      "Dimensions / Épaisseur (mm)": 100,
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0020",
+     "label": "Dalle",
+     "props": {
+      "Catégorie": "Sols",
+      "Code étage": "2F",
+      "Niveau": "R+2",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0021",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "2F",
+      "Contraintes / Contrainte inférieure": "R+2",
+      "Bâtiment": "A",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0022",
+     "label": "Poteau",
+     "props": {
+      "Catégorie": "Poteaux",
+      "Code étage": "2F",
+      "Contraintes / Contrainte inférieure": "R+2",
+      "Bâtiment": "B",
+      "Matériau": "Acier",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0023",
+     "label": "Porte",
+     "props": {
+      "Catégorie": "Portes",
+      "Code étage": "2F",
+      "Niveau": "R+2",
+      "Bâtiment": "A",
+      "Matériau": "Bois",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0024",
+     "label": "Fenêtre",
+     "props": {
+      "Catégorie": "Fenêtres",
+      "Code étage": "2F",
+      "Niveau": "R+2",
+      "Bâtiment": "B",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0025",
+     "label": "Toit",
+     "props": {
+      "Catégorie": "Toits",
+      "Code étage": "RF",
+      "Niveau": "Toiture",
+      "Bâtiment": "A",
+      "Matériau": "Bois",
+      "Phase": "Nouvelle construction"
+     }
+    },
+    {
+     "key": "EL-0026",
+     "label": "Semelle",
+     "props": {
+      "Catégorie": "Fondations",
+      "Code étage": "F.G.L",
+      "Contraintes / Contrainte inférieure": "RDC",
+      "Bâtiment": "A",
+      "Matériau": "Béton",
+      "Phase": "Existant"
+     }
+    }
+   ]
+  }
+ },
+ "cases": [
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque le niveau R+1",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "R+1"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole le RDC",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "RDC"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "affiche que le béton",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Matériaux",
+       "op": "equals",
+       "value": "Béton"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Colorie le béton en vert",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-couleur-materiaux-beton",
+       "name": "Matériaux = Béton : vert",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Matériaux",
+         "op": "equals",
+         "value": "Béton"
+        }
+       ],
+       "color": "#43a047"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Combien d’éléments par niveau ?",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Niveau"
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Quels éléments n’ont pas de matériau ?",
+   "expect": {
+    "tool": "find_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Matériaux",
+       "op": "missing"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Résume ce modèle en quelques lignes.",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole les murs",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "mets en évidance Mur A",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Nom",
+       "op": "equals",
+       "value": "Mur A"
+      }
+     ],
+     "highlight": true
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque la porte 1",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Nom",
+       "op": "equals",
+       "value": "Porte 1"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "sélectionne les IfcWall",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Classe IFC",
+       "op": "equals",
+       "value": "IfcWall"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "renseigne FireRating à REI 60 pour les IfcWall",
+   "expect": {
+    "tool": "set_property",
+    "args": {
+     "filters": [
+      {
+       "property": "Classe IFC",
+       "op": "equals",
+       "value": "IfcWall"
+      }
+     ],
+     "property": "Pset_WallCommon / FireRating",
+     "value": "REI 60"
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "tout afficher",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [],
+     "showAll": true
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "regroupe l'arbre par niveau puis classe IFC",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "groupBy": [
+      "Niveau",
+      "Classe IFC"
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "isole les éléments du RDC en béton",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Matériaux",
+       "op": "equals",
+       "value": "Béton"
+      },
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "RDC"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque le R+1 et le RDC",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "isole les mures",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "en",
+   "style": "typed",
+   "text": "hide R+1",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "R+1"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "en",
+   "style": "typed",
+   "text": "highlight the concrete",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "rends le R+1 transparent",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-opacite-niveau-r+1",
+       "name": "Niveau = R+1 : opacité 30 %",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Niveau",
+         "op": "equals",
+         "value": "R+1"
+        }
+       ],
+       "opacity": 0.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "mets l'opacité du R+1 à 40 %",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-opacite-niveau-r+1",
+       "name": "Niveau = R+1 : opacité 40 %",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Niveau",
+         "op": "equals",
+         "value": "R+1"
+        }
+       ],
+       "opacity": 0.4
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "annule ce que tu as fait",
+   "expect": {
+    "undo": true
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "affiche les murs",
+   "expect": null
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "est-ce que tu peux masquer le niveau R plus 1 s'il te plaît",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "R+1"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole la sélection",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [],
+     "isolate": true,
+     "scope": "selection"
+    }
+   }
+  },
+  {
+   "model": "exemple",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Quelle est la somme des volumes des murs ?",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole le bâtiment A",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Bâtiment",
+       "op": "equals",
+       "value": "A"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "n’affiche que le bâtiment A, le reste invisible",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Bâtiment",
+       "op": "equals",
+       "value": "A"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque le niveau R+2",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "R+2"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque R+2",
+   "expect": {
+    "ambiguity": [
+     "Contraintes / Contrainte inférieure = R+2 (5 éléments)",
+     "Niveau = R+2 (3 éléments)"
+    ]
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "isole R plus 1",
+   "expect": {
+    "ambiguity": [
+     "Contraintes / Contrainte inférieure = R+1 (5 éléments)",
+     "Niveau = R+1 (3 éléments)"
+    ]
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "affiche que le 1F",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "1F"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "isole le 2 F",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "2F"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole l'étage 1F",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "1F"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole le F.G.L",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "F.G.L"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "isole le FGL",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "colorie les murs en rouge",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-couleur-categorie-murs",
+       "name": "Catégorie = Murs : rouge",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Catégorie",
+         "op": "equals",
+         "value": "Murs"
+        }
+       ],
+       "color": "#e53935"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "colorie en bleu les portes",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-couleur-categorie-portes",
+       "name": "Catégorie = Portes : bleu",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Catégorie",
+         "op": "equals",
+         "value": "Portes"
+        }
+       ],
+       "color": "#1e88e5"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "rends les dalles transparentes",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-opacite-nom-dalle",
+       "name": "Nom de l’élément = Dalle : opacité 30 %",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "#nom",
+         "op": "equals",
+         "value": "Dalle"
+        }
+       ],
+       "opacity": 0.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "fais ressortir les poteaux du bâtiment B",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Bâtiment",
+       "op": "equals",
+       "value": "B"
+      },
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Poteaux"
+      }
+     ],
+     "highlight": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole les murs porteurs",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      },
+      {
+       "property": "Porteur",
+       "op": "equals",
+       "value": true
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole les murs de 200",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      },
+      {
+       "property": "Dimensions / Épaisseur (mm)",
+       "op": "equals",
+       "value": 200
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de portes ?",
+   "expect": {
+    "tool": "find_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Portes"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien d'éléments par code étage",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Code étage"
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs par niveau",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "regroupe l'arbre par bâtiment, puis code étage",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "groupBy": [
+      "Bâtiment",
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "regroupe par niveau",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "groupBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "ajoute une date de début et une date de fin à chaque objet, chantier du 04/01/2026 au 12/12/2027, 15 à 45 jours par objet, ordonnés par code étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2026-01-04",
+     "end": "2027-12-12",
+     "minDays": 15,
+     "maxDays": 45,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "planifie du 4 janvier 2026 au 12 décembre 2027 chaque élément dure entre 15 et 45 jours par code étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2026-01-04",
+     "end": "2027-12-12",
+     "minDays": 15,
+     "maxDays": 45,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning du 04/01/2026 au 12/12/2027",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning du 04/01/2026 au 12/12/2027, 15 à 45 jours, par niveau de base",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "ajoute une propriété Lot = Gros œuvre aux murs",
+   "expect": {
+    "tool": "set_property",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      }
+     ],
+     "property": "Lot",
+     "value": "Gros œuvre"
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "mets Phase à Existant sur les poteaux",
+   "expect": {
+    "tool": "set_property",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Poteaux"
+      }
+     ],
+     "property": "Phase",
+     "value": "Existant"
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "mets la propriété Commentaires à vérifié",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole les éléments sans matériau",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Matériau",
+       "op": "missing"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "quels éléments n'ont pas de matériau",
+   "expect": {
+    "tool": "find_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Matériau",
+       "op": "missing"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "mets en évidence EL-0003",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "#id",
+       "op": "equals",
+       "value": "EL-0003"
+      }
+     ],
+     "highlight": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole EL-0003 et EL-0004",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque les murs et les portes",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "réaffiche le 2F",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "2F"
+      }
+     ],
+     "visible": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "sélectionne les fenêtres",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Fenêtres"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole la toiture",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Niveau",
+       "op": "equals",
+       "value": "Toiture"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole le niveau 3",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque tout sauf le bâtiment B",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Bâtiment",
+       "op": "equals",
+       "value": "B"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "ne garde que les fondations",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Fondations"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque les éléments existants",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Phase",
+       "op": "equals",
+       "value": "Existant"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "peux-tu isoler le bâtiment A stp",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Bâtiment",
+       "op": "equals",
+       "value": "A"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "hide 2F",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "2F"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "show only GF",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "GF"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "group the tree by Bâtiment then Code étage",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "groupBy": [
+      "Bâtiment",
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "color 1F blue",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-couleur-code-etage-1f",
+       "name": "Code étage = 1F : blue",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Code étage",
+         "op": "equals",
+         "value": "1F"
+        }
+       ],
+       "color": "#1e88e5"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "make GF transparent",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "rules": [
+      {
+       "id": "assistant-opacite-code-etage-gf",
+       "name": "Code étage = GF : opacité 30 %",
+       "enabled": true,
+       "conditions": [
+        {
+         "property": "Code étage",
+         "op": "equals",
+         "value": "GF"
+        }
+       ],
+       "opacity": 0.3
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "show 2F again",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "2F"
+      }
+     ],
+     "visible": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "how many elements by Bâtiment",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Bâtiment"
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "set Phase to Existant for 2F",
+   "expect": {
+    "tool": "set_property",
+    "args": {
+     "filters": [
+      {
+       "property": "Code étage",
+       "op": "equals",
+       "value": "2F"
+      }
+     ],
+     "property": "Phase",
+     "value": "Existant"
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "isolate building A",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "undo",
+   "expect": {
+    "undo": true
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "show everything",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [],
+     "showAll": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole le niveau RDC et R+1",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "colorie les murs en rouge foncé",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque les murs extérieurs",
+   "expect": {
+    "tool": "set_visibility",
+    "args": {
+     "filters": [
+      {
+       "property": "#nom",
+       "op": "equals",
+       "value": "Mur extérieur"
+      }
+     ],
+     "visible": false
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "isole les murs de 200 mm",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      },
+      {
+       "property": "Dimensions / Épaisseur (mm)",
+       "op": "equals",
+       "value": 200
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs ont une épaisseur de 200",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "masque les portes du bâtiment C",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "cache",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "en",
+   "style": "typed",
+   "text": "show only GF and 1F",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "affiche moi que les portes",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Portes"
+      }
+     ],
+     "isolate": true
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "sélectionne les murs de la sélection",
+   "expect": {
+    "tool": "select_elements",
+    "args": {
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      }
+     ],
+     "scope": "selection"
+    }
+   }
+  }
+ ]
+}

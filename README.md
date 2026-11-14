@@ -264,12 +264,28 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   les noms des éléments touchés avant de répondre. Les calculs et règles s’exécutent dans le navigateur ; seuls
   le résumé, la conversation et des résultats bornés sont envoyés au modèle. Les contrôles
   manuels ne consomment aucun jeton d’IA.
+- **Commandes sans modèle, comptes rendus écrits par le code** : les demandes courantes
+  (isoler, masquer, réafficher, tout afficher, sélectionner, mettre en évidence, colorier,
+  rendre transparent, regrouper l’arbre, « combien de… », « combien par… », renseigner une
+  propriété, planning, annuler), en français ou en anglais, tapées ou dictées, sont reconnues
+  par le viewer d’après les noms et les valeurs du modèle chargé, sans appel au modèle d’IA ;
+  quand une phrase a plusieurs lectures (« R+2 » est une valeur de deux propriétés), il propose
+  les choix en boutons au lieu de deviner. Le reste est traduit par le modèle d’IA en une
+  requête JSON que le viewer vérifie (n’importe quel fournisseur compatible). Ce que l’assistant
+  a fait est toujours écrit par le viewer d’après le résultat, avec un bouton « Annuler » ; une
+  écriture sur plus de 200 éléments ou sur toute la maquette est d’abord montrée (nombre,
+  propriété, exemples) et attend « Appliquer ». Sans service d’IA joignable, l’onglet passe en
+  « commandes seulement ».
 - **API pour les agents** : les outils de l’assistant sont offerts à tout agent qui pilote la
   page, sans passer par le service d’IA du site. `window.viewerBim.tools` les décrit (nom,
   description, schéma JSON des arguments) et `window.viewerBim.call('plan_dates', {...})` les
   exécute ; un agent qui exécute du JavaScript dans l’onglet (extension de navigateur, Playwright)
   s’en sert directement. Les navigateurs qui proposent WebMCP (`document.modelContext`) les
-  reçoivent aussi comme outils déclarés. Les données restent dans l’onglet.
+  reçoivent aussi comme outils déclarés. Les données restent dans l’onglet. Les arguments sont
+  validés contre ces schémas (un booléen ou un nombre écrit en texte est accepté, un argument
+  inconnu ou manquant est refusé avec un message exact) ; un résultat dépasse au plus
+  8 000 caractères en JSON (`truncated` le signale) ; `set_property` et `plan_dates` acceptent
+  `dryRun: true`, qui calcule l’écriture et en rend un aperçu sans rien écrire.
 - **Usage et API** : l’assistant affiche les jetons d’entrée/sortie/total communiqués pendant
   la session ; `?` signale une mesure indisponible, sans estimation inventée. Les réglages permettent
   d’utiliser une API compatible personnelle ou d’entreprise via le relais. Les paramètres et

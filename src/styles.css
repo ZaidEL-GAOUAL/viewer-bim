@@ -1276,6 +1276,33 @@ button[aria-pressed='true'] {
   line-height: 1.35;
 }
 
+.chat.comment {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat.comment::before {
+  content: 'Commentaire du modèle : ';
+  font-weight: 600;
+}
+
+.assistant-result { white-space: normal; }
+.assistant-result > p { margin: 0; white-space: pre-wrap; }
+.assistant-figures { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 6px 0 0; font-size: 12px; }
+.assistant-figures dt { color: var(--muted); }
+.assistant-figures dd { margin: 0; font-variant-numeric: tabular-nums; }
+.assistant-table { max-height: 220px; margin-top: 6px; overflow: auto; }
+.assistant-table table { border-collapse: collapse; font-size: 11px; }
+.assistant-table th, .assistant-table td { padding: 2px 8px 2px 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.assistant-table th { color: var(--muted); font-weight: 600; }
+.assistant-more { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.assistant-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.assistant-actions button { height: auto; min-height: 26px; padding: 3px 10px; font-size: 11px; white-space: normal; text-align: left; }
+
 .assistant-usage { margin: 0; padding: 3px 12px 8px; font-size: 10px; color: var(--muted); border-bottom: 1px solid var(--border); }
 .assistant-usage-unknown { display: block; margin-top: 3px; }
 .assistant-api-settings { border-bottom: 1px solid var(--border); padding: 8px 12px; }

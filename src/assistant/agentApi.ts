@@ -2,6 +2,7 @@
 // (window.viewerBim) et déclarés à WebMCP quand le navigateur le propose. Aucun appel d'IA ici :
 // l'agent qui s'en sert apporte son propre modèle. Tout reste dans l'onglet.
 
+import { capResult } from './protocol.ts';
 import { TOOL_DEFINITIONS, runTool, type ToolContext, type ToolOutcome } from './tools.ts';
 
 interface AgentTool {
@@ -14,7 +15,7 @@ interface ViewerApi {
   readonly version: 1;
   /** Outils au format MCP : nom, description, schéma JSON des arguments. */
   readonly tools: readonly AgentTool[];
-  /** Exécute un outil : `result` pour l'agent, `note` lisible par une personne. */
+  /** Exécute un outil : `result` pour l'agent (8 000 caractères JSON au plus, `truncated` sinon), `note` lisible par une personne. */
   call(name: string, args?: Record<string, unknown> | string): ToolOutcome;
 }
 
@@ -35,7 +36,9 @@ export function createViewerApi(context: () => ToolContext | null): ViewerApi {
       if (typeof args === 'string') {
         try { parsed = JSON.parse(args); } catch { return { result: { error: 'Arguments JSON illisibles.' }, note: 'Arguments illisibles' }; }
       }
-      return runTool(name, parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}, current);
+      // Mêmes arguments validés et même plafond que pour le chat ; set_property et plan_dates acceptent dryRun.
+      const outcome = runTool(name, parsed, current);
+      return { ...outcome, result: capResult(outcome.result) };
     },
   });
 }

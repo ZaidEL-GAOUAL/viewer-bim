@@ -1,0 +1,10 @@
+{
+  "source": "hand-written",
+  "note": "Écrit à la main d'après les formes déjà vues dans ce projet (worker/src/index.ts, tests du relais) ; pas un enregistrement. scripts/record-assistant.ts enregistre les vraies réponses à côté, dans recorded/.",
+  "dialect": "Argument obligatoire manquant.",
+  "raw": "{\"name\": \"select_elements\", \"arguments\": {\"isolate\": true}}",
+  "expect": {
+    "error": "filters : argument obligatoire manquant",
+    "tool": "select_elements"
+  }
+}

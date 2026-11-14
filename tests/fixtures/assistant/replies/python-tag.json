@@ -1,0 +1,19 @@
+{
+  "source": "hand-written",
+  "note": "Écrit à la main d'après les formes déjà vues dans ce projet (worker/src/index.ts, tests du relais) ; pas un enregistrement. scripts/record-assistant.ts enregistre les vraies réponses à côté, dans recorded/.",
+  "dialect": "Llama 3.x sur Workers AI : <|python_tag|> puis name/parameters, booléen en texte.",
+  "raw": "<|python_tag|>{\"name\": \"set_visibility\", \"parameters\": {\"filters\": [{\"property\": \"Niveau\", \"op\": \"=\", \"value\": \"R+2\"}], \"visible\": \"false\"}}<|eom_id|>",
+  "expect": {
+    "tool": "set_visibility",
+    "args": {
+      "filters": [
+        {
+          "property": "Niveau",
+          "op": "equals",
+          "value": "R+2"
+        }
+      ],
+      "visible": false
+    }
+  }
+}

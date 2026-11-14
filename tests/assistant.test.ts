@@ -117,9 +117,12 @@ test('le message système résume les propriétés sans dépasser quelques milli
   const prompt = buildSystemPrompt({ fileName: 'test.glb', count: 6, store });
   assert.match(prompt, /« test.glb », 6 éléments, 5 avec des propriétés/);
   assert.match(prompt, /Champs verrouillés .* : Classe IFC, Niveau, Matériaux, Qto_\*/);
-  // Demande dictée sans « ne » (« affiche que les éléments en R1 ») : elle isole.
-  assert.match(prompt, /« affiche que X » \(à l’oral, sans « ne »\).* → select_elements avec isolate:true/);
-  assert.match(prompt, /n’écris « isolés » que si isolated vaut true/);
+  // Protocole JSON en texte, une ligne par outil ; la correspondance des phrases est passée aux commandes (intent.ts).
+  assert.match(prompt, /\{"tool": "<nom>", "args": \{…\}\}.*\{"answer": "<texte>"\}/);
+  assert.match(prompt, /^- select_elements\(filters, scope\?, isolate\?, highlight\?\) : Sélectionne et cadre/m);
+  assert.doesNotMatch(prompt, /affiche que X|isolated vaut true|"properties":/);
+  // Avant : ≈ 5 400 caractères de message système + ≈ 8 500 de définitions d'outils à chaque étape, pour ce modèle.
+  assert.ok(prompt.length < 7000, `message système de ${prompt.length} caractères, sans définitions d’outils à part`);
 
   // Un modèle aux valeurs toutes différentes ne liste que des exemples, et la taille reste bornée.
   const wide = new PropertyStore(3000);
@@ -155,15 +158,25 @@ test('trimHistory garde le message système et des échanges complets', () => {
   const messages: Message[] = [{ role: 'system', content: 'S' }];
   for (let i = 0; i < 30; i++) {
     messages.push({ role: 'user', content: `q${i}` });
-    messages.push({ role: 'assistant', content: null, tool_calls: [{ id: `c${i}`, type: 'function', function: { name: 'count_by', arguments: '{}' } }] });
-    messages.push({ role: 'tool', tool_call_id: `c${i}`, content: '{}' });
-    messages.push({ role: 'assistant', content: `r${i}` });
+    messages.push({ role: 'assistant', content: '{"tool":"count_by","args":{"property":"Niveau"}}' });
+    messages.push({ role: 'user', content: `[Résultat de count_by] {}` });
+    messages.push({ role: 'assistant', content: `{"answer":"r${i}"}` });
   }
   const trimmed = trimHistory(messages);
   assert.equal(trimmed[0].role, 'system');
-  assert.equal(trimmed[1].role, 'user');
+  assert.equal(trimmed[1].content.startsWith('q'), true, 'un échange commence par une question, jamais par un résultat');
   assert.ok(trimmed.length <= 41);
   assert.equal(trimmed[trimmed.length - 1], messages[messages.length - 1]);
+});
+
+test('trimHistory garde le tour en cours en entier, même plus long que la limite', () => {
+  const messages: Message[] = [{ role: 'system', content: 'S' }, { role: 'user', content: 'ancienne' }, { role: 'assistant', content: '{"answer":"ok"}' }];
+  const turnStart = messages.length;
+  messages.push({ role: 'user', content: 'question' });
+  for (let i = 0; i < 25; i++) messages.push({ role: 'assistant', content: '{"tool":"list_properties","args":{}}' }, { role: 'user', content: '[Résultat de list_properties] {}' });
+  const trimmed = trimHistory(messages, turnStart);
+  assert.deepEqual(trimmed.slice(0, 2).map((message) => message.content), ['S', 'question'], 'il envoyait le message système seul');
+  assert.equal(trimmed.length, 1 + messages.length - turnStart);
 });
 
 test('les définitions d’outils sont au format OpenAI et nomment des outils implémentés', () => {
@@ -183,16 +196,16 @@ test('compactHistory abrège les résultats d’outils des tours précédents', 
   const messages: Message[] = [
     { role: 'system', content: 'S' },
     { role: 'user', content: 'q' },
-    { role: 'assistant', content: null, tool_calls: [{ id: 'c', type: 'function', function: { name: 'find_elements', arguments: '{}' } }] },
-    { role: 'tool', tool_call_id: 'c', content: long },
-    { role: 'assistant', content: 'r' },
+    { role: 'assistant', content: '{"tool":"find_elements","args":{"filters":[]}}' },
+    { role: 'user', content: `[Résultat de find_elements] ${long}` },
+    { role: 'assistant', content: '{"answer":"r"}' },
   ];
   compactHistory(messages);
-  const tool = messages[3] as { content: string };
+  const tool = messages[3];
   assert.ok(tool.content.length < 300, `${tool.content.length} caractères`);
-  assert.ok(tool.content.startsWith(long.slice(0, 100)));
+  assert.ok(tool.content.startsWith(`[Résultat de find_elements] ${long.slice(0, 100)}`));
   assert.match(tool.content, /abrégé/);
-  assert.equal(messages[4].content, 'r');
+  assert.equal(messages[4].content, '{"answer":"r"}');
 });
 
 test('compileExpression : arithmétique, comparaisons, logique, fonctions, erreurs', () => {
@@ -332,10 +345,56 @@ test('select_elements avec highlight atténue le reste par deux règles empilée
   context.setAppearanceRules!([{ id: 'u1', enabled: true, conditions: [], color: '#ff0000' }, ...rulesOf()]);
   runTool('select_elements', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcDoor' }], highlight: true }, context);
   assert.deepEqual(rulesOf().map((rule) => rule.id), ['u1', 'assistant-dim-others', 'assistant-highlight']);
-  // Dans la sélection seulement : pas de règle d'atténuation (le périmètre n'est pas exprimable en conditions).
+  // Dans la sélection : le périmètre ne s'exprime pas en conditions, une règle par identifiant le remplace (il disait « mis en évidence » sans rien faire).
   context.setAppearanceRules!([]);
-  runTool('select_elements', { filters: [], scope: 'selection', highlight: true }, context);
-  assert.equal(rulesOf().length, 0);
+  const inSelection = runTool('select_elements', { filters: [], scope: 'selection', highlight: true }, context);
+  assert.equal(inSelection.note, '2 éléments mis en évidence');
+  assert.deepEqual(rulesOf().map((rule) => [rule.id, rule.conditions]), [
+    ['assistant-dim-others', []],
+    ['assistant-highlight', [{ property: '#id', op: 'equals', value: 'a' }]],
+    ['assistant-highlight-2', [{ property: '#id', op: 'equals', value: 'b' }]],
+  ]);
+  // Sans règles disponibles, le résultat ne prétend pas avoir mis en évidence.
+  const plain = { ...context, setAppearanceRules: undefined };
+  const refused = runTool('select_elements', { filters: [], highlight: true }, plain);
+  assert.equal((refused.result as { highlighted: boolean }).highlighted, false);
+  assert.match(refused.note, /sélectionnés/);
+});
+
+test('set_visibility sans visible ni showAll demande au lieu de réafficher', () => {
+  const { context, visibility } = sampleContext();
+  const outcome = runTool('set_visibility', { filters: [{ property: 'Niveau', op: 'equals', value: 'R+1' }] }, context);
+  assert.match((outcome.result as { error: string }).error, /visible/);
+  assert.deepEqual(visibility, []);
+});
+
+test('les éléments cités réduisent la cible de chaque outil à filtres, y compris les calculs et les écritures', () => {
+  const store = new PropertyStore(3);
+  ['Mur pignon est', 'Mur pignon est', 'Dalle'].forEach((label, i) => store.set(i, { Niveau: ['RDC', 'R+1', 'R+1'][i], Longueur: 10 + i }, label));
+  store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  const context: ToolContext = {
+    store, count: 3, keys: ['k0', 'k1', 'k2'], labelOf: (i) => store.labelOf(i)!, selection: new Set(), select: () => {},
+    mentioned: new Set([1]), writeProperties: (updates) => edits.setMany(updates),
+  };
+  const byName = [{ property: '#nom', op: 'equals', value: 'Mur pignon est' }];
+  assert.equal((runTool('find_elements', { filters: byName }, context).result as { count: number }).count, 1);
+  assert.equal((runTool('compute', { filters: byName, expression: '[Longueur]' }, context).result as { sum: number }).sum, 11);
+  runTool('set_property', { filters: byName, property: 'Lot', value: 'GO' }, context);
+  assert.deepEqual([0, 1].map((i) => store.propsOf(i)?.Lot), [undefined, 'GO']);
+});
+
+test('dryRun calcule l’écriture sans rien écrire : nombre, propriété et exemples de nouvelles valeurs', () => {
+  const { context, store, edits } = writableContext();
+  const preview = runTool('set_property', { filters: [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }], property: 'Lot', value: 'GO', dryRun: 'true' }, context);
+  const result = preview.result as { dryRun: boolean; count: number; created: boolean; sample: { element: string; before: unknown; after: unknown }[] };
+  assert.deepEqual([result.dryRun, result.count, result.created], [true, 2, true]);
+  assert.deepEqual(result.sample[0], { element: 'Mur A', before: null, after: 'GO' });
+  assert.equal(store.paths.includes('Lot'), false);
+  assert.equal(edits.canUndo, false);
+  const dates = runTool('plan_dates', { filters: [], start: '2026-01-05', end: '2026-12-18', minDays: 10, maxDays: 20, dryRun: true }, context).result as { dryRun: boolean; elements: number; planning?: unknown };
+  assert.deepEqual([dates.dryRun, dates.elements, dates.planning], [true, 6, undefined]);
+  assert.equal(store.paths.includes('Planning / Date début'), false);
 });
 
 /** Contexte où les outils peuvent écrire, par le même historique annulable que l'application. */
@@ -474,4 +533,21 @@ test('serviceLine dit « injoignable » quand la vérification a échoué, au li
   assert.match(serviceLine('', true), /injoignable/);
   assert.equal(serviceLine('Workers AI', false), 'Service : Workers AI');
   assert.equal(serviceLine('Workers AI', true), 'Service : Workers AI', 'un fournisseur connu l’emporte');
+});
+
+test('l’API des agents plafonne ses résultats comme le chat et accepte dryRun', () => {
+  const store = new PropertyStore(600);
+  for (let i = 0; i < 600; i++) store.set(i, { Niveau: `N${i % 3}`, Description: `Élément numéro ${i} avec un texte assez long` }, `Élément ${i}`);
+  store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  const context: ToolContext = { store, count: 600, keys: store.paths.map(String), labelOf: (i) => `Élément ${i}`, selection: new Set(), select: () => {}, writeProperties: (updates) => edits.setMany(updates) };
+  const api = createViewerApi(() => context);
+  const found = api.call('find_elements', { filters: [], properties: ['Description'], limit: 50 }).result as { count: number; truncated?: string };
+  assert.equal(found.count, 600);
+  assert.ok(JSON.stringify(found).length <= 8000);
+  const listed = api.call('get_element', { query: 'Élément' }).result;
+  assert.ok(JSON.stringify(listed).length <= 8000);
+  const preview = api.call('set_property', { filters: [], property: 'Lot', value: 'A', dryRun: true }).result as { dryRun: boolean; count: number };
+  assert.deepEqual([preview.dryRun, preview.count, edits.canUndo], [true, 600, false]);
+  assert.match((api.call('select_elements', {}).result as { error: string }).error, /filters : argument obligatoire manquant/);
 });

@@ -38,12 +38,15 @@ l'indique) ; tout le reste fonctionne.
 ## Modèles et relais
 
 - Par défaut : **Workers AI**, `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, dans le quota
-  gratuit de 10 000 neurones par jour. Chaque appel envoie les définitions des outils (≈ 10 000
-  caractères) et le message système (≈ 5 000 caractères et plus, selon le modèle chargé), soit
-  environ 5 000 jetons avant même la question et l'historique ; une question fait au moins deux
-  appels, donc plus de 10 000 jetons. À ce poids, le quota couvre de l'ordre de 30 questions par
-  jour, non mesuré : le compteur de jetons de l'onglet Assistant et le tableau de bord Cloudflare
-  donnent la valeur réelle. Au-delà, Cloudflare refuse jusqu'au lendemain ; rien n'est facturé.
+  gratuit de 10 000 neurones par jour. Les commandes courantes (« isole le niveau R+1 »,
+  « masque les portes », « combien d’éléments par niveau ? »…) sont comprises par le viewer
+  lui-même et n'appellent aucun modèle. Pour le reste, chaque étape envoie le message système
+  (protocole, résumé des propriétés, une ligne par outil : ≈ 4 000 caractères et plus, selon le
+  modèle chargé) et la conversation ; les définitions complètes des outils ne partent plus
+  (seulement le schéma d'un outil mal utilisé, en seconde chance). Une question fait une à
+  quatre étapes. Le compteur de jetons de l'onglet Assistant et le tableau de bord Cloudflare
+  donnent la consommation réelle. Au-delà du quota, Cloudflare refuse jusqu'au lendemain ; rien
+  n'est facturé.
 - Relais facultatifs quand Workers AI refuse : **Groq** et **Cerebras** (paliers gratuits, sans
   carte). Créer une clé chez eux, puis dans Cloudflare → Workers & Pages → `viewer-bim`
   → Settings → Variables and Secrets : `GROQ_API_KEY`, `CEREBRAS_API_KEY`. Modèles dans
@@ -77,7 +80,7 @@ la page le remet à zéro.
 ## Protection du quota
 
 - Origine vérifiée (`Origin`), 20 requêtes par minute et par adresse (binding « rate limit »),
-  corps limité à 256 Ko, 80 messages, 20 outils.
+  corps limité à 256 Ko, 80 messages, 20 outils (requêtes avec `tools`).
 - Les clés du service restent dans le worker. Une clé personnelle est transmise uniquement
   au relais puis à l’endpoint autorisé choisi, sans journalisation de la clé ou des erreurs
   brutes du fournisseur.
@@ -96,9 +99,25 @@ exécute le worker chez Cloudflare (nécessaire pour Workers AI).
 - `GET /` → `{ ok, providers: [{ name, model }] }`.
   Ce contrôle indique les fournisseurs configurés ; il n'appelle aucun modèle et ne garantit
   donc ni leur disponibilité ni le quota restant.
-- `POST /chat` avec `{ messages, tools, api? }` au format « chat completions » (OpenAI).
+- `POST /chat` avec `{ messages, api?, provider? }` au format « chat completions » (OpenAI) :
+  le viewer actuel n'envoie pas de `tools`. Le modèle répond en texte par un seul objet JSON,
+  `{"tool": "<nom>", "args": {…}}` ou `{"answer": "<texte>"}`, que le viewer lit, valide et
+  exécute lui-même (`src/assistant/protocol.ts`) ; les résultats d'outils lui reviennent comme
+  des messages `user` (« [Résultat de outil] … »). Le relais demande le mode JSON
+  (`response_format: {"type": "json_object"}`) aux fournisseurs compatibles OpenAI (Groq,
+  Cerebras, API personnelle), et le redemande sans si le service répond HTTP 400 ; pas à
+  Workers AI, dont la prise en charge par ce modèle n'est pas vérifiée (le protocole s'en passe).
+  `provider`, facultatif, est le nom rendu par la première étape du tour : seul ce fournisseur
+  est alors tenté, pour qu'un tour ne change pas de modèle en route.
   `api`, facultatif, vaut `{ endpoint, apiKey, model }` et ne fait jamais partie des messages.
-- Réponse : `{ content, tool_calls: [{ id, name, arguments }], provider, model, usage }`.
+- Compatibilité : une requête avec `tools` (le site tel qu'il était déployé avant ce
+  changement) garde l'appel d'outils natif d'avant. Différences : un appel d'outil aux
+  arguments illisibles n'est plus transmis avec des arguments vides (le viewer reçoit à la place
+  un message qui le dit), et chaque appel a un identifiant propre à la réponse.
+- Chaque fournisseur a 25 s pour répondre (au-delà : diagnostic `timeout`) ; le viewer attend
+  60 s au plus par étape.
+- Réponse : `{ content, tool_calls: [{ id, name, arguments }], provider, model, usage }`
+  (`tool_calls` est vide sans `tools`).
   `usage` contient `{ inputTokens, outputTokens, totalTokens }` ; chaque valeur est un entier
   mesuré ou `null` si elle n’est pas disponible. `unreportedAttempts`, facultatif, compte
   les tentatives précédentes sans mesure retournée.
