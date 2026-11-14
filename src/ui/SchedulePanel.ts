@@ -352,6 +352,23 @@ export class SchedulePanel {
     }, { class: 'primary' }));
   }
 
+  /**
+   * Le panneau tel qu'il est (fermé, vide, ou un autre planning) ; la fonction rendue y revient, si `opened` (ouvert
+   * ensuite par `fromMetadata`) est toujours le planning affiché : annuler ses dates ne laisse pas un planning sans dates.
+   */
+  snapshot(opened: MetadataScheduleOptions): () => void {
+    const schedule = this.compiled?.schedule ?? null, source = this.source, mapping = this.metadataMapping, open = !this.body.hidden;
+    return () => {
+      if (this.metadataMapping !== opened) return;
+      if (schedule) {
+        this.loadSchedule(schedule, source);
+        // Un planning tiré des métadonnées se relit sur les valeurs revenues.
+        if (mapping) { this.metadataMapping = mapping; this.rebind(); }
+      } else this.clear();
+      this.setOpen(open);
+    };
+  }
+
   /** Opens the planning built from date properties, kept in sync with later edits. Returns the task count. */
   fromMetadata(mapping: MetadataScheduleOptions): number {
     if (!this.app.model) throw new Error('Chargez une maquette pour créer le planning.');

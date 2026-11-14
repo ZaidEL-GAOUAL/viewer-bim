@@ -402,6 +402,49 @@
      }
     }
    ]
+  },
+  "niveau_revit": {
+   "description": "Export Revit dont la seule propriété d'étage s'appelle « Niveau » ; deux leurres contiennent le mot dans un nom plus long. « étage » doit trouver « Niveau » (vocabulaire courant, valueIndex.ts).",
+   "readOnly": [],
+   "elements": [
+    {
+     "key": "R-01",
+     "label": "Mur 1",
+     "props": {
+      "Catégorie": "Murs",
+      "Niveau": "RDC",
+      "Contraintes / Décalage par rapport au niveau (m)": 0,
+      "Cotes / Floor finish level (m)": 0
+     }
+    },
+    {
+     "key": "R-02",
+     "label": "Mur 2",
+     "props": {
+      "Catégorie": "Murs",
+      "Niveau": "R+1",
+      "Contraintes / Décalage par rapport au niveau (m)": 0.2,
+      "Cotes / Floor finish level (m)": 3.2
+     }
+    },
+    {
+     "key": "R-03",
+     "label": "Sol 1",
+     "props": {
+      "Catégorie": "Sols",
+      "Niveau": "RDC",
+      "Cotes / Floor finish level (m)": 0
+     }
+    },
+    {
+     "key": "R-04",
+     "label": "Porte 1",
+     "props": {
+      "Catégorie": "Portes",
+      "Niveau": "R+1"
+     }
+    }
+   ]
   }
  },
  "cases": [
@@ -1156,7 +1199,19 @@
    "lang": "fr",
    "style": "typed",
    "text": "combien de murs par niveau",
-   "expect": null
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Niveau",
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      }
+     ]
+    }
+   }
   },
   {
    "model": "etages",
@@ -1800,6 +1855,326 @@
      "scope": "selection"
     }
    }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "On démarre le chantier le 2 mars 2027 et chaque étage prend trois semaines : remplis le planning étage par étage.",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 21,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning à partir du 2 mars 2027, 3 semaines par étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 21,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Le chantier commence le 2 mars 2027, chaque niveau dure 15 jours",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 15,
+     "orderBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planifie à partir du 04/01/2026 avec 2 mois par code étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2026-01-04",
+     "daysPerGroup": 60,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "début du chantier le 2 mars 2027, deux semaines par étage, étage par étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 14,
+     "orderBy": [
+      "Code étage"
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning à partir du 2 mars 2027, 3 semaines",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning à partir du 2 mars 2027, 3 jours par objet",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "chaque étage prend trois semaines",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "le 2 mars 2027, chaque étage prend entre 2 et 3 semaines",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning le 2 mars 2027, chaque étage prend 3 semaines sauf le 2F",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning du 2 mars 2027, chaque étage prend 3 semaines, par niveau",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning du 04/01/2026 au 12/12/2027, 3 semaines par étage",
+   "expect": null
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "On démarre le chantier le 2 mars 2027 et chaque étage prend trois semaines : remplis le planning étage par étage.",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 21,
+     "orderBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "planning du 2 mars 2027, 3 semaines par étage",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 21,
+     "orderBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "Planning à partir du 2 mars 2027, trois semaines par niveau",
+   "expect": {
+    "tool": "plan_dates",
+    "args": {
+     "filters": [],
+     "start": "2027-03-02",
+     "daysPerGroup": 21,
+     "orderBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "regroupe par étage",
+   "expect": {
+    "tool": "update_view",
+    "args": {
+     "groupBy": [
+      "Niveau"
+     ]
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien par étage",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Niveau"
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs par étage",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Niveau",
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "niveau_revit",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs par couleur",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de portes par code étage",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Code étage",
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Portes"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "dictated",
+   "text": "combien y a-t-il de poteaux par bâtiment ?",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Bâtiment",
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Poteaux"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs par étage",
+   "expect": {
+    "tool": "count_by",
+    "args": {
+     "property": "Code étage",
+     "filters": [
+      {
+       "property": "Catégorie",
+       "op": "equals",
+       "value": "Murs"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de R+2 par catégorie",
+   "expect": {
+    "ambiguity": [
+     "Contraintes / Contrainte inférieure = R+2 (5 éléments)",
+     "Niveau = R+2 (3 éléments)"
+    ]
+   }
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de licornes par niveau",
+   "expect": null
+  },
+  {
+   "model": "etages",
+   "lang": "fr",
+   "style": "typed",
+   "text": "combien de murs par niveau et par matériau",
+   "expect": null
   }
  ]
 }

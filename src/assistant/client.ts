@@ -26,8 +26,12 @@ interface ServiceStatus {
 }
 
 export interface TurnEvents {
-  /** Exécute un outil validé. `stop` : une écriture attend la confirmation de l'utilisateur, le tour s'arrête là. */
-  execute(name: string, args: Record<string, unknown>): { outcome: ToolOutcome; stop?: boolean };
+  /**
+   * Exécute un outil validé. `preview` : la requête suit une réponse invalide du même tour (seconde chance) ; une
+   * écriture est alors montrée avant d'être faite, quel que soit son nombre d'éléments. `stop` : une écriture attend
+   * la confirmation de l'utilisateur, le tour s'arrête là.
+   */
+  execute(name: string, args: Record<string, unknown>, preview: boolean): { outcome: ToolOutcome; stop?: boolean };
   onProvider(provider: string, model: string): void;
   onUsage?(usage: TokenUsage | null): void;
   /** Faux quand le modèle chargé a changé pendant le tour. */
@@ -168,6 +172,8 @@ export async function runTurn(url: string, messages: Message[], userText: string
   const ran: string[] = [];
   let provider: string | undefined;
   let retried = false;
+  /** Étape qui suit une réponse invalide : sa requête a été corrigée, une écriture y est montrée d'abord. */
+  let corrected = -1;
   const stale = () => events.isCurrent?.() === false;
   try {
     for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -199,12 +205,13 @@ export async function runTurn(url: string, messages: Message[], userText: string
           return { answer: null, ran, ending: 'invalid', invalid: action.error };
         }
         retried = true;
+        corrected = round + 1;
         messages.push({ role: 'user', content: retryMessage(action) });
         continue;
       }
       messages.push({ role: 'assistant', content: JSON.stringify(action) });
       if ('answer' in action) return { answer: action.answer, ran };
-      const { outcome, stop } = events.execute(action.tool, action.args);
+      const { outcome, stop } = events.execute(action.tool, action.args, round === corrected);
       ran.push(action.tool);
       messages.push({ role: 'user', content: toolResultMessage(action.tool, outcome.result) });
       if (stop) {

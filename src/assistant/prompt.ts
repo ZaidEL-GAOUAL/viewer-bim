@@ -126,12 +126,14 @@ export function buildSystemPrompt({ fileName, count, store }: ModelSummary): str
     'filters : liste de {property, op, value} combinés par ET, [] pour tous ; op : equals (défaut), not_equals, contains, missing, present, greater, less, greater_or_equal, less_or_equal. scope : "model" (défaut) ou "selection".',
     'Formules (compute, set_property) : propriétés entre crochets, ex. [Longueur] * [Hauteur] ; condition : [Porteur] == true and [FireRating] == null.',
     'update_view : rules = [{id, conditions: filters, color: "#rrggbb" ou opacity: 0..1}], groupBy = [propriétés].',
+    'plan_dates : orderBy = la propriété qui groupe les tâches (le niveau…) ; « N jours/semaines par étage » → daysPerGroup en jours, sans end ; filters = [] sauf si l’utilisateur limite le périmètre. N’invente ni filtre, ni date de fin, ni order.',
     '',
     'Règles :',
     '- Ne devine aucune donnée : les noms de propriétés viennent du résumé ou de list_properties, les valeurs se vérifient (count_by). Les calculs se font avec compute.',
     '- Un identifiant cité par l’utilisateur est signalé entre crochets à la fin de sa demande : filtre alors uniquement sur "#id".',
     '- Tu n’écris des propriétés qu’avec set_property et plan_dates (annulables). Tu ne lis ni ne modifies la géométrie : si une mesure manque dans les métadonnées, dis-le.',
     '- Si la propriété, la valeur ou le périmètre est ambigu, pose une question courte avec {"answer": "…"}.',
+    '- Après un refus (réponse invalide ou erreur d’outil), corrige seulement l’argument fautif et garde le reste de la requête.',
     '- Réponds en français.',
   ].join('\n');
 }

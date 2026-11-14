@@ -35,8 +35,11 @@ export interface ToolContext {
   groupBy?(paths: string[]): void;
   /** Écrit des valeurs (élément, propriété, valeur) en une seule étape annulable. Faux si rien n'a changé. */
   writeProperties?(updates: readonly (readonly [number, string, PropValue])[]): boolean;
-  /** Ouvre le Planning 4D à partir de deux propriétés de dates ; renvoie le nombre de tâches. */
-  openPlanning?(startProperty: string, endProperty: string): number;
+  /**
+   * Ouvre le Planning 4D à partir de deux propriétés de dates ; renvoie le nombre de tâches. `written` : les dates
+   * viennent d'être écrites en une étape annulable, et annuler cette étape rend au panneau son état d'avant.
+   */
+  openPlanning?(startProperty: string, endProperty: string, written?: boolean): number;
   /** Bas de l'élément sur l'axe vertical de la maquette (undefined sans géométrie). Sert à ranger un planning, jamais renvoyé au modèle. */
   heightOf?(index: number): number | undefined;
   isCurrent?(): boolean;
@@ -259,17 +262,22 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const path = resolveProperty(store, String(args.property ?? ''));
       if (typeof path !== 'string') return { result: path, note: path.error };
       if (isElementField(path)) return { result: { error: `${path} distingue chaque élément : utilisez find_elements avec un filtre sur ${path}.` }, note: 'Répartition impossible sur le nom ou l’identifiant' };
-      const scope = args.scope === 'selection' ? context.selection : null;
+      const filters = parseFilters(store, args.filters);
+      if (!Array.isArray(filters)) return { result: filters, note: filters.error };
+      // Sans filtre ni sélection, les groupes de la propriété suffisent ; sinon on ne garde que les éléments visés.
+      const { indices, narrowed } = filters.length > 0 || args.scope === 'selection' ? targets(context, filters, args.scope) : { indices: null, narrowed: 0 };
+      if (indices?.length === 0 && filters.length > 0) return { result: { total: 0, error: NO_MATCH, ...existingValues(store, filters) }, note: 'Aucun élément concerné' };
+      const within = indices && new Set(indices);
       const counts = new Map<string, number>();
       for (const [label, members] of store.groups(path)) {
-        const count = scope ? members.filter((index) => scope.has(index)).length : members.length;
+        const count = within ? members.filter((index) => within.has(index)).length : members.length;
         if (count > 0) counts.set(label, count);
       }
       const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
       const values = sorted.slice(0, COUNT_LIMIT).map(([value, count]) => ({ value: value === UNDEFINED_LABEL ? null : value, count }));
       const total = sorted.reduce((sum, [, count]) => sum + count, 0);
       return {
-        result: { property: path, total, distinct: sorted.length, values, truncated: sorted.length > COUNT_LIMIT },
+        result: { property: path, total, distinct: sorted.length, values, truncated: sorted.length > COUNT_LIMIT, ...narrowedNote(narrowed) },
         note: `Répartition par « ${path} » : ${plural(sorted.length, 'valeur')}`,
       };
     }
@@ -501,20 +509,29 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const filters = parseFilters(store, args.filters);
       if (!Array.isArray(filters)) return { result: filters, note: filters.error };
       const first = parseScheduleDate(args.start);
-      const last = parseScheduleDate(args.end);
-      if (last < first) throw new Error('La fin du chantier précède son début.');
-      const total = last - first + 1;
-      const shortest = dayCount(args.minDays, 'minDays');
-      const longest = dayCount(args.maxDays, 'maxDays');
-      const [minDays, maxDays] = shortest <= longest ? [shortest, longest] : [longest, shortest];
-      if (maxDays > total) throw new Error(`maxDays (${maxDays} j) dépasse la durée du chantier (${total} j).`);
+      // Une durée par groupe fixe toutes les dates : end, minDays et maxDays, s'ils sont donnés aussi, sont ignorés (et signalés).
+      const perGroup = args.daysPerGroup === undefined ? 0 : dayCount(args.daysPerGroup, 'daysPerGroup');
+      const ignored = perGroup ? ['end', 'minDays', 'maxDays'].filter((key) => args[key] !== undefined) : [];
+      let last = first, total = 1, minDays = perGroup, maxDays = perGroup;
+      if (!perGroup) {
+        last = parseScheduleDate(args.end);
+        if (last < first) throw new Error('La fin du chantier précède son début.');
+        total = last - first + 1;
+        const shortest = dayCount(args.minDays, 'minDays');
+        const longest = dayCount(args.maxDays, 'maxDays');
+        [minDays, maxDays] = shortest <= longest ? [shortest, longest] : [longest, shortest];
+        if (maxDays > total) throw new Error(`maxDays (${maxDays} j) dépasse la durée du chantier (${total} j).`);
+      }
       const startPath = writablePath(store, args.startProperty ?? 'Planning / Date début');
       if (typeof startPath !== 'string') return { result: startPath, note: startPath.error };
       const endPath = writablePath(store, args.endProperty ?? 'Planning / Date fin');
       if (typeof endPath !== 'string') return { result: endPath, note: endPath.error };
       if (startPath === endPath) throw new Error('Les propriétés de début et de fin doivent être différentes.');
       const orderBy: string[] = [];
-      for (const name of (args.orderBy ?? []) as string[]) {
+      const names = (args.orderBy ?? []) as string[];
+      // Une durée par groupe : les groupes sont les valeurs de la première propriété, les suivantes ne changeraient aucune date.
+      if (perGroup && names.length > 1) ignored.push(`orderBy après « ${names[0]} »`);
+      for (const name of perGroup ? names.slice(0, 1) : names) {
         const path = resolveProperty(store, name);
         if (typeof path !== 'string') return { result: path, note: path.error };
         orderBy.push(path);
@@ -590,17 +607,18 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       // chantier : le premier commence au début, le dernier finit à la fin, et un groupe dure à
       // proportion de son nombre d'éléments. Les départs ne reculent jamais, donc un groupe ne
       // commence pas avant le précédent. Chaque durée est tirée de l'identifiant de l'élément.
+      // Avec daysPerGroup, chaque groupe a sa période, le lendemain de la précédente, pour tous ses éléments.
       const updates: [number, string, PropValue][] = [];
       const periods: { value: string; elements: number; from: string; to: string }[] = [];
       const gaps = Math.max(1, indices.length - 1);
       let j = 0;
       let finish = first;
-      for (const group of ordered) {
+      for (const [g, group] of ordered.entries()) {
         let from = Infinity;
         let to = -Infinity;
         for (const index of group.members) {
-          const duration = minDays + (stableHash(context.keys[index] ?? String(index)) % (maxDays - minDays + 1));
-          const start = j > 0 && j === indices.length - 1 ? last - duration + 1 : first + Math.floor((j * (total - maxDays)) / gaps);
+          const duration = perGroup || minDays + (stableHash(context.keys[index] ?? String(index)) % (maxDays - minDays + 1));
+          const start = perGroup ? first + g * perGroup : j > 0 && j === indices.length - 1 ? last - duration + 1 : first + Math.floor((j * (total - maxDays)) / gaps);
           const end = start + duration - 1;
           updates.push([index, startPath, formatScheduleDate(start)], [index, endPath, formatScheduleDate(end)]);
           from = Math.min(from, start);
@@ -614,6 +632,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
         elements: indices.length, startProperty: startPath, endProperty: endPath,
         from: formatScheduleDate(first), to: formatScheduleDate(finish),
         ...(orderBy.length > 0 ? { orderBy } : {}),
+        ...(perGroup ? { daysPerGroup: perGroup } : {}),
+        ...(ignored.length > 0 ? { ignored: `Sans effet avec daysPerGroup : ${ignored.join(', ')}.` } : {}),
         ...(bottom.size > 0 ? { sequence: `${rank.size > 0 ? 'Ordre dicté, puis d' : 'D'}u plus bas au plus haut, d’après la maquette.` } : {}),
         ...(placed > 0 ? { placedByHeight: `Sans « ${orderBy[0]} », ${plural(placed, 'élément')} : chacun rangé avec l’étage où il se trouve.` } : {}),
         periods: periods.slice(0, 30), ...(periods.length > 30 ? { morePeriods: periods.length - 30 } : {}),
@@ -624,7 +644,7 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       let planning: Record<string, unknown> = { opened: false };
       if (context.openPlanning) {
         try {
-          planning = { opened: true, tasks: context.openPlanning(startPath, endPath) };
+          planning = { opened: true, tasks: context.openPlanning(startPath, endPath, changed) };
         } catch (error) {
           planning = { opened: false, error: error instanceof Error ? error.message : String(error) };
         }

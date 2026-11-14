@@ -4,6 +4,7 @@ import { compactHistory, serviceLine, trimHistory, type Message } from '../src/a
 import { compileExpression } from '../src/assistant/expression.ts';
 import { buildSystemPrompt, summarizeProperties } from '../src/assistant/prompt.ts';
 import { TOOL_DEFINITIONS, resolveProperty, runTool, type ToolContext } from '../src/assistant/tools.ts';
+import { answerFor } from '../src/assistant/answers.ts';
 import type { AppearanceRule } from '../src/data/appearanceRules.ts';
 import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
@@ -512,6 +513,73 @@ test('plan_dates construit du bas vers le haut d’après la hauteur réelle des
 
   // Un ordre dicté par l'utilisateur l'emporte ; les autres étages suivent, du plus bas au plus haut.
   assert.deepEqual(periods(runTool('plan_dates', { ...args, order: ['RF'] }, context)), ['RF', 'F.G.L', 'GF', '1F', '2F', '(non défini)']);
+});
+
+test('plan_dates avec daysPerGroup : une période par étage, à la suite, du bas vers le haut, mêmes dates pour tout l’étage', () => {
+  // Trois étages dont les noms ne se trient pas d'eux-mêmes ; l'élément 5 n'a pas d'étage mais il est posé au 1F.
+  const levels = ['1F', 'GF', '2F', 'GF', '1F', ''];
+  const bottoms = [3.2, 0, 6.4, 0.2, 3.1, 3.5];
+  const store = new PropertyStore(levels.length);
+  levels.forEach((level, index) => store.set(index, level ? { Niveau: level } : { Nom: 'sans niveau' }, `élément ${index}`));
+  store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  const opened: (boolean | undefined)[] = [];
+  const context: ToolContext = {
+    store, count: levels.length, keys: levels.map((_, index) => `k${index}`), labelOf: (index) => `élément ${index}`, selection: new Set(), select: () => {},
+    writeProperties: (updates) => edits.setMany(updates), heightOf: (index) => bottoms[index], openPlanning: (_start, _end, written) => { opened.push(written); return 3; },
+  };
+  const outcome = runTool('plan_dates', { filters: [], start: '2027-03-02', daysPerGroup: 21, orderBy: ['Niveau'] }, context);
+  const result = outcome.result as { from: string; to: string; daysPerGroup: number; periods: { value: string; elements: number; from: string; to: string }[] };
+  assert.deepEqual(result.periods, [
+    { value: 'GF', elements: 2, from: '2027-03-02', to: '2027-03-22' },
+    { value: '1F', elements: 3, from: '2027-03-23', to: '2027-04-12' },
+    { value: '2F', elements: 1, from: '2027-04-13', to: '2027-05-03' },
+  ]);
+  assert.deepEqual([result.from, result.to, result.daysPerGroup], ['2027-03-02', '2027-05-03', 21]);
+  const dates = (index: number) => [store.propsOf(index)?.['Planning / Date début'], store.propsOf(index)?.['Planning / Date fin']];
+  assert.deepEqual([0, 4, 5].map(dates), Array(3).fill(['2027-03-23', '2027-04-12']), 'tout le 1F, et l’élément posé dessus, partagent ses dates');
+  assert.deepEqual(dates(3), ['2027-03-02', '2027-03-22']);
+  assert.deepEqual(opened, [true], 'le planning est ouvert après une écriture annulable');
+  assert.equal(answerFor('plan_dates', {}, outcome).text, 'Dates de début et de fin écrites sur 6 éléments, du 2027-03-02 au 2027-05-03, 21 jours par valeur de « Niveau ». Planning 4D ouvert (3 tâches).');
+
+  // daysPerGroup donne toutes les dates : end, minDays, maxDays et un second orderBy sont ignorés, et le résultat le dit.
+  const both = runTool('plan_dates', { filters: [], start: '2027-03-02', end: '2027-03-10', minDays: 2, maxDays: 3, daysPerGroup: 21, orderBy: ['Niveau', 'Nom'] }, context).result as { to: string; ignored: string };
+  assert.equal(both.to, '2027-05-03');
+  assert.equal(both.ignored, 'Sans effet avec daysPerGroup : end, minDays, maxDays, orderBy après « Niveau ».');
+
+  // Sans orderBy, daysPerGroup n'a pas de groupes : refusé avant toute écriture.
+  edits.undo();
+  const refused = runTool('plan_dates', { filters: [], start: '2027-03-02', daysPerGroup: 21 }, context).result as { error: string };
+  assert.equal(refused.error, 'plan_dates — orderBy : argument obligatoire avec daysPerGroup (la propriété dont chaque valeur forme un groupe, ex. le niveau).');
+  assert.match((runTool('plan_dates', { filters: [], start: '2027-03-02', daysPerGroup: 21, orderBy: [] }, context).result as { error: string }).error, /orderBy : argument obligatoire avec daysPerGroup/);
+  assert.match((runTool('plan_dates', { filters: [], start: '2027-03-02', daysPerGroup: 0, orderBy: ['Niveau'] }, context).result as { error: string }).error, /daysPerGroup doit être un nombre de jours/);
+  assert.equal(store.paths.includes('Planning / Date début'), false);
+});
+
+test('plan_dates sans daysPerGroup demande toujours end, minDays et maxDays, avec les mêmes messages', () => {
+  const { context } = writableContext();
+  const error = (args: Record<string, unknown>) => (runTool('plan_dates', { filters: [], ...args }, context).result as { error: string }).error;
+  assert.equal(error({ end: '2027-12-12', minDays: 15, maxDays: 45 }), 'plan_dates — start : argument obligatoire manquant.');
+  assert.equal(error({ start: '2026-01-04', minDays: 15, maxDays: 45 }), 'plan_dates — end : argument obligatoire manquant.');
+  assert.equal(error({ start: '2026-01-04', end: '2027-12-12', maxDays: 45 }), 'plan_dates — minDays : argument obligatoire manquant.');
+  assert.equal(error({ start: '2026-01-04', end: '2027-12-12', minDays: 15 }), 'plan_dates — maxDays : argument obligatoire manquant.');
+});
+
+test('count_by avec filters ne compte que les éléments qui les vérifient', () => {
+  const { context } = sampleContext();
+  const walls = [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }];
+  const outcome = runTool('count_by', { property: 'Matériaux', filters: walls }, context);
+  const result = outcome.result as { total: number; values: { value: unknown; count: number }[] };
+  assert.equal(result.total, 2);
+  assert.deepEqual(result.values, [{ value: 'Béton', count: 1 }, { value: null, count: 1 }]);
+  assert.equal(answerFor('count_by', { property: 'Matériaux', filters: walls }, outcome).text, 'Répartition par « Matériaux » des éléments Classe IFC = IfcWall : 2 éléments, 2 valeurs.');
+  const several = [{ property: 'Matériaux', op: 'equals', value: 'Béton' }, { property: 'FireRating', op: 'missing' }];
+  assert.equal(answerFor('count_by', { property: 'Niveau', filters: several }, runTool('count_by', { property: 'Niveau', filters: several }, context)).text, 'Répartition par « Niveau » des éléments Matériaux = Béton et FireRating absent : 2 éléments, 2 valeurs.');
+  // Filtres et sélection se combinent ; une valeur absente du modèle donne les valeurs présentes.
+  assert.equal((runTool('count_by', { property: 'Niveau', filters: [{ property: 'Matériaux', value: 'Béton' }], scope: 'selection' }, context).result as { total: number }).total, 1);
+  const none = runTool('count_by', { property: 'Niveau', filters: [{ property: 'Classe IFC', value: 'IfcWindow' }] }, context).result as { error: string; existingValues: Record<string, string[]> };
+  assert.match(none.error, /Aucun élément ne vérifie ces filtres/);
+  assert.ok(none.existingValues['Classe IFC'].includes('IfcWall'));
 });
 
 test('l’API des agents expose les outils du chat, en direct et par WebMCP', async () => {

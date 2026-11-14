@@ -64,7 +64,7 @@ const tool = (name: string, description: string, properties: Record<string, Sche
 /** Format OpenAI (nom, description, schéma JSON des arguments) : compris par les fournisseurs, les agents et WebMCP. */
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   tool('list_properties', 'Propriétés du modèle avec leur nombre de valeurs distinctes.', { search: { type: 'string', description: 'Texte cherché dans les noms (facultatif).' } }),
-  tool('count_by', 'Répartition des éléments par valeur d’une propriété.', { property: { type: 'string', description: 'Nom de la propriété.' }, scope: SCOPE }, ['property']),
+  tool('count_by', 'Répartition des éléments par valeur d’une propriété.', { property: { type: 'string', description: 'Nom de la propriété.' }, filters: { ...FILTERS, description: `Facultatif : ne compte que les éléments qui les vérifient (ex. les types des seuls murs). ${FILTERS.description}` }, scope: SCOPE }, ['property']),
   tool('find_elements', 'Éléments vérifiant les filtres : total et premiers éléments avec les propriétés demandées.', {
     filters: FILTERS,
     properties: NAMES('Propriétés à renvoyer (facultatif).'),
@@ -105,20 +105,35 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     expression: { type: 'string', description: 'Formule par élément, à la place de value.' },
     dryRun: DRY_RUN,
   }, ['filters', 'property']),
-  tool('plan_dates', 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent groupe par groupe d’orderBy (ex. le niveau ou code étage), du plus bas au plus haut d’après la maquette quels que soient les noms, répartis régulièrement de start (premier début) à end (dernière fin) ; chaque élément dure entre minDays et maxDays jours. Annulable par l’utilisateur.', {
+  tool('plan_dates', 'Planning prévisionnel : écrit une date de début et une date de fin (AAAA-MM-JJ) sur chaque élément visé, puis ouvre le Planning 4D. Les éléments s’enchaînent groupe par groupe d’orderBy (ex. le niveau ou code étage), du plus bas au plus haut d’après la maquette quels que soient les noms. Avec daysPerGroup (« 3 semaines par étage » → 21), chaque valeur de la première propriété d’orderBy a sa période de daysPerGroup jours, les périodes se suivent à partir de start et tous les éléments d’un groupe en prennent les dates ; end, minDays et maxDays sont alors inutiles et ignorés. Sinon les éléments sont répartis régulièrement de start (premier début) à end (dernière fin) et chacun dure entre minDays et maxDays jours. Annulable par l’utilisateur.', {
     filters: FILTERS,
     scope: SCOPE,
     start: { type: 'string', format: 'date', description: 'Début du chantier, AAAA-MM-JJ.' },
-    end: { type: 'string', format: 'date', description: 'Fin du chantier, AAAA-MM-JJ.' },
-    minDays: { type: 'number', description: 'Durée minimale d’un élément, en jours.' },
-    maxDays: { type: 'number', description: 'Durée maximale d’un élément, en jours.' },
-    orderBy: NAMES('Propriétés qui ordonnent les tâches, la première d’abord.'),
+    end: { type: 'string', format: 'date', description: 'Fin du chantier, AAAA-MM-JJ (obligatoire sans daysPerGroup).' },
+    minDays: { type: 'number', description: 'Durée minimale d’un élément, en jours (obligatoire sans daysPerGroup).' },
+    maxDays: { type: 'number', description: 'Durée maximale d’un élément, en jours (obligatoire sans daysPerGroup).' },
+    daysPerGroup: { type: 'number', description: 'Durée de chaque groupe d’orderBy, en jours (« 3 semaines par étage » → 21) ; remplace end, minDays et maxDays.' },
+    orderBy: NAMES('Propriétés qui groupent et ordonnent les tâches, la première d’abord (obligatoire avec daysPerGroup).'),
     order: { type: 'array', description: 'Seulement si l’utilisateur a dicté lui-même l’ordre des valeurs de la première propriété d’orderBy ; ne le devine jamais. Sans order, l’outil range les groupes du plus bas au plus haut d’après la maquette.', items: { type: 'string', description: 'Valeur.' } },
     startProperty: { type: 'string', description: 'Propriété de début (défaut « Planning / Date début »).' },
     endProperty: { type: 'string', description: 'Propriété de fin (défaut « Planning / Date fin »).' },
     dryRun: DRY_RUN,
-  }, ['start', 'end', 'minDays', 'maxDays']),
+  }, ['start']),
 ];
+
+/**
+ * Arguments obligatoires selon un autre argument, ce qu'un `required` ne dit pas : plan_dates demande
+ * end, minDays et maxDays, sauf avec daysPerGroup, qui demande orderBy. Même message qu'un `required`.
+ */
+function checkTogether(name: string, args: Record<string, unknown>): void {
+  if (name !== 'plan_dates') return;
+  if (args.daysPerGroup === undefined) {
+    const missing = ['end', 'minDays', 'maxDays'].find((key) => args[key] === undefined);
+    if (missing) throw new ArgumentError(`${missing} : argument obligatoire manquant.`);
+  } else if (!(args.orderBy as unknown[] | undefined)?.length) {
+    throw new ArgumentError('orderBy : argument obligatoire avec daysPerGroup (la propriété dont chaque valeur forme un groupe, ex. le niveau).');
+  }
+}
 
 export const TOOL_NAMES: readonly string[] = TOOL_DEFINITIONS.map((definition) => definition.function.name);
 export const definitionOf = (name: string): ToolDefinition | undefined => TOOL_DEFINITIONS.find((definition) => definition.function.name === name);
@@ -244,7 +259,9 @@ export function coerceArgs(name: string, raw: unknown): { args: Record<string, u
   const parsed = raw === undefined || raw === null ? {} : typeof raw === 'string' ? parsedJson(raw) : raw;
   if (!isRecord(parsed)) return { error: `${name} : les arguments doivent former un objet JSON.` };
   try {
-    return { args: coerceObject(parsed, definition.function.parameters, '') };
+    const args = coerceObject(parsed, definition.function.parameters, '');
+    checkTogether(name, args);
+    return { args };
   } catch (error) {
     if (error instanceof ArgumentError) return { error: `${name} — ${error.message}` };
     throw error;

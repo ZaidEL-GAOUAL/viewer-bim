@@ -206,6 +206,8 @@ export class App {
   private cameraBeforeViews: ReturnType<Viewer['capturePose']> | null = null;
   private keyIndex: Map<string, number> | null = null;
   private readonly planning: SchedulePanel;
+  /** Planning 4D panel as it was before each step that wrote dates and opened it (see `openPlanning`), by undo step. */
+  private readonly planningBefore = new WeakMap<object, () => void>();
   get grouping(): readonly string[] { return this.groupingPaths; }
   private originalGlb: ArrayBuffer | Blob | null = null;
   private originalNodeKeys = new Map<number, string>();
@@ -1483,11 +1485,26 @@ export class App {
   deleteProperty(indices: readonly number[], path: string): boolean { return this.propertyEdits?.delete(indices, path) ?? false; }
   /** Several values in one undoable step (the assistant's writes). */
   editProperties(updates: readonly (readonly [number, string, PropValue])[]): boolean { return this.propertyEdits?.setMany(updates) ?? false; }
-  /** Opens the 4D planning from two date properties; returns its task count. */
-  openPlanning(startProperty: string, endProperty: string): number { return this.planning.fromMetadata({ startProperty, endProperty }); }
+  /**
+   * Opens the 4D planning from two date properties; returns its task count. `written`: the dates were just written as
+   * the last undo step, and undoing that step (toolbar, ⌘Z or the assistant) puts the panel back as it was before.
+   */
+  openPlanning(startProperty: string, endProperty: string, written = false): number {
+    const mapping = { startProperty, endProperty };
+    const restore = this.planning.snapshot(mapping);
+    const tasks = this.planning.fromMetadata(mapping);
+    const step = written ? this.propertyEdits?.lastChange : null;
+    if (step) this.planningBefore.set(step, restore);
+    return tasks;
+  }
   /** Back to the file's value of `path` for these elements (one undoable step). */
   revertProperty(indices: readonly number[], path: string): boolean { return this.propertyEdits?.revert(indices, path) ?? false; }
-  undoProperties(): void { this.propertyEdits?.undo(); this.emit('selection'); }
+  undoProperties(): void {
+    const step = this.propertyEdits?.lastChange;
+    this.propertyEdits?.undo();
+    if (step) this.planningBefore.get(step)?.();
+    this.emit('selection');
+  }
   redoProperties(): void { this.propertyEdits?.redo(); this.emit('selection'); }
   revertEdits(): void { this.propertyEdits?.revertAll(); this.emit('selection'); }
   private afterPropertyEdit(path: string): void {

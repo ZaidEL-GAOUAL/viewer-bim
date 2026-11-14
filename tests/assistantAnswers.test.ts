@@ -60,7 +60,13 @@ test('une écriture sur plus de 200 éléments, ou sur toute la maquette, est d�
   assert.ok(previewWrite('set_property', { filters: [{ property: 'Niveau', value: 'RDC' }], property: 'Lot', value: 'GO' }, large.context));
   const dates = previewWrite('plan_dates', { filters: [], start: '2026-01-05', end: '2026-12-18', minDays: 5, maxDays: 10, orderBy: ['Niveau'] }, small.context);
   assert.match(previewAnswer('plan_dates', dates!, 8).text, /^Écrire des dates de début et de fin sur 8 éléments \(toute la maquette\), du 2026-01-05 au 2026-12-18 \?/);
+  // Requête corrigée par le modèle après un refus : aperçu même pour une petite écriture.
+  assert.ok(previewWrite('set_property', { filters: [{ property: 'Niveau', value: 'RDC' }], property: 'Lot', value: 'GO' }, small.context, true));
+  const grouped = previewWrite('plan_dates', { filters: [{ property: 'Niveau', value: 'RDC' }], start: '2027-03-02', daysPerGroup: 21, orderBy: ['Niveau'] }, small.context, true);
+  assert.equal(previewAnswer('plan_dates', grouped!, 8).text, 'Écrire des dates de début et de fin sur 4 éléments, du 2027-03-02 au 2027-03-22, 21 jours par valeur de « Niveau » ? Rien n’est écrit avant « Appliquer ».');
+  assert.equal(small.edits.canUndo, false, 'toujours rien d’écrit');
   // Lectures et vues : jamais d'aperçu ; une écriture refusée par l'outil non plus (il le dira).
+  assert.equal(previewWrite('select_elements', { filters: [] }, small.context, true), null);
   assert.equal(previewWrite('select_elements', { filters: [] }, small.context), null);
   assert.equal(previewWrite('set_property', { filters: [], property: 'Niveau / x', value: 1, expression: '[Inconnue]' }, small.context), null);
 });

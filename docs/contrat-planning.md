@@ -117,6 +117,11 @@ s’enchaînent dans cet ordre à intervalles réguliers : le premier commence l
 le dernier finit le jour de la fin, un étage dure à proportion de son nombre d’objets et ne
 commence jamais avant le précédent ; les tâches voisines se chevauchent. Chaque objet dure
 entre `minDays` et `maxDays` jours, valeur tirée de son identifiant : relancer donne les mêmes dates. Les jours ouvrés, dépendances et ressources ne sont pas pris en compte.
+Avec `daysPerGroup` (« trois semaines par étage » : 21), `end`, `minDays` et `maxDays` ne sont pas
+demandés (ignorés s’ils sont donnés, et le résultat le signale) et `orderBy` est obligatoire : chaque
+valeur de sa première propriété forme un groupe, dans le même ordre, et occupe `daysPerGroup` jours,
+le premier groupe à partir de `start`, chaque suivant le lendemain du précédent ; tous les objets
+d’un groupe en reçoivent les dates.
 Les dates s’écrivent en une seule étape annulable, dans `Planning / Date début` et
 `Planning / Date fin` par défaut.
 

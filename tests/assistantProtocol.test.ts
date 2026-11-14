@@ -55,6 +55,19 @@ test('coerceArgs refuse avec un message exact : rien n’est deviné', () => {
   assert.match(error('find_elements', { filters: [{ property: 'Niveau', value: { a: 1 } }] }), /value : .* n’est pas une valeur simple/);
 });
 
+test('plan_dates : une durée par groupe se passe de end ; « end: "" » reste refusé', () => {
+  assert.deepEqual(parseAction('{"tool":"plan_dates","args":{"start":"2027-03-02","daysPerGroup":21,"orderBy":["Niveau"]}}'), {
+    tool: 'plan_dates', args: { start: '2027-03-02', daysPerGroup: 21, orderBy: ['Niveau'] },
+  });
+  // Ce que le modèle a envoyé lors de l'essai : une fin vide n'est pas une date.
+  const trial = parseAction('{"tool":"plan_dates","args":{"filters":[],"start":"2027-03-02","end":"","orderBy":"Niveau","order":"asc","minDays":21,"maxDays":21}}');
+  assert.deepEqual(trial, { error: 'plan_dates — end : date «  » illisible, attendu AAAA-MM-JJ.', tool: 'plan_dates' });
+  assert.match((parseAction('{"tool":"plan_dates","args":{"start":"2027-03-02","end":"","daysPerGroup":21,"orderBy":["Niveau"]}}') as { error: string }).error, /end : date «  » illisible/);
+  assert.match((parseAction('{"tool":"plan_dates","args":{"start":"2027-03-02","daysPerGroup":21}}') as { error: string }).error, /orderBy : argument obligatoire avec daysPerGroup/);
+  assert.match(toolLines(), /- count_by\(property, filters\?, scope\?\)/);
+  assert.match(toolLines(), /- plan_dates\(filters\?, scope\?, start, end\?, minDays\?, maxDays\?, daysPerGroup\?, orderBy\?/);
+});
+
 test('toIsoDate lit les dates à la française, en ISO et en anglais, et refuse les dates impossibles', () => {
   assert.equal(toIsoDate('2026-1-4'), '2026-01-04');
   assert.equal(toIsoDate('04/01/2026'), '2026-01-04');
@@ -151,6 +164,21 @@ test('quatre étapes au plus ; une écriture à confirmer arrête le tour', asyn
   const waiting = await runTurn('https://relay.test', messages, 'écris', { ...events, execute: (name, args) => ({ outcome: runTool(name, args, sample().context), stop: true }) });
   assert.deepEqual([waiting.ending, waiting.answer], ['confirm', null]);
   assert.equal(messages[messages.length - 1].role, 'assistant', 'l’historique reste alterné');
+});
+
+test('une écriture demandée juste après une réponse invalide est marquée pour l’aperçu ; au premier essai, non', async (t) => {
+  const calls: [string, boolean][] = [];
+  const execute: TurnEvents['execute'] = (name, _args, preview) => { calls.push([name, preview]); return { outcome: { result: { count: 1 }, note: '' } }; };
+  const write = '{"tool": "set_property", "args": {"filters": [], "property": "Lot", "value": "GO"}}';
+  relay(t, ['{"tool": "set_property", "args": {"property": "Lot"}}', write, write, '{"answer": ""}']);
+  await runTurn('https://relay.test', [], 'mets Lot à GO', { execute, onProvider: () => {} });
+  assert.deepEqual(calls, [['set_property', true], ['set_property', false]], 'seule l’étape qui suit le refus est marquée');
+
+  t.mock.restoreAll();
+  calls.length = 0;
+  relay(t, [write, '{"answer": ""}']);
+  await runTurn('https://relay.test', [], 'mets Lot à GO', { execute, onProvider: () => {} });
+  assert.deepEqual(calls, [['set_property', false]]);
 });
 
 test('un relais muet au-delà de 60 s : erreur claire, panneau en commandes seulement', async (t) => {

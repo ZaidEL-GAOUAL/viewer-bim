@@ -29,7 +29,7 @@ export function toolContext(app: App): ToolContext {
     get grouping() { return app.grouping; },
     groupBy: (paths) => app.groupBy(paths),
     writeProperties: (updates) => app.editProperties(updates),
-    openPlanning: (startProperty, endProperty) => app.openPlanning(startProperty, endProperty),
+    openPlanning: (startProperty, endProperty, written) => app.openPlanning(startProperty, endProperty, written),
     // La maquette est en Y vers le haut : le bas d'un élément est le minimum de sa boîte en Y.
     heightOf: (index) => {
       if (!app.model?.elementBox(index, box) || box.isEmpty()) return undefined;

@@ -51,6 +51,44 @@ test('chaque choix d’une question est une commande complète, prête à exécu
   ]);
 });
 
+test('une durée par groupe dont le nom désigne deux propriétés devient une question, chaque choix prêt à exécuter', () => {
+  const index = indexOf({ readOnly: [], elements: [
+    { key: 'k1', label: 'Mur', props: { 'Niveau de base': 'R+1', 'Niveau supérieur': 'R+2' } },
+    { key: 'k2', label: 'Dalle', props: { 'Niveau de base': 'RDC', 'Niveau supérieur': 'R+1' } },
+  ] });
+  const parsed = parseIntent('le 2 mars 2027, chaque niveau dure trois semaines', index);
+  assert.equal(parsed?.kind, 'ambiguity');
+  if (parsed?.kind !== 'ambiguity') return;
+  assert.deepEqual(parsed.choices.map((choice) => choice.intent), ['Niveau de base', 'Niveau supérieur'].map((path) => (
+    { kind: 'tool', tool: 'plan_dates', args: { filters: [], start: '2027-03-02', daysPerGroup: 21, orderBy: [path] } }
+  )));
+});
+
+test('vocabulaire courant : « étage » trouve « Niveau » faute de mieux, jamais à la place d’une propriété qu’il nomme', () => {
+  const niveauOnly = indexOf(corpus.models.niveau_revit);
+  assert.deepEqual(niveauOnly.propertiesNamed('étages'), ['Niveau'], 'le nom exact passe avant « Floor finish level » et « …rapport au niveau »');
+  assert.deepEqual(niveauOnly.propertiesNamed('storey'), ['Niveau']);
+  const both = indexOf({ readOnly: [], elements: [
+    { key: 'k1', label: 'Mur', props: { Catégorie: 'Murs', Étage: 'E1', Niveau: 'N1' } },
+    { key: 'k2', label: 'Sol', props: { Catégorie: 'Sols', Étage: 'E2', Niveau: 'N2' } },
+  ] });
+  assert.deepEqual(both.propertiesNamed('étage'), ['Étage']);
+  assert.deepEqual(both.propertiesNamed('niveau'), ['Niveau']);
+  assert.deepEqual(shape(parseIntent('le 2 mars 2027, chaque étage prend trois semaines', both)), { tool: 'plan_dates', args: { filters: [], start: '2027-03-02', daysPerGroup: 21, orderBy: ['Étage'] } });
+  assert.deepEqual(shape(parseIntent('combien de murs par étage', both)), { tool: 'count_by', args: { property: 'Étage', filters: [{ property: 'Catégorie', op: 'equals', value: 'Murs' }] } });
+});
+
+test('« combien de X par Y » : une question quand Y désigne deux propriétés, chaque choix filtré sur X', () => {
+  const index = indexOf({ readOnly: [], elements: [
+    { key: 'k1', label: 'Mur', props: { Catégorie: 'Murs', 'Niveau de base': 'R+1', 'Niveau supérieur': 'R+2' } },
+    { key: 'k2', label: 'Dalle', props: { Catégorie: 'Sols', 'Niveau de base': 'RDC', 'Niveau supérieur': 'R+1' } },
+  ] });
+  assert.deepEqual(shape(parseIntent('combien de murs par niveau', index)), { ambiguity: ['Niveau de base', 'Niveau supérieur'] });
+  const parsed = parseIntent('combien de murs par niveau', index);
+  if (parsed?.kind !== 'ambiguity') return;
+  assert.deepEqual(parsed.choices[1].intent, { kind: 'tool', tool: 'count_by', args: { property: 'Niveau supérieur', filters: [{ property: 'Catégorie', op: 'equals', value: 'Murs' }] } });
+});
+
 test('aucun vocabulaire BIM : la même phrase marche sur un modèle anglais par ses valeurs, et nulle part ailleurs', () => {
   const english = indexOf({ readOnly: [], elements: [
     { key: 'k1', label: 'Basic Wall', props: { Category: 'Walls', Level: 'Level 1' } },

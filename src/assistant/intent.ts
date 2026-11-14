@@ -232,12 +232,22 @@ const PLAN = /\b(?:planning|planifi\w*|plan(?:s)? (?:les |the )?dates|plan dates
 const DURATION = /(?:\b(?:entre|de|between|from)\s+)?\b(\d+)\s*(?:et|a|au|and|to|-)\s*(\d+)\s*(?:jours?|j|days?)\b/g;
 const ORDER = /(?:\b(?:ordonn|group|rang|tri|class)(?:e|es|ee|ees|s)?\s+)?\b(?:par|selon|suivant|dans l'ordre (?:du|de la|des|de l')|en suivant|by|ordered by|per)\s+(?:le |la |les |l'|the |chaque |each )?([^,;]+?)(?=\s*(?:,|;|$|\s(?:et|puis|then|and|avec|with|du|from|entre|between)\s))/g;
 const PER_ELEMENT = /^(?:elements?|objets?|taches?|tasks?|items?|jours?|days?)$/;
+/** Nombres dictés en lettres, pour une durée (« trois semaines »). */
+const NUMBER_WORDS: Record<string, number> = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, douze: 12, quinze: 15, vingt: 20, trente: 30 };
+// shortcut: un mois compte 30 jours (daysPerGroup est en jours) ; passer aux mois du calendrier si on le demande.
+const unitDays = (unit: string) => (/^(?:sem|week)/.test(unit) ? 7 : /^(?:mois|month)/.test(unit) ? 30 : 1);
+const SPAN = `(?<count>\\d+|${Object.keys(NUMBER_WORDS).join('|')})\\s*(?<unit>jours?|j|semaines?|sem|mois|days?|weeks?|months?)\\b`;
+/** Une durée par groupe : « 3 semaines par étage », « 21 jours pour chaque niveau ». */
+const PER_GROUP = new RegExp(`\\b${SPAN}\\s+(?:par|pour chaque|a chaque|per|for each)\\s+(?:le |la |les |l'|the )?(?<group>[^,;:]+?)(?=\\s*(?:,|;|:|$|\\s(?:et|puis|then|and|avec|with|du|from|a partir|starting)\\s))`, 'g');
+/** « chaque étage prend trois semaines », « chaque niveau dure 15 jours ». */
+const EACH_GROUP = new RegExp(`\\b(?:chaque|each|every)\\s+(?<group>[^,;:]+?)\\s+(?:prend|prendra|dure|durera|takes|lasts)\\s+${SPAN}`, 'g');
 const PLAN_WORDS = new Set([
   'ajoute', 'ajouter', 'ajoutes', 'ajoutez', 'ecris', 'ecrire', 'ecrivez', 'genere', 'generer', 'generez', 'cree', 'creer', 'creez', 'mets', 'met', 'mettre', 'mettez', 'fais', 'faire', 'faites', 'prepare', 'preparer', 'preparez',
   'planning', 'planifie', 'planifier', 'planifiez', 'planification', 'previsionnel', 'previsionnelle', '4d', 'date', 'dates', 'debut', 'fin', 'demarrage', 'chantier', 'travaux', 'projet', 'construction',
   'chaque', 'dure', 'durent', 'duree', 'durees', 'entre', 'jour', 'jours', 'et', 'puis', 'commence', 'commencant', 'finit', 'finissant', 'termine', 'terminant', 'ordre', 'ordonne', 'ordonnes', 'ordonnee', 'ordonnees',
   'bas', 'haut', 'vers', 'etage', 'etages', 'calendrier', 'minimum', 'maximum', 'min', 'max', 'selection', 'schedule', 'plan', 'from', 'between', 'and', 'days', 'day', 'each', 'start', 'end', 'by', 'with', 'a', 'an',
   'ordered', 'site', 'durant', 'pendant', 'element', 'elements', 'objet', 'objets', 'tache', 'taches', 'task', 'tasks', 'per', 'par', 'est', 'sont', 'qui',
+  'demarre', 'demarrer', 'demarrez', 'demarrons', 'commencer', 'commencez', 'partir', 'remplis', 'remplir', 'remplissez',
 ]);
 
 const commands: Command[] = [
@@ -266,11 +276,12 @@ const commands: Command[] = [
     const match = HOW_MANY.exec(s.low);
     if (!match) return undefined;
     const phrase = match.groups!.target;
-    // « combien de murs par niveau » : count_by ne filtre pas, on laisse au modèle.
-    if (/\s(?:par|by|per)\s/.test(` ${phrase} `)) return null;
+    const per = /\s(?:par|by|per)\s/.exec(` ${phrase} `);
+    if (per) return countByOf(phrase.slice(0, per.index), phrase.slice(per.index + per[0].length - 1), index, extra);
     return fromTarget(resolveTarget(phrase, index, extra, true), (option) => tool('find_elements', { filters: option.filters, ...scoped(option) }));
   },
-  (s, index, extra) => (PLAN.test(s.low) ? planDates(s, index, extra) : undefined),
+  // « planning… », ou sans ce mot une date et une durée par groupe (« le 2 mars 2027, chaque niveau dure 3 semaines »).
+  (s, index, extra) => (PLAN.test(s.low) || (s.low.search(DATE_PATTERN) >= 0 && (s.low.search(PER_GROUP) >= 0 || s.low.search(EACH_GROUP) >= 0)) ? planDates(s, index, extra) : undefined),
   (s, index, extra) => {
     const match = HIGHLIGHT.exec(s.low);
     return match ? fromTarget(resolveTarget(match.groups!.target ?? '', index, extra), (option) => tool('select_elements', { filters: option.filters, highlight: true, ...scoped(option) })) : undefined;
@@ -319,6 +330,21 @@ const commands: Command[] = [
   (s, index, extra) => setProperty(s, index, extra, EQUATION.exec(s.low), true),
 ];
 
+/**
+ * « combien de murs par niveau » : la répartition par la propriété Y des seuls éléments X. Une question si X ou Y a
+ * plusieurs lectures (pas les deux à la fois) ; null si l'un des deux ne se lit pas sûrement.
+ */
+function countByOf(what: string, by: string, index: ValueIndex, extra: RuleCondition[]): Parsed {
+  if (extra.length > 0 || !what.trim()) return null;
+  const targetOf = resolveTarget(what, index, extra);
+  const property = properties(by, index, (path) => tool('count_by', { property: path }));
+  if (targetOf === null || property === null || property.kind === 'undo') return null;
+  const build = (path: string) => (option: Target) => tool('count_by', { property: path, filters: option.filters, ...scoped(option) });
+  if (property.kind === 'tool') return fromTarget(targetOf, build(property.args.property as string));
+  if ('ambiguous' in targetOf) return null;
+  return { ...property, choices: property.choices.map((choice) => ({ label: choice.label, intent: build(choice.label)(targetOf) })) };
+}
+
 /** « mets Lot à GO sur les murs », « ajoute une propriété Lot = GO aux murs ». La valeur garde sa casse. */
 function setProperty(s: Sentence, index: ValueIndex, extra: RuleCondition[], match: RegExpExecArray | null, equation = false): Parsed | undefined {
   if (!match) return undefined;
@@ -339,35 +365,56 @@ function setProperty(s: Sentence, index: ValueIndex, extra: RuleCondition[], mat
   return path ? fromTarget(resolved, build(path)) : null;
 }
 
+/**
+ * Deux dates et une durée par élément (« du 04/01/2026 au 12/12/2027, 15 à 45 jours ») ; ou une date de début et une
+ * durée par groupe (« le 2 mars 2027, chaque étage prend trois semaines »), où le groupe nomme la propriété d'orderBy.
+ */
 function planDates(s: Sentence, index: ValueIndex, extra: RuleCondition[]): Parsed {
   if (extra.length > 0) return null;
   let rest = s.low;
   const blank = (match: { index?: number; 0: string }) => { rest = rest.slice(0, match.index) + ' '.repeat(match[0].length) + rest.slice(match.index! + match[0].length); };
   const dates = [...s.low.matchAll(DATE_PATTERN)];
-  if (dates.length !== 2) return null;
+  if (dates.length !== 1 && dates.length !== 2) return null;
   const [start, end] = dates.map((match) => toIsoDate(match[0]));
-  if (!start || !end) return null;
+  if (!start || (dates.length === 2 && !end)) return null;
   dates.forEach(blank);
-  const durations = [...rest.matchAll(DURATION)];
-  if (durations.length !== 1) return null;
-  durations.forEach(blank);
-  const [low, high] = [Number(durations[0][1]), Number(durations[0][2])].sort((a, b) => a - b);
-  let orderBy: string[] = [];
-  let choice: Ambiguity | null = null;
+  let timing: Record<string, unknown>;
+  const phrases: string[] = [];
+  if (end) {
+    const durations = [...rest.matchAll(DURATION)];
+    if (durations.length !== 1) return null;
+    durations.forEach(blank);
+    const [low, high] = [Number(durations[0][1]), Number(durations[0][2])].sort((a, b) => a - b);
+    timing = { end, minDays: low, maxDays: high };
+  } else {
+    const spans = [...rest.matchAll(PER_GROUP), ...rest.matchAll(EACH_GROUP)];
+    if (spans.length !== 1) return null;
+    blank(spans[0]);
+    const { count, unit, group } = spans[0].groups!;
+    // « 3 jours par objet » : une durée par élément, sans date de fin, ne se planifie pas ainsi.
+    if (PER_ELEMENT.test(group.trim())) return null;
+    timing = { daysPerGroup: (Number(count) || NUMBER_WORDS[count]) * unitDays(unit) };
+    phrases.push(group.trim());
+  }
   for (const match of [...rest.matchAll(ORDER)]) {
     const phrase = match[1].trim();
     blank(match);
-    if (PER_ELEMENT.test(phrase)) continue;
-    if (orderBy.length > 0 || choice) return null;
-    const found = properties(phrase, index, (path) => tool('plan_dates', { orderBy: [path] }));
-    if (found === null) return null;
-    if (found.kind === 'ambiguity') choice = found;
-    else orderBy = found.kind === 'tool' ? found.args.orderBy as string[] : [];
+    if (!PER_ELEMENT.test(phrase)) phrases.push(phrase);
   }
-  const leftover = words(rest.replace(PLAN, ' ')).filter((word) => !FILLERS.has(word) && !PLAN_WORDS.has(word));
+  // Toutes les façons de nommer le groupe (« chaque étage… étage par étage ») doivent désigner la même propriété.
+  let found: Parsed = null;
+  for (const phrase of phrases) {
+    const one = properties(phrase, index, (path) => tool('plan_dates', { orderBy: [path] }));
+    if (one === null || (found && JSON.stringify(one) !== JSON.stringify(found))) return null;
+    found = one;
+  }
+  const named = new Set(phrases.flatMap(words));
+  const leftover = words(rest.replace(PLAN, ' ')).filter((word) => !FILLERS.has(word) && !PLAN_WORDS.has(word) && !named.has(word));
   if (leftover.length > 0) return null;
+  const choice = found?.kind === 'ambiguity' ? found : null;
+  const orderBy = found?.kind === 'tool' ? found.args.orderBy as string[] : [];
   const scope = /\bselection\b/.test(s.low) ? { scope: 'selection' } : {};
-  const args = (paths: string[]) => ({ filters: [], start, end, minDays: low, maxDays: high, ...(paths.length > 0 ? { orderBy: paths } : {}), ...scope });
+  const args = (paths: string[]) => ({ filters: [], start, ...timing, ...(paths.length > 0 ? { orderBy: paths } : {}), ...scope });
   if (choice) return { ...choice, choices: choice.choices.map((option) => ({ label: option.label, intent: tool('plan_dates', args([option.label])) })) };
   return tool('plan_dates', args(orderBy));
 }

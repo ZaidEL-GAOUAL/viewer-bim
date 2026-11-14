@@ -15,6 +15,15 @@ export const FILLERS = new Set([
   'the', 'of', 'on', 'in', 'at', 'to', 'all', 'every', 'object', 'objects', 'any', 'svp', 'stp', 'please',
 ]);
 
+/**
+ * Vocabulaire courant, pas des noms de propriétés : des mots qu'on emploie l'un pour l'autre (« étage » pour une
+ * propriété « Niveau », « Level » ou « Storey »). Un mot d'un nom de propriété qui ne trouve aucune propriété essaie
+ * les autres mots de son groupe ; une propriété trouvée par le mot lui-même passe toujours avant. Formes comparables (`stem`).
+ */
+const SYNONYMS: readonly (readonly string[])[] = [
+  ['etage', 'niveau', 'level', 'storey', 'story', 'floor'],
+];
+
 /** Au-delà, une propriété ressemble à un identifiant : ses valeurs ne sont pas indexées. */
 const MAX_DISTINCT = 500;
 /** Une valeur plus longue ne se dicte pas : elle n'est pas indexée. */
@@ -133,19 +142,34 @@ export class ValueIndex {
     return [...(this.names.get(span.map(stem).join(' ')) ?? [])];
   }
 
-  /** Propriétés que ce texte nomme : nom exact, puis dernier segment, puis mêmes mots, puis une partie du nom. */
+  /**
+   * Propriétés que ce texte nomme : nom exact, puis dernier segment, puis mêmes mots, puis une partie du nom. Si rien ne
+   * répond, les autres mots du groupe (SYNONYMS) au meilleur de ces rangs : « étage » trouve « Niveau » avant « Floor finish level ».
+   */
   propertiesNamed(text: string): string[] {
+    const direct = this.namedByRank(text).find((list) => list.length > 0);
+    if (direct) return direct;
+    const stems = contentStems(text);
+    const others = stems.flatMap((word, i) => (SYNONYMS.find((group) => group.includes(word)) ?? [])
+      .filter((other) => other !== word)
+      .map((other) => this.namedByRank([...stems.slice(0, i), other, ...stems.slice(i + 1)].join(' '))));
+    for (let rank = 0; rank < 4; rank++) {
+      const found = [...new Set(others.flatMap((ranks) => ranks[rank]))];
+      if (found.length > 0) return found;
+    }
+    return [];
+  }
+
+  /** Les quatre rangs de `propertiesNamed` pour ce seul texte : nom exact, dernier segment, mêmes mots, partie du nom. */
+  private namedByRank(text: string): string[][] {
     const wanted = fold(text).replace(/\s+/g, ' ');
     const paths = this.store.paths;
     const exact = paths.filter((path) => fold(path) === wanted);
-    if (exact.length > 0) return exact;
     const tail = paths.filter((path) => fold(path.slice(path.lastIndexOf(PATH_SEP) + (path.includes(PATH_SEP) ? PATH_SEP.length : 0))) === wanted);
-    if (tail.length > 0) return tail;
     const stems = contentStems(text);
-    if (stems.length === 0) return [];
     const key = stems.join(' ');
-    const same = paths.filter((path) => (this.nameStems.get(path) ?? []).some((list) => list.join(' ') === key));
-    return same.length > 0 ? same : this.propertiesFor(stems);
+    const same = stems.length === 0 ? [] : paths.filter((path) => (this.nameStems.get(path) ?? []).some((list) => list.join(' ') === key));
+    return [exact, tail, same, stems.length === 0 ? [] : this.propertiesFor(stems)];
   }
 
   /** Éléments qui vérifient toutes les conditions, dans le périmètre donné. */

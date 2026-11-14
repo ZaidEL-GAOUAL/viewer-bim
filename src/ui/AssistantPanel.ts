@@ -194,10 +194,11 @@ export class AssistantPanel {
     return this.index;
   }
 
-  /** Exécute un outil validé et en rend compte. Une écriture large n'est d'abord que montrée (`stop`). */
-  private execute(name: string, args: Record<string, unknown>, context: ToolContext): { outcome: ToolOutcome; stop?: boolean } {
-    const preview = previewWrite(name, args, context);
+  /** Exécute un outil validé et en rend compte. Une écriture large, ou corrigée par le modèle (`corrected`), n'est d'abord que montrée (`stop`). */
+  private execute(name: string, args: Record<string, unknown>, context: ToolContext, corrected = false): { outcome: ToolOutcome; stop?: boolean } {
+    const preview = previewWrite(name, args, context, corrected);
     if (preview) {
+      if (corrected) this.line('note', 'Requête corrigée par le modèle après un refus : vérifiez l’aperçu avant d’appliquer.');
       this.showPreview(name, args, preview);
       return { outcome: { result: { ...(preview.result as object), pending: 'Aperçu montré à l’utilisateur ; rien n’est écrit tant qu’il n’a pas confirmé.' }, note: preview.note }, stop: true };
     }
@@ -321,9 +322,9 @@ export class AssistantPanel {
     this.syncStatus();
     try {
       const turn = await runTurn(this.url, this.messages, request, {
-        execute: (name, args) => {
+        execute: (name, args, preview) => {
           pending.remove();
-          const step = this.execute(name, args, context);
+          const step = this.execute(name, args, context, preview);
           this.log.append(pending);
           return step;
         },

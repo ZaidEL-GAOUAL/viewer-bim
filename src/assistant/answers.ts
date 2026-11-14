@@ -1,6 +1,7 @@
 // Couche 3 : ce que l'assistant dit d'une action est écrit par le code, d'après le résultat de
 // l'outil, jamais par le modèle. Une écriture importante passe d'abord par un aperçu à confirmer.
 
+import { fieldLabel } from '../data/elementFields.ts';
 import { formatValue, type PropValue } from '../data/metadata.ts';
 import { integer, plural, s } from '../data/text.ts';
 import { runTool, type ToolContext, type ToolOutcome } from './tools.ts';
@@ -31,6 +32,18 @@ function names(result: Result): string {
   if (list.length === 0) return '';
   const extra = (typeof result.more === 'number' ? result.more : 0) + Math.max(0, list.length - 5);
   return ` : ${list.slice(0, 5).join(', ')}${extra > 0 ? ` et ${plural(extra, 'autre')}` : ''}`;
+}
+
+/** « , 21 jours par valeur de « Niveau » » : la durée de chaque groupe de plan_dates, quand elle est fixée. */
+const perGroup = (result: Result): string => (typeof result.daysPerGroup === 'number' ? `, ${plural(result.daysPerGroup, 'jour')} par valeur de « ${(result.orderBy as string[] | undefined)?.[0]} »` : '');
+
+const OP_TEXT: Record<string, string> = { equals: '=', not_equals: '≠', contains: 'contient', greater: '>', greater_or_equal: '≥', less: '<', less_or_equal: '≤', missing: 'absent', present: 'renseigné' };
+/** « des éléments Catégorie = Murs » : les filtres d'une lecture, tels que l'outil les a reçus. */
+function filtered(filters: unknown): string {
+  const list = (Array.isArray(filters) ? filters : []) as Result[];
+  if (list.length === 0) return '';
+  const condition = (filter: Result) => `${fieldLabel(String(filter.property))} ${OP_TEXT[String(filter.op ?? 'equals')] ?? filter.op}${filter.op === 'missing' || filter.op === 'present' ? '' : ` ${cell(filter.value)}`}`;
+  return ` des éléments ${list.map(condition).join(' et ')}`;
 }
 
 function errorAnswer(result: Result): Answer {
@@ -81,7 +94,7 @@ export function answerFor(name: string, args: Record<string, unknown>, outcome: 
       const periods = (result.periods ?? []) as Result[];
       return {
         kind: result.unchanged ? 'read' : 'write',
-        text: `${result.unchanged ? 'Ces dates étaient déjà écrites' : 'Dates de début et de fin écrites'} sur ${plural(Number(result.elements) || 0, 'élément')}, du ${result.from} au ${result.to}.${opened}`,
+        text: `${result.unchanged ? 'Ces dates étaient déjà écrites' : 'Dates de début et de fin écrites'} sur ${plural(Number(result.elements) || 0, 'élément')}, du ${result.from} au ${result.to}${perGroup(result)}.${opened}`,
         table: table(['Période', 'Éléments', 'Début', 'Fin'], periods.map((period) => [String(period.value), cell(period.elements), String(period.from), String(period.to)]), periods.length + (Number(result.morePeriods) || 0)),
       };
     }
@@ -89,7 +102,7 @@ export function answerFor(name: string, args: Record<string, unknown>, outcome: 
       const values = (result.values ?? []) as Result[];
       return {
         kind: 'read',
-        text: `Répartition par « ${result.property} » : ${plural(Number(result.total) || 0, 'élément')}, ${plural(Number(result.distinct) || 0, 'valeur')}.`,
+        text: `Répartition par « ${result.property} »${filtered(args.filters)} : ${plural(Number(result.total) || 0, 'élément')}, ${plural(Number(result.distinct) || 0, 'valeur')}.`,
         table: table(['Valeur', 'Éléments'], values.map((item) => [item.value === null ? '(non défini)' : String(item.value), cell(item.count)]), Number(result.distinct) || values.length),
       };
     }
@@ -152,16 +165,17 @@ export function answerFor(name: string, args: Record<string, unknown>, outcome: 
 
 /**
  * Une écriture large (plus de CONFIRM_ABOVE éléments, ou toute la maquette) est d'abord calculée à
- * blanc : son aperçu est rendu, rien n'est écrit. null : l'écriture peut se faire directement (ou
+ * blanc : son aperçu est rendu, rien n'est écrit. `always` : aperçu quel que soit le nombre d'éléments
+ * (requête corrigée par le modèle après un refus). null : l'écriture peut se faire directement (ou
  * l'outil va de toute façon refuser, et le dira).
  */
-export function previewWrite(name: string, args: Record<string, unknown>, context: ToolContext): ToolOutcome | null {
+export function previewWrite(name: string, args: Record<string, unknown>, context: ToolContext, always = false): ToolOutcome | null {
   if (!WRITE_TOOLS.has(name) || args.dryRun === true) return null;
   const dry = runTool(name, { ...args, dryRun: true }, context);
   const result = dry.result as Result;
   const count = Number(name === 'set_property' ? result.count : result.elements);
   if (typeof result.error === 'string' || !Number.isFinite(count)) return null;
-  return count > CONFIRM_ABOVE || count === context.count ? dry : null;
+  return always || count > CONFIRM_ABOVE || count === context.count ? dry : null;
 }
 
 /** Le texte et l'échantillon d'un aperçu d'écriture. */
@@ -180,7 +194,7 @@ export function previewAnswer(name: string, outcome: ToolOutcome, total: number)
   const periods = (result.periods ?? []) as Result[];
   return {
     kind: 'read',
-    text: `Écrire des dates de début et de fin sur ${plural(count, 'élément')}${whole}, du ${result.from} au ${result.to} ? Rien n’est écrit avant « Appliquer ».`,
+    text: `Écrire des dates de début et de fin sur ${plural(count, 'élément')}${whole}, du ${result.from} au ${result.to}${perGroup(result)} ? Rien n’est écrit avant « Appliquer ».`,
     table: table(['Période', 'Éléments', 'Début', 'Fin'], periods.map((period) => [String(period.value), cell(period.elements), String(period.from), String(period.to)]), periods.length),
   };
 }
