@@ -1073,6 +1073,15 @@ button[aria-pressed='true'] {
   white-space: nowrap;
 }
 
+.empty-card .empty-site {
+  margin: 14px 0 0;
+}
+
+.empty-site a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .empty-card .empty-legal {
   margin: 18px 0 0;
   font-size: 11px;

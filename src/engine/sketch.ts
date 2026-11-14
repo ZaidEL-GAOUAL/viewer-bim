@@ -10,6 +10,9 @@ const SNAP_PIXELS = 12;
 
 export type SketchMode = 'lines' | 'polygon';
 
+/** Ce que l'esquisse lit de la vue : le Viewer, ou la scène de l'étude de site (sans modèle, `pick` rend null). */
+export type SketchHost = Pick<Viewer, 'renderer' | 'camera' | 'afterRender' | 'toScreen' | 'pick' | 'model'>;
+
 /** Le point où un rayon rencontre le plan horizontal y = `height`, ou null s'il ne le rencontre pas devant lui. */
 export function planePoint(origin: Vector3, direction: Vector3, height: number): Vector3 | null {
   if (Math.abs(direction.y) < 1e-9) return null;
@@ -47,7 +50,7 @@ export class Sketch {
   /** Un polygone vient d'être fermé (clic sur son premier point). */
   onPolygon: (points: Vector3[]) => void = () => {};
 
-  private readonly viewer: Viewer;
+  private readonly viewer: SketchHost;
   private readonly svg: SVGSVGElement;
   private pending: Vector3 | null = null;
   private hover: { point: Vector3; snapped: boolean } | null = null;
@@ -55,7 +58,7 @@ export class Sketch {
   private readonly screen = { x: 0, y: 0 };
   private queued = false;
 
-  constructor(viewer: Viewer, root: HTMLElement, surface: HTMLElement) {
+  constructor(viewer: SketchHost, root: HTMLElement, surface: HTMLElement) {
     this.viewer = viewer;
     this.svg = document.createElementNS(SVG_NS, 'svg');
     this.svg.classList.add('measure-svg', 'sketch-svg');

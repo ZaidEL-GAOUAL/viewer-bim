@@ -8,6 +8,8 @@ export interface OsmBuilding {
   /** Contour extérieur, [longitude, latitude] en degrés. */
   outline: [number, number][];
   height: number;
+  /** Vrai si la hauteur vient des attributs (`height`, `building:levels`), faux si c'est la valeur usuelle. */
+  tagged: boolean;
 }
 
 interface Bbox { south: number; west: number; north: number; east: number }
@@ -36,14 +38,17 @@ interface OverpassElement {
   members?: { type: string; role?: string; geometry?: OverpassPoint[] }[];
 }
 
-/** Hauteur d'un bâtiment d'après ses attributs OSM. */
-export function buildingHeight(tags: Record<string, string> | undefined): number {
+/** Hauteur d'un bâtiment d'après ses attributs OSM ; null s'ils n'en disent rien. */
+function taggedHeight(tags: Record<string, string> | undefined): number | null {
   const explicit = parseFloat((tags?.height ?? '').replace(',', '.'));
   if (Number.isFinite(explicit) && explicit > 0) return explicit;
   const levels = parseFloat((tags?.['building:levels'] ?? '').replace(',', '.'));
   if (Number.isFinite(levels) && levels > 0) return levels * METRES_PER_LEVEL;
-  return DEFAULT_HEIGHT;
+  return null;
 }
+
+/** Hauteur d'un bâtiment d'après ses attributs OSM, sinon une valeur usuelle. */
+export const buildingHeight = (tags: Record<string, string> | undefined): number => taggedHeight(tags) ?? DEFAULT_HEIGHT;
 
 function outlineOf(points: OverpassPoint[] | undefined): [number, number][] | null {
   if (!points || points.length < 4) return null;
@@ -59,15 +64,16 @@ export function parseOverpassBuildings(json: unknown): OsmBuilding[] {
   if (!Array.isArray(elements)) throw new Error('Réponse Overpass inattendue.');
   const out: OsmBuilding[] = [];
   for (const element of elements) {
-    const height = buildingHeight(element.tags);
+    const tagged = taggedHeight(element.tags);
+    const height = tagged ?? DEFAULT_HEIGHT;
     if (element.type === 'way') {
       const outline = outlineOf(element.geometry);
-      if (outline) out.push({ id: element.id, outline, height });
+      if (outline) out.push({ id: element.id, outline, height, tagged: tagged !== null });
     } else if (element.type === 'relation') {
       for (const member of element.members ?? []) {
         if (member.type !== 'way' || (member.role ?? 'outer') !== 'outer') continue;
         const outline = outlineOf(member.geometry);
-        if (outline) out.push({ id: element.id, outline, height });
+        if (outline) out.push({ id: element.id, outline, height, tagged: tagged !== null });
       }
     }
   }

@@ -23,7 +23,7 @@ export const zonesToJson = (zones: readonly Zone[]): Zone[] => zones.map(({ name
 
 type Point = [number, number];
 
-const signedArea = (polygon: readonly Point[]): number => {
+export const signedArea = (polygon: readonly Point[]): number => {
   let sum = 0;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) sum += polygon[j][0] * polygon[i][1] - polygon[i][0] * polygon[j][1];
   return sum / 2;
@@ -51,7 +51,7 @@ function clipToConvex(subject: readonly Point[], clip: readonly Point[]): Point[
   return output;
 }
 
-function contains(polygon: readonly Point[], [x, y]: Point): boolean {
+export function contains(polygon: readonly Point[], [x, y]: Point): boolean {
   let within = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const [xi, yi] = polygon[i], [xj, yj] = polygon[j];

@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "node node_modules/vite/bin/vite.js",
-    "build": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/vite/bin/vite.js build",
+    "build": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/vite/bin/vite.js build && node node_modules/vite/bin/vite.js build --mode site",
     "preview": "node node_modules/vite/bin/vite.js preview",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit && node node_modules/typescript/bin/tsc -p worker",
     "typecheck:worker": "node node_modules/typescript/bin/tsc -p worker",

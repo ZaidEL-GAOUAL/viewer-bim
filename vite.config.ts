@@ -59,10 +59,15 @@ function licenceFiles(): Plugin {
 
 // Chemins relatifs : le site fonctionne quel que soit le sous-dossier où il est publié
 // (GitHub Pages le sert sous /<nom-du-dépôt>/).
-export default defineConfig({
-  base: './',
-  plugins: [cesiumAssets(), licenceFiles()],
-  optimizeDeps: { include: ['cesium'] },
-  // Cesium est chargé à la demande, dans son propre morceau de plusieurs mégaoctets.
-  build: { chunkSizeWarningLimit: 6000 },
-});
+// L'étude de site (site.html) est construite à part (`vite build --mode site`, après le viewer, dans le même dossier) :
+// les deux pages partagent le code source, pas de morceau commun, et le bundle du viewer ne bouge pas à cause d'elle.
+// En développement, le serveur sert les deux pages.
+export default defineConfig(({ mode }) => (mode === 'site'
+  ? { base: './', publicDir: false, build: { emptyOutDir: false, chunkSizeWarningLimit: 6000, rolldownOptions: { input: resolve(root, 'site.html') } } }
+  : {
+    base: './',
+    plugins: [cesiumAssets(), licenceFiles()],
+    optimizeDeps: { include: ['cesium'] },
+    // Cesium est chargé à la demande, dans son propre morceau de plusieurs mégaoctets.
+    build: { chunkSizeWarningLimit: 6000 },
+  }));

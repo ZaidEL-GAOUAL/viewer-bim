@@ -416,6 +416,7 @@ export class App {
           button('Choisir un dossier…', () => folderInput.click()),
           button('Charger l’exemple', () => void this.loadSample('demo')),
         ),
+        h('p', { class: 'empty-site' }, 'Avant le projet : ', h('a', { text: 'Étude de site', attrs: { href: 'site.html' } }), ' (volumes, chiffres, soleil).'),
         h('p', { class: 'empty-legal' },
           '© 2026 Zaid EL GAOUAL · view-only licence · ',
           h('a', { text: 'Licences', attrs: { href: 'licences/index.html', target: '_blank', rel: 'noopener' } }),
