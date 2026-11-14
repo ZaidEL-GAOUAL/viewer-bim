@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseMetadata, type Metadata } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
-import { applyOverlays, buildStore, chooseMetadata, modificationsFile, orphanNotice } from '../src/data/sidecar.ts';
+import { applyOverlays, buildStore, chooseMetadata, modificationsFile, orphanNotice, userViewsOf } from '../src/data/sidecar.ts';
 
 const keys = ['a', 'b', 'c'];
 const view = { name: '{3D}', camera: { position: [10, 10, 10], direction: [-1, -1, -1] } };
@@ -113,4 +113,32 @@ test('an overlay that mostly misses the model is loaded, and said so', () => {
   assert.equal(store.propsOf(0)?.Niveau, 'R+4');
   assert.deepEqual(notices, ['« ancien.json » : 3 éléments modifiés sur 4 introuvables dans ce modèle.']);
   assert.equal(orphanNotice(reread({ version: 1, elements: { a: {}, x: {} } }, 'moitié.json'), keys), '', 'half found: nothing to say');
+});
+
+const mine = (id: string, name = id) => ({ ...view, name, id, origin: 'user' });
+
+test('user views survive both exports: the full snapshot keeps them next to the file’s, the modifications JSON carries them', () => {
+  // Full snapshot: the reader's views come fresh from the file, the user's views come from the snapshot.
+  const session = open(own(), []);
+  const exported = session.store.export(keys) as Record<string, unknown>;
+  exported.views = [{ ...view, name: 'Ancienne vue' }, mine('u1', 'Coupe A')];
+  exported.levels = [{ name: 'R+1', elevation: 3 }];
+  const { metadata } = open(own(), [reread(exported, 'maison.json')]);
+  assert.deepEqual(metadata?.views?.map((saved) => saved.name), ['{3D}', 'Coupe A']);
+  assert.deepEqual(metadata?.levels, [{ name: 'R+1', elevation: 3 }]);
+  assert.deepEqual(userViewsOf(metadata, []).map((saved) => saved.id), ['u1']);
+
+  // Modifications JSON: only the user's views, even with no property changed; it reloads as an overlay.
+  const file = modificationsFile(session.edits, keys, 'maison.rvt', parseMetadata({ elements: { a: {} }, views: [mine('u2')] }).views!);
+  assert.deepEqual(file.elements, {});
+  assert.deepEqual((file.views as { id: string }[]).map((saved) => saved.id), ['u2']);
+  const overlay = reread(file, 'maison.modifications.json');
+  const reopened = open(own(), [overlay]);
+  assert.deepEqual(reopened.notices, []);
+  assert.deepEqual(userViewsOf(reopened.metadata, [overlay]).map((saved) => saved.id), ['u2']);
+  // The same view in the base and in an overlay is kept once (the overlay's, more recent).
+  const twice = userViewsOf(parseMetadata({ elements: { a: {} }, views: [mine('u2', 'Avant')] }), [parseMetadata({ elements: {}, views: [mine('u2', 'Après')] })]);
+  assert.deepEqual(twice.map((saved) => saved.name), ['Après']);
+  // Without user views the modifications JSON has no views section, as before.
+  assert.equal(modificationsFile(session.edits, keys, 'maison.rvt').views, undefined);
 });

@@ -241,3 +241,15 @@ def test_model_without_site_coordinates_has_no_georeference():
     assert ifc_to_glb.georeference(model) is None
     assert ifc_to_glb._degrees((45, 44, 50, 634155)) == pytest.approx(45.747398376, abs=1e-9)
     assert ifc_to_glb._degrees((-4, 41, 25)) == pytest.approx(-(4 + 41 / 60 + 25 / 3600))
+
+
+def test_levels_come_from_the_storeys_in_metres_in_the_glb_frame(result):
+    # Les niveaux sont placés à 35 m (RDC) et 38 m (R+1) du projet ; l'IFC est en millimètres.
+    assert result.metadata["levels"] == [
+        {"name": "RDC", "elevation": pytest.approx(35.0)},
+        {"name": "R+1", "elevation": pytest.approx(38.0)},
+    ]
+    # Même repère que la géométrie : la dalle du RDC (épaisse de 20 cm) a son dessus au niveau.
+    document, _ = parse_glb(result.glb)
+    slab = next(node for node in element_nodes(document) if node["name"] == "Dalle RDC")
+    assert slab["matrix"][14] + 0.2 == pytest.approx(result.metadata["levels"][0]["elevation"])

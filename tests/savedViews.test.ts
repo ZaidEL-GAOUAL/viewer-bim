@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseMetadata, type PropValue } from '../src/data/metadata.ts';
-import { cameraPose, hiddenByView, hiddenInEveryView, parseViews, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView, type Vec3 } from '../src/data/savedViews.ts';
+import { cameraFromPose, cameraPose, hiddenByView, hiddenInEveryView, missingKeys, parseViews, planCameraPose, planRangeOfBox, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView, type Vec3 } from '../src/data/savedViews.ts';
 
 const close = (actual: number, expected: number, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected} (±${tolerance})`);
 const closeVec = (actual: readonly number[], expected: readonly number[], tolerance = 1e-9) => expected.forEach((x, i) => close(actual[i], x, tolerance));
@@ -410,4 +410,87 @@ test('la boîte d’un plan reste valide quand le modèle est vide, ou tout enti
 test('une vue sans étendue n’a pas de boîte de plan', () => {
   const [view] = parseViews([{ name: 'V', camera: PERSPECTIVE, sectionBox: { min: [0, 0, 0], max: [1, 1, 1] } }]);
   assert.equal(planSectionBox(view, [0, 0, 0], MODEL_BOX), null);
+});
+
+// ---------------------------------------------------------------------------------------------- vues de l'utilisateur
+
+const USER_VIEW = {
+  name: 'Ma coupe', id: 'v-1', origin: 'user',
+  camera: { position: [651210, 40, -6861490], direction: [0, -0.6, -0.8], up: [0, 0.8, -0.6], projection: 'perspective', fov: 50 },
+  sectionBox: { min: [651200, 35, -6861500], max: [651210, 41, -6861494], rotation: 20 },
+  hiddenElements: ['a'],
+  phase: 'Neuf',
+  sections: [{ name: 'Niveau R+1', point: [651205, 39.2, -6861497], normal: [0, 1, 0], enabled: true }, { point: [1, 2, 3], normal: [1, 0, 0], enabled: false }],
+  appearanceRules: [{ id: 'r1', enabled: true, conditions: [{ property: 'Niveau', op: 'equals', value: 'R+1' }], color: '#3366ff' }, { id: 'r2', enabled: true, conditions: [], opacity: 0.4 }],
+  grouping: ['Niveau', 'Catégorie'],
+  isolated: ['b', 'c'],
+};
+
+test('une vue de l’utilisateur fait l’aller-retour par le JSON avec tous ses champs', () => {
+  const [view] = parseViews([USER_VIEW]);
+  assert.equal(view.origin, 'user');
+  assert.equal(view.id, 'v-1');
+  assert.deepEqual(view.sections, [
+    { name: 'Niveau R+1', point: [651205, 39.2, -6861497], normal: [0, 1, 0], enabled: true },
+    { point: [1, 2, 3], normal: [1, 0, 0], enabled: false },
+  ]);
+  assert.equal(view.appearanceRules?.length, 2);
+  assert.deepEqual(view.grouping, ['Niveau', 'Catégorie']);
+  assert.deepEqual(view.isolated, ['b', 'c']);
+  const json = JSON.parse(JSON.stringify(viewsToJson([view])));
+  assert.deepEqual(json, [USER_VIEW]);
+  assert.deepEqual(parseViews(json), [view]);
+});
+
+test('une vue du fichier n’écrit aucun des champs des vues de l’utilisateur', () => {
+  const [view] = parseViews([{ name: 'V', camera: PERSPECTIVE }]);
+  assert.equal(view.origin, undefined, 'absent : une vue du fichier');
+  assert.deepEqual(Object.keys(viewsToJson([view])[0]).sort(), ['camera', 'name']);
+});
+
+test('des champs illisibles d’une vue de l’utilisateur sont écartés, la vue reste', () => {
+  const [view] = parseViews([{
+    name: 'V', camera: PERSPECTIVE, origin: 'autre', id: 12,
+    sections: [{ point: [0, 0], normal: [0, 1, 0] }, { point: [0, 0, 0], normal: [0, 0, 0] }, { point: [0, 0, 0], normal: [0, 2, 0] }],
+    appearanceRules: [{ id: 'x' }], grouping: ['A', 3], isolated: 'a',
+  }]);
+  assert.equal(view.origin, undefined);
+  assert.equal(view.id, undefined);
+  assert.deepEqual(view.sections, [{ point: [0, 0, 0], normal: [0, 1, 0], enabled: true }], 'normale remise à l’unité, activé par défaut');
+  assert.equal(view.appearanceRules, undefined, 'des règles invalides sont ignorées en bloc');
+  assert.deepEqual(view.grouping, ['A']);
+  assert.equal(view.isolated, undefined);
+});
+
+test('les clés d’une vue que le modèle n’a plus sont comptées, pas fatales', () => {
+  const [view] = parseViews([USER_VIEW]);
+  const index = new Map([['a', 0], ['b', 1]]);
+  assert.equal(missingKeys(view, index), 1, '« c » manque');
+  assert.equal(missingKeys({}, index), 0);
+  // Ouvrir la vue masque ce qui existe et ignore le reste.
+  assert.deepEqual([...hiddenByView(view, 2, index, () => undefined)], [1, 0]);
+});
+
+test('la caméra capturée se relit en la même pose, dans le repère du modèle', () => {
+  const offset: Vec3 = [100, 10, -50];
+  const camera = cameraFromPose({ position: [3, 4, 5], target: [3, 4, -5], up: [0, 1, 0], fov: 40, halfHeight: 7 }, 'perspective', offset, 2);
+  assert.deepEqual(camera, { position: [103, 14, -45], direction: [0, 0, -1], up: [0, 1, 0], projection: 'perspective', fov: 40 });
+  const ortho = cameraFromPose({ position: [0, 9, 0], target: [0, 0, 0], up: [0, 0, -1], fov: 40, halfHeight: 5 }, 'orthographic', offset, 1.6);
+  assert.deepEqual(ortho.size, [16, 10]);
+  const [view] = parseViews(viewsToJson([{ name: 'V', kind: '3d', camera: ortho }]));
+  const pose = cameraPose(view.camera, offset, { center: [0, 0, 0], radius: 10 }, 1.6);
+  closeVec(pose.position, [0, 9, 0]);
+  close(pose.halfHeight!, 5);
+});
+
+test('l’étendue d’un plan se déduit de sa boîte, et la boîte du plan rouvert est la même', () => {
+  const offset: Vec3 = [10, 30, 0];
+  const box = { min: [-5, 4.98, -3] as Vec3, max: [5, 6.2, 3] as Vec3, rotation: 15 };
+  const range = planRangeOfBox(box, offset);
+  close(range.bottom!, 35);
+  close(range.top, 36.2);
+  const reopened = planSectionBox({ range, sectionBox: { min: [5, 0, -3], max: [15, 0, 3], rotation: 15 } }, offset, null)!;
+  closeVec(reopened.min, box.min);
+  closeVec(reopened.max, box.max);
+  assert.equal(reopened.rotation, 15);
 });

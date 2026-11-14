@@ -1,7 +1,9 @@
 import { Box3, Sphere } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { PropertyStore, unflattenProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
-import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice } from '../data/sidecar.ts';
+import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice, userViewsOf } from '../data/sidecar.ts';
+import { levelsToJson, type Level } from '../data/levels.ts';
+import { applyUserView } from './userViews.ts';
 import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
 import { cameraPose, hiddenByView, hiddenInEveryView, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
 import { combineHidden, layerChanges } from '../data/viewLayer.ts';
@@ -23,7 +25,7 @@ import { describeRevitReport } from '../revit/revitReport.ts';
 import type { ModelSource, RawInput } from '../engine/buildModel.ts';
 import { Model } from '../engine/Model.ts';
 import { Viewer } from '../engine/Viewer.ts';
-import { AXES } from '../engine/Sections.ts';
+import { AXES, PLANE_NAMES } from '../engine/Sections.ts';
 import { STANDARD_VIEWS, VIEW_ORDER } from '../engine/views.ts';
 import { button, download, h, stored } from './dom.ts';
 import { integer, plural, s } from '../data/text.ts';
@@ -45,7 +47,7 @@ import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view';
+type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view' | 'userViews';
 type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
@@ -148,6 +150,8 @@ export class App {
   phaseEvaluation: PhaseEvaluation | null = null;
   /** Vue enregistrée ouverte (section `views`), ou null : l'affichage normal. */
   activeView: SavedView | null = null;
+  /** Les vues que l'utilisateur a enregistrées (« Mes vues »), exportées dans les deux JSON. */
+  userViews: SavedView[] = [];
   /** Éléments que la vue enregistrée masque (éléments et catégories), ou null. */
   private viewHidden: Uint8Array | null = null;
   /** Éléments que toutes les vues enregistrées masquent : masqués à l'ouverture, comme dans Revit ; « Vue par défaut » y revient. */
@@ -551,6 +555,11 @@ export class App {
     return this.isolation !== null;
   }
 
+  /** Pendant un isolement, la visibilité d'avant (1 = visible) ; sinon null. */
+  get isolationBase(): Uint8Array | null {
+    return this.isolation;
+  }
+
   /**
    * Isole la sélection (elle seule reste affichée), ou quitte l'isolement en cours en rétablissant
    * l'affichage d'avant : ce qui était masqué le redevient.
@@ -640,9 +649,20 @@ export class App {
     return this.metadata?.phases;
   }
 
-  /** Les vues enregistrées du fichier de métadonnées. */
+  /** Les vues enregistrées du fichier de métadonnées (celles de l'utilisateur sont dans `userViews`). */
   get savedViews(): readonly SavedView[] {
-    return this.metadata?.views ?? [];
+    return this.metadata?.views?.filter((view) => view.origin !== 'user') ?? [];
+  }
+
+  /** Les niveaux du modèle (section `levels`), du plus bas au plus haut. */
+  get levels(): readonly Level[] {
+    return this.metadata?.levels ?? [];
+  }
+
+  setUserViews(views: SavedView[]): void {
+    this.userViews = views;
+    this.syncDownloads();
+    this.emit('userViews');
   }
 
   /**
@@ -722,6 +742,8 @@ export class App {
       return;
     }
     if (!this.mapPanel.isOpen) this.cameraBeforeViews ??= viewer.capturePose();
+    // Une vue de l'utilisateur est exactement ce qu'il voyait : on repart de tout affiché (sans isolement ni masquage).
+    if (view.origin === 'user') this.showAll();
     const plan = view.kind === 'plan';
     const offset = model.offset.toArray();
     // Boîte de coupe : celle de la vue, ou aucune. Un plan a la sienne (recadrage en x et z, plage de hauteur en y).
@@ -753,6 +775,7 @@ export class App {
       this.syncProjectionUi();
     }
     this.activeView = view;
+    if (view.origin === 'user') applyUserView(this, view);
     this.emit('phase');
     this.emit('view');
   }
@@ -823,6 +846,7 @@ export class App {
     // La normale d'un plan de coupe désigne le côté retiré ; celle du contact pointe vers la caméra.
     sections.setTransform(axis, hit.point, hit.normal.clone());
     sections.set(axis, { enabled: true });
+    sections.names[axis] = PLANE_NAMES[axis];
     this.viewer.sectionsChanged();
     sectionHandles.select(axis);
     this.setTool('select');
@@ -957,14 +981,23 @@ export class App {
         if (!this.model) {
           this.metadata = metadata;
           notices.push({ text: 'Métadonnées chargées. Déposez maintenant le fichier .glb ou .gltf.', error: false });
-        } else if (countMatches(metadata, this.model.keys) === 0) {
-          // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
-          notices.push({ text: NO_MATCH, error: true });
         } else {
-          this.propertyEdits?.import(metadata, this.model.keys);
-          const orphans = metadata.propertiesMode === 'replace' ? '' : orphanNotice(metadata, this.model.keys);
-          if (orphans) notices.push({ text: orphans, error: true });
-          this.emit('selection');
+          // Ses vues de l'utilisateur rejoignent « Mes vues » (une vue de même identifiant est remplacée).
+          const views = userViewsOf(null, [metadata]);
+          const ids = new Set(views.map((view) => view.id));
+          if (views.length > 0) {
+            this.setUserViews([...this.userViews.filter((view) => view.id === undefined || !ids.has(view.id)), ...views]);
+            notices.push({ text: `${plural(views.length, 'vue')} ajoutée${s(views.length)} à « Mes vues ».`, error: false });
+          }
+          if (countMatches(metadata, this.model.keys) === 0) {
+            // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
+            if (views.length === 0) notices.push({ text: NO_MATCH, error: true });
+          } else {
+            this.propertyEdits?.import(metadata, this.model.keys);
+            const orphans = metadata.propertiesMode === 'replace' ? '' : orphanNotice(metadata, this.model.keys);
+            if (orphans) notices.push({ text: orphans, error: true });
+            this.emit('selection');
+          }
         }
       }
       if (ticket !== this.loadTicket) return;
@@ -1147,7 +1180,9 @@ export class App {
     if (this.georeference) out.georeference = georeferenceToJson(this.georeference);
     // Phases et vues enregistrées : le fichier d'origine les donne, le JSON exporté les garde.
     if (this.metadata?.phases) out.phases = phasesToJson(this.metadata.phases);
-    if (this.metadata?.views) out.views = viewsToJson(this.metadata.views);
+    const views = [...this.savedViews, ...this.userViews];
+    if (views.length > 0) out.views = viewsToJson(views);
+    if (this.levels.length > 0) out.levels = levelsToJson(this.levels);
     return JSON.stringify(out);
   }
 
@@ -1173,7 +1208,7 @@ export class App {
       extension = 'json';
     } else if (kind === 'changes') {
       if (!this.propertyEdits) return;
-      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName))], { type: 'application/json' });
+      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName, this.userViews))], { type: 'application/json' });
       extension = 'modifications.json';
     } else {
       this.busy('Écriture des métadonnées du modèle…');
@@ -1247,7 +1282,8 @@ export class App {
     this.jsonDownload.hidden = !hasMetadata;
     const modified = this.propertyEdits?.modifiedCount ?? 0;
     this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
-    this.changesDownload.disabled = modified === 0;
+    // Les vues de l'utilisateur sont aussi des modifications : elles s'enregistrent même sans propriété changée.
+    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0;
     this.downloads.hidden = this.model === null;
   }
 
@@ -1372,6 +1408,7 @@ export class App {
     this.phaseSelection = null;
     this.phaseEvaluation = null;
     this.activeView = null;
+    this.userViews = [];
     this.viewHidden = null;
     this.openingHidden = null;
     this.layerHidden = null;
@@ -1441,6 +1478,7 @@ export class App {
     // La base (le JSON complet qui correspond le mieux) et les JSON de modifications à appliquer par-dessus.
     const { metadata, overlays } = chooseMetadata(own, dropped, model.keys);
     this.metadata = metadata;
+    this.userViews = userViewsOf(metadata, overlays);
     this.georeference = metadata?.georeference ?? null;
     this.fileName = name;
     // Le modèle lu par morceaux est déjà dans la vue : le remettre cadre la caméra sur le modèle entier.
@@ -1613,7 +1651,7 @@ export class App {
     });
     canvas.addEventListener('pointerleave', () => this.measure.leave());
     canvas.addEventListener('dblclick', (event) => {
-      if (!onCanvas(event) || isPointMeasure(this.tool) || this.viewer.sectionHandles.blocksPicking) return;
+      if (!onCanvas(event) || isPointMeasure(this.tool) || this.viewer.handlesBusy) return;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.fitTo([hit.element]);
     });
@@ -1621,7 +1659,7 @@ export class App {
   }
 
   private handleClick(event: PointerEvent): void {
-    if (!this.model || this.viewer.sectionHandles.blocksPicking) return;
+    if (!this.model || this.viewer.handlesBusy) return;
     if (this.tool === 'section') {
       this.placeSection(event);
     } else if (!isPointMeasure(this.tool)) {

@@ -3,15 +3,17 @@
 // des éléments est désignée par la vue elle-même (`hiddenCategories.property`).
 //
 // Les coordonnées du fichier sont celles du repère du modèle (mètres, axe Y vers le haut, comme le GLB) : le viewer les
-// recentre en retranchant `Model.offset`.
+// recentre en retranchant `Model.offset` (voir modelFrame.ts).
 
 import type { PropValue } from './metadata.ts';
+import { validateAppearanceRules, type AppearanceRule } from './appearanceRules.ts';
 import { isRecord } from './json.ts';
+import { toModelPoint, type Vec3 } from './modelFrame.ts';
 
-export type Vec3 = [number, number, number];
+export type { Vec3 } from './modelFrame.ts';
 type CameraProjection = 'perspective' | 'orthographic';
 
-interface SavedViewCamera {
+export interface SavedViewCamera {
   position: Vec3;
   /** Sens du regard, unitaire (calculé depuis `target` si le fichier ne donne que celle-ci). */
   direction: Vec3;
@@ -23,7 +25,7 @@ interface SavedViewCamera {
   size?: [number, number];
 }
 
-interface SectionBoxSpec {
+export interface SectionBoxSpec {
   min: Vec3;
   max: Vec3;
   /** Rotation autour de la verticale (Y), en degrés, positive dans le sens anti-horaire vu d'en haut. */
@@ -40,7 +42,7 @@ interface HiddenCategories {
 type ViewKind = '3d' | 'plan';
 
 /** L'étendue verticale d'un plan d'étage, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). */
-interface PlanRange {
+export interface PlanRange {
   /** La profondeur de vue : le plan ne montre rien de plus bas. Absente quand elle est illimitée. */
   bottom?: number;
   /** Le plan de coupe : le plan ne montre rien de plus haut. */
@@ -63,6 +65,27 @@ export interface SavedView {
   /** Phase et filtre de phase (noms de la section `phases`). */
   phase?: string;
   phaseFilter?: string;
+  /** `'user'` : une vue que l'utilisateur a enregistrée (modifiable) ; absente : une vue du fichier (lecture seule). */
+  origin?: 'file' | 'user';
+  /** Identifiant stable (renommer une vue ne le change pas). */
+  id?: string;
+  /** Plans de coupe libres, dans le repère du modèle. */
+  sections?: SavedPlane[];
+  /** Règles de présentation (voir data/appearanceRules.ts), dans leur ordre. */
+  appearanceRules?: AppearanceRule[];
+  /** Propriétés de « Grouper par », dans l'ordre. */
+  grouping?: string[];
+  /** Clés des éléments isolés : eux seuls sont affichés. */
+  isolated?: string[];
+}
+
+/** Un plan de coupe libre enregistré : un point et une normale dans le repère du modèle. */
+export interface SavedPlane {
+  name?: string;
+  point: Vec3;
+  /** Unitaire, tournée vers la partie retirée (le côté d'où l'on regarde la coupe). */
+  normal: Vec3;
+  enabled: boolean;
 }
 
 function vec3(value: unknown): Vec3 | undefined {
@@ -149,9 +172,54 @@ export function parseViews(raw: unknown): SavedView[] {
     }
     if (typeof item.phase === 'string' && item.phase !== '') view.phase = item.phase;
     if (typeof item.phaseFilter === 'string' && item.phaseFilter !== '') view.phaseFilter = item.phaseFilter;
+    parseUserFields(item, view);
     views.push(view);
   }
   return views;
+}
+
+const strings = (raw: unknown): string[] | undefined => Array.isArray(raw) ? raw.filter((x): x is string | number => typeof x === 'string' || typeof x === 'number').map(String) : undefined;
+
+/** Les champs des vues de l'utilisateur : chacun facultatif, un champ illisible est écarté sans écarter la vue. */
+function parseUserFields(item: Record<string, unknown>, view: SavedView): void {
+  if (item.origin === 'user' || item.origin === 'file') view.origin = item.origin;
+  if (typeof item.id === 'string' && item.id !== '') view.id = item.id;
+  if (Array.isArray(item.sections)) {
+    view.sections = item.sections.flatMap((raw): SavedPlane[] => {
+      if (!isRecord(raw)) return [];
+      const point = vec3(raw.point), normal = unit(vec3(raw.normal) ?? [0, 0, 0]);
+      if (!point || !normal) return [];
+      return [{ ...(typeof raw.name === 'string' && raw.name !== '' ? { name: raw.name } : {}), point, normal, enabled: raw.enabled !== false }];
+    });
+  }
+  if (item.appearanceRules !== undefined) {
+    try { view.appearanceRules = validateAppearanceRules(item.appearanceRules); } catch { /* règles illisibles : la vue s'ouvre sans elles */ }
+  }
+  if (Array.isArray(item.grouping)) view.grouping = item.grouping.filter((path): path is string => typeof path === 'string' && path !== '');
+  const isolated = strings(item.isolated);
+  if (isolated && isolated.length > 0) view.isolated = isolated;
+}
+
+/** Le nombre de clés de la vue (éléments masqués et isolés) qu'aucun élément du modèle ne porte : le fichier a changé depuis. */
+export function missingKeys(view: Pick<SavedView, 'hiddenElements' | 'isolated'>, indexOfKey: ReadonlyMap<string, number>): number {
+  let missing = 0;
+  for (const key of [...(view.hiddenElements ?? []), ...(view.isolated ?? [])]) if (!indexOfKey.has(key)) missing++;
+  return missing;
+}
+
+/**
+ * La caméra du viewer (repère recentré, voir `Viewer.capturePose`) au format d'une vue enregistrée, dans le repère du
+ * modèle. En projection parallèle, `size` est la fenêtre montrée (largeur et hauteur, `aspect` = largeur / hauteur).
+ */
+export function cameraFromPose(
+  pose: { position: readonly number[]; target: readonly number[]; up: readonly number[]; fov: number; halfHeight: number },
+  projection: CameraProjection, offset: readonly number[], aspect: number,
+): SavedViewCamera {
+  const direction = unit(sub(pose.target as Vec3, pose.position as Vec3)) ?? [0, 0, -1];
+  const camera: SavedViewCamera = { position: toModelPoint(pose.position, offset), direction, up: [pose.up[0], pose.up[1], pose.up[2]], projection };
+  if (projection === 'perspective') camera.fov = pose.fov;
+  else camera.size = [2 * pose.halfHeight * aspect, 2 * pose.halfHeight];
+  return camera;
 }
 
 /** Une caméra prête pour le viewer : repère du modèle recentré (`Model.offset` retranché). */
@@ -319,6 +387,11 @@ export function planSectionBox(view: Pick<SavedView, 'sectionBox' | 'range'>, of
   return { min: [model.min[0] - 1, bottom, model.min[2] - 1], max: [model.max[0] + 1, top, model.max[2] + 1], rotation: 0 };
 }
 
+/** L'étendue d'un plan dont la boîte (repère recentré) est `box` : l'inverse de `planSectionBox` en y. */
+export function planRangeOfBox(box: SectionBoxSpec, offset: readonly number[]): PlanRange {
+  return { bottom: box.min[1] + offset[1] + PLAN_DEPTH_MARGIN, top: box.max[1] + offset[1] };
+}
+
 /** La section `views` au format du contrat (pour réexporter les métadonnées). */
 export function viewsToJson(views: readonly SavedView[]): Record<string, unknown>[] {
   return views.map((view) => {
@@ -339,6 +412,12 @@ export function viewsToJson(views: readonly SavedView[]): Record<string, unknown
     if (view.hiddenElements) out.hiddenElements = [...view.hiddenElements];
     if (view.phase !== undefined) out.phase = view.phase;
     if (view.phaseFilter !== undefined) out.phaseFilter = view.phaseFilter;
+    if (view.origin !== undefined) out.origin = view.origin;
+    if (view.id !== undefined) out.id = view.id;
+    if (view.sections) out.sections = view.sections.map((plane) => ({ ...(plane.name ? { name: plane.name } : {}), point: [...plane.point], normal: [...plane.normal], enabled: plane.enabled }));
+    if (view.appearanceRules) out.appearanceRules = structuredClone(view.appearanceRules);
+    if (view.grouping) out.grouping = [...view.grouping];
+    if (view.isolated) out.isolated = [...view.isolated];
     return out;
   });
 }

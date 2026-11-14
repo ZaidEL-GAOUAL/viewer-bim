@@ -2,15 +2,59 @@ import { Box3, Plane, Vector3 } from 'three';
 
 export type Axis = 0 | 1 | 2;
 
+type Triple = [number, number, number];
+
 /** Une boîte de coupe : coins avant rotation, et rotation autour de la verticale (degrés). */
-interface BoxCut {
-  min: [number, number, number];
-  max: [number, number, number];
+export interface BoxCut {
+  min: Triple;
+  max: Triple;
   rotation: number;
 }
 export const AXES: readonly Axis[] = [0, 1, 2];
 const UNIT = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)];
 const FAR_AWAY = 1e9;
+/** Les noms des trois plans tant qu'aucune action ne leur en a donné un autre. */
+export const PLANE_NAMES: readonly string[] = ['X', 'Y (hauteur)', 'Z'];
+/** Demi-épaisseur minimale d'une boîte tirée par ses poignées, en mètres. */
+const MIN_HALF = 0.005;
+
+/** Les axes de la boîte tournée de `rotation` degrés autour de Y : x → (cos, 0, −sin), y, z → (sin, 0, cos). */
+function boxAxes(rotation: number): Triple[] {
+  const angle = (rotation * Math.PI) / 180, c = Math.cos(angle), s = Math.sin(angle);
+  return [[c, 0, -s], [0, 1, 0], [s, 0, c]];
+}
+
+/** Les six faces d'une boîte (−x, +x, −y, +y, −z, +z de la boîte) : centre et normale vers l'extérieur, dans le repère de la boîte posée. */
+export function boxFaces(box: BoxCut): { centre: Triple; normal: Triple }[] {
+  const centre = [0, 1, 2].map((i) => (box.min[i] + box.max[i]) / 2);
+  const axes = boxAxes(box.rotation);
+  return [0, 1, 2, 3, 4, 5].map((face) => {
+    const axis = face >> 1, sign = face & 1 ? 1 : -1, half = (box.max[axis] - box.min[axis]) / 2;
+    const normal = axes[axis].map((x) => x * sign) as Triple;
+    return { centre: centre.map((x, i) => x + normal[i] * half) as Triple, normal };
+  });
+}
+
+/**
+ * La boîte dont la face `face` (voir `boxFaces`) a avancé de `distance` mètres vers l'extérieur (négatif : vers l'intérieur),
+ * la face opposée restant en place. La boîte tourne autour de son centre : le centre se déplace de la moitié, le long de
+ * l'axe tourné. Une face ne passe jamais la face opposée.
+ */
+export function moveBoxFace(box: BoxCut, face: number, distance: number): BoxCut {
+  const axis = face >> 1, sign = face & 1 ? 1 : -1;
+  const half = [0, 1, 2].map((i) => (box.max[i] - box.min[i]) / 2);
+  const step = Math.max(distance, 2 * (MIN_HALF - half[axis]));
+  half[axis] += step / 2;
+  const shift = boxAxes(box.rotation)[axis].map((x) => (x * sign * step) / 2);
+  const centre = [0, 1, 2].map((i) => (box.min[i] + box.max[i]) / 2 + shift[i]);
+  return { min: centre.map((x, i) => x - half[i]) as Triple, max: centre.map((x, i) => x + half[i]) as Triple, rotation: box.rotation };
+}
+
+/** Une boîte droite autour de `box`, avec une marge de 2 % de sa diagonale (au moins 5 cm). */
+export function boxAround(box: Box3): BoxCut {
+  const margin = Math.max(0.05, box.min.distanceTo(box.max) * 0.02);
+  return { min: [box.min.x - margin, box.min.y - margin, box.min.z - margin], max: [box.max.x + margin, box.max.y + margin, box.max.z + margin], rotation: 0 };
+}
 
 /** Trois plans indépendants, initialement alignés sur X/Y/Z, déplaçables et orientables. */
 export class Sections {
@@ -20,6 +64,8 @@ export class Sections {
   /** Stable gesture pivots: rotation never reprojects them onto the model centre. */
   private readonly pivots = UNIT.map(() => new Vector3());
   readonly enabled = [false, false, false];
+  /** Nom de chaque plan, donné par l'action qui l'a posé (« Niveau R+1 », « Sélection »…) ou par l'utilisateur. */
+  readonly names = [...PLANE_NAMES];
   /** Distance à l'origine mesurée suivant normals[axis]. */
   readonly position = [0, 0, 0];
   readonly flipped = [false, false, false];
@@ -111,6 +157,7 @@ export class Sections {
       this.bounds.getCenter(this.pivots[axis]);
       this.enabled[axis] = false;
       this.flipped[axis] = false;
+      this.names[axis] = PLANE_NAMES[axis];
       this.update(axis);
     }
   }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Box3, Vector3 } from 'three';
-import { Sections } from '../src/engine/Sections.ts';
+import { Sections, boxAround, boxFaces, moveBoxFace } from '../src/engine/Sections.ts';
 
 test('sans plan actif, rien n’est coupé', () => {
   const sections = new Sections();
@@ -190,4 +190,40 @@ test('un modèle qui grandit élargit les bornes sans déranger un plan réglé 
   assert.equal(sections.enabled[1], true);
   assert.equal(sections.enabled[0], false);
   assert.equal(sections.isClipped(0, 3.5, 0), true, 'le plan actif coupe toujours');
+});
+
+// ------------------------------------------------------------------------------------------- boîte modifiable
+
+test('a box moved by its handles equals the box typed in numbers', () => {
+  const box = { min: [-2, 0, -1] as [number, number, number], max: [2, 3, 1] as [number, number, number], rotation: 0 };
+  // Faces : −x, +x, −y, +y, −z, +z. Tirer +x de 1,5 m, pousser −y de 0,5 m (vers l'intérieur).
+  assert.deepEqual(moveBoxFace(moveBoxFace(box, 1, 1.5), 2, -0.5), { min: [-2, 0.5, -1], max: [3.5, 3, 1], rotation: 0 });
+  // Tournée, la face opposée ne bouge pas et la face tirée avance le long de sa normale.
+  const turned = { ...box, rotation: 30 };
+  const moved = moveBoxFace(turned, 1, 1);
+  const before = boxFaces(turned), after = boxFaces(moved);
+  const along = (face: { centre: number[]; normal: number[] }) => face.centre.reduce((sum, x, i) => sum + x * face.normal[i], 0);
+  assert.ok(Math.abs(along(after[0]) - along(before[0])) < 1e-12, 'the −x face stays');
+  assert.ok(Math.abs(along(after[1]) - along(before[1]) - 1) < 1e-12, 'the +x face moved by 1 along its normal');
+  assert.equal(moved.rotation, 30);
+  // A face cannot pass the opposite one: the box keeps a minimal thickness.
+  const flat = moveBoxFace(box, 3, -10);
+  assert.ok(flat.max[1] > flat.min[1]);
+  assert.equal(flat.min[1], 0);
+  // The six face handles sit at the face centres, normals pointing out.
+  const faces = boxFaces(box);
+  assert.deepEqual(faces.map((face) => face.centre), [[-2, 1.5, 0], [2, 1.5, 0], [0, 0, 0], [0, 3, 0], [0, 1.5, -1], [0, 1.5, 1]]);
+  assert.deepEqual(faces[5].normal, [0, 0, 1]);
+});
+
+test('a box around a selection contains it, with a small margin', () => {
+  const box = boxAround(new Box3(new Vector3(1, 2, 3), new Vector3(4, 6, 3)));
+  assert.equal(box.rotation, 0);
+  for (let axis = 0; axis < 3; axis++) assert.ok(box.min[axis] < [1, 2, 3][axis] && box.max[axis] > [4, 6, 3][axis]);
+  const sections = new Sections();
+  sections.setBounds(new Box3(new Vector3(-10, -10, -10), new Vector3(10, 10, 10)));
+  sections.setBox(box);
+  assert.equal(sections.isClipped(1, 2, 3), false);
+  assert.equal(sections.isClipped(4, 6, 3), false);
+  assert.equal(sections.isClipped(5, 6, 3), true);
 });

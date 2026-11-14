@@ -329,6 +329,26 @@ def georeference(model: Any) -> dict[str, Any] | None:
     return None
 
 
+def levels(model: Any) -> list[dict[str, Any]]:
+    """Les niveaux du modèle (section `levels` du contrat), du plus bas au plus haut.
+
+    L'altitude est en mètres dans le repère du GLB : la hauteur Z de l'IFC, celle du placement de
+    l'IfcBuildingStorey (c'est elle qui place la géométrie) ; à défaut de placement, son attribut
+    Elevation. Un niveau sans l'un ni l'autre est écarté.
+    """
+    scale = unit_util.calculate_unit_scale(model)
+    result = []
+    for storey in model.by_type("IfcBuildingStorey"):
+        if storey.ObjectPlacement is not None:
+            elevation = float(placement_util.get_local_placement(storey.ObjectPlacement)[2, 3])
+        elif storey.Elevation is not None:
+            elevation = float(storey.Elevation)
+        else:
+            continue
+        result.append({"name": storey.Name or storey.LongName or storey.GlobalId, "elevation": round(elevation * scale, 6)})
+    return sorted(result, key=lambda level: level["elevation"])
+
+
 def convert(
     model: Any,
     *,
@@ -439,6 +459,9 @@ def convert(
     position = georeference(model)
     if position is not None:
         metadata["georeference"] = position
+    storeys = levels(model)
+    if storeys:
+        metadata["levels"] = storeys
     return Conversion(
         scene=scene,
         metadata=metadata,

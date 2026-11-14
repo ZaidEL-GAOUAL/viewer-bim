@@ -4,6 +4,7 @@
 import { fileKind } from '../engine/fileKinds.ts';
 import { IFC_READ_ONLY, PropertyStore, flattenProperties, mergeProperties, type Metadata } from './metadata.ts';
 import type { PropertyEdits } from './PropertyEdits.ts';
+import { viewsToJson, type SavedView } from './savedViews.ts';
 import { integer, s } from './text.ts';
 
 /** Nombre d'éléments du modèle (`keys`) que décrit `metadata`. */
@@ -35,7 +36,23 @@ export function chooseMetadata(own: Metadata | null, dropped: readonly Metadata[
     }
   }
   if (!own || !base || base === own) return { metadata: base, overlays };
-  return { metadata: { ...base, readOnly: own.readOnly ?? base.readOnly, georeference: own.georeference ?? base.georeference, phases: own.phases ?? base.phases, views: own.views ?? base.views }, overlays };
+  // Les vues du fichier sont relues fraîches ; celles de l'utilisateur viennent du JSON déposé.
+  const views = [...(own.views ?? base.views ?? []).filter((view) => view.origin !== 'user'), ...userViewsOf(base, [])];
+  return { metadata: { ...base, readOnly: own.readOnly ?? base.readOnly, georeference: own.georeference ?? base.georeference, phases: own.phases ?? base.phases, views: views.length > 0 ? views : undefined, levels: own.levels ?? base.levels }, overlays };
+}
+
+/** Les vues de l'utilisateur de la base et des JSON de modifications, dans cet ordre ; une même vue (`id`) n'est gardée qu'une fois, la plus récente. */
+export function userViewsOf(metadata: Metadata | null, overlays: readonly Metadata[]): SavedView[] {
+  const byId = new Map<string, SavedView>();
+  const loose: SavedView[] = [];
+  for (const source of [metadata, ...overlays]) {
+    for (const view of source?.views ?? []) {
+      if (view.origin !== 'user') continue;
+      if (view.id === undefined) loose.push(view);
+      else byId.set(view.id, view);
+    }
+  }
+  return [...byId.values(), ...loose];
 }
 
 /** Les propriétés d'ouverture : les `extras` de chaque élément complétés par le JSON, ou remplacés par un instantané. */
@@ -78,10 +95,13 @@ export function orphanNotice(overlay: Metadata, keys: readonly string[]): string
   return `« ${overlay.source ?? 'JSON'} » : ${integer.format(missing)} élément${s(missing)} modifié${s(missing)} sur ${integer.format(total)} introuvable${s(missing)} dans ce modèle.`;
 }
 
-/** Le JSON « Modifications » : ce qui diffère du fichier source `sourceName`, en mode fusion, avec le fichier qu'il complète. */
-export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string): Record<string, unknown> {
+/**
+ * Le JSON « Modifications » : ce qui diffère du fichier source `sourceName`, en mode fusion, avec le fichier qu'il complète, et
+ * les vues de l'utilisateur (`userViews`) : elles aussi sont des modifications.
+ */
+export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string, userViews: readonly SavedView[] = []): Record<string, unknown> {
   const { version, elements } = edits.diff(keys);
   const kind = fileKind(sourceName);
   const source = kind && kind !== 'json' ? { name: sourceName, kind: kind === 'gltf' ? 'glb' : kind } : undefined;
-  return { version, ...(source ? { source } : {}), elements };
+  return { version, ...(source ? { source } : {}), elements, ...(userViews.length > 0 ? { views: viewsToJson(userViews) } : {}) };
 }

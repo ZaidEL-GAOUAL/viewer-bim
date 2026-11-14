@@ -10,10 +10,8 @@ import {
   LineLoop,
   Mesh,
   MeshBasicMaterial,
-  NotEqualStencilFunc,
   OrthographicCamera,
   PerspectiveCamera,
-  PlaneGeometry,
   Ray,
   LineSegments,
   Raycaster,
@@ -27,6 +25,8 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { AdaptiveResolution } from './AdaptiveResolution.ts';
+import { BoxHandles } from './BoxHandles.ts';
+import { CutDisplay } from './CutDisplay.ts';
 import { cameraUp, clonePose, easeInOut, interpolatePose, samePose, type PoseState } from './cameraPose.ts';
 import type { CameraPose } from '../data/savedViews.ts';
 import { clipRange } from './clipRange.ts';
@@ -67,6 +67,12 @@ export class Viewer {
   readonly controls: OrbitControls;
   readonly sections = new Sections();
   readonly sectionHandles: SectionHandles;
+  /** Poignées de la boîte de coupe (faces et rotation). */
+  readonly boxHandles: BoxHandles;
+  /** Contour et remplissage de la coupe, calculés quand la vue est immobile (voir `sharpen`). */
+  readonly cut: CutDisplay;
+  /** Prévenu quand la caméra passe au globe (mode carte) ou en revient. */
+  readonly onExternalCameraChange = new Set<() => void>();
   /** Mode visite : la caméra marche dans la maquette à hauteur d'yeux, à la place des contrôles d'orbite. */
   readonly walk: WalkControls;
   readonly onSectionsChange = new Set<() => void>();
@@ -85,8 +91,8 @@ export class Viewer {
   private readonly freeRay = new Ray();
   private readonly pointer = new Vector2();
   private readonly sphere = new Sphere(new Vector3(), 10);
-  private readonly capScene = new Scene();
-  private readonly cap: Mesh;
+  /** Couleur unique du remplissage des coupes (thème). */
+  private readonly capColor = new Color(0x39424f);
   private readonly outlines: LineLoop[] = [];
   /** Le plan de coupe lui-même, translucide, pour le voir et le saisir dans la vue. */
   private readonly planeFills: Mesh[] = [];
@@ -95,8 +101,6 @@ export class Viewer {
   /** Déplacement de caméra en cours vers une vue enregistrée. */
   private tween: { from: PoseState; to: PoseState; start: number; duration: number } | null = null;
   private readonly tweenPose: PoseState = { position: new Vector3(), target: new Vector3(), up: new Vector3(0, 1, 0), fov: 45, halfHeight: 1 };
-  private readonly onePlane: Plane[] = [];
-  private readonly otherPlanes: Plane[] = [];
   private readonly scratch = new Vector3();
   private readonly scratchBox = new Box3();
   private dirty = true;
@@ -123,6 +127,8 @@ export class Viewer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
+    // Le dessin de la coupe d'un plan est découpé par les autres plans (matériau par matériau).
+    this.renderer.localClippingEnabled = true;
     container.appendChild(this.renderer.domElement);
 
     this.camera.position.copy(DEFAULT_DIRECTION).multiplyScalar(30);
@@ -149,19 +155,6 @@ export class Viewer {
       this.scene.add(light);
     }
 
-    // Quadrilatère de remplissage des coupes : dessiné là où le pochoir signale l'intérieur d'un solide.
-    this.cap = new Mesh(
-      new PlaneGeometry(1, 1),
-      new MeshBasicMaterial({
-        color: 0x39424f,
-        side: DoubleSide,
-        stencilWrite: true,
-        stencilRef: 0,
-        stencilFunc: NotEqualStencilFunc,
-      }),
-    );
-    this.capScene.add(this.cap);
-
     for (const axis of AXES) {
       const geometry = new BufferGeometry();
       geometry.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
@@ -186,7 +179,10 @@ export class Viewer {
     this.boxOutline.visible = false;
     this.boxOutline.frustumCulled = false;
     this.overlay.add(this.boxOutline);
+    this.cut = new CutDisplay(this.sections, () => this.capColor, this.invalidate, () => this.externalCamera);
+    this.overlay.add(this.cut.group);
     this.sectionHandles = new SectionHandles(this);
+    this.boxHandles = new BoxHandles(this);
     this.walk = new WalkControls(this);
     this.walk.onChange.add(() => { if (this.walk.active) this.cameraMoved = true; });
 
@@ -210,6 +206,8 @@ export class Viewer {
   readonly invalidateMotion = (): void => {
     this.dirty = true;
     this.moving = true;
+    // Le calcul de la coupe reprendra à l'arrêt : il ne prend pas de temps aux images du mouvement.
+    this.cut.interrupt();
   };
 
   setBackground(color: string): void {
@@ -236,6 +234,10 @@ export class Viewer {
       this.camera.up.set(0, 1, 0);
       this.controls.update();
     }
+    // Le globe dessine la maquette sans partager la profondeur : ni contour de coupe ni poignées de boîte par-dessus.
+    this.cut.stale();
+    this.boxHandles.sync();
+    for (const callback of this.onExternalCameraChange) callback();
     this.invalidate();
   }
 
@@ -263,7 +265,8 @@ export class Viewer {
   }
 
   setCapColor(color: string): void {
-    (this.cap.material as MeshBasicMaterial).color.set(color);
+    this.capColor.set(color);
+    this.cut.refresh();
     this.invalidate();
   }
 
@@ -280,6 +283,7 @@ export class Viewer {
     this.sectionHandles.select(null);
     if (this.model) this.scene.remove(this.model.group);
     this.model = model;
+    this.cut.setModel(model);
     if (model) {
       this.scene.add(model.group);
       const box = this.boundsOf(model);
@@ -304,6 +308,7 @@ export class Viewer {
     const box = this.boundsOf(model);
     box.getBoundingSphere(this.sphere);
     this.sections.growBounds(box);
+    this.cut.modelGrown();
     this.sectionsChanged();
     if (this.pendingFit && !model.box.isEmpty()) {
       this.pendingFit = false;
@@ -501,6 +506,7 @@ export class Viewer {
 
   sectionsChanged(): void {
     for (const notify of this.onSectionsChanged) notify();
+    this.cut.stale();
     const { enabled } = this.sections;
     for (const axis of AXES) {
       const outline = this.outlines[axis];
@@ -515,8 +521,15 @@ export class Viewer {
     }
     this.updateBoxOutline();
     this.sectionHandles.sync();
+    this.boxHandles.sync();
     for (const callback of this.onSectionsChange) callback();
-    this.invalidate();
+    // Un plan qui bouge est un mouvement : seule la coupe des matériaux est dessinée, le remplissage attend l'arrêt.
+    this.invalidateMotion();
+  }
+
+  /** Un geste sur une poignée (plan ou boîte) est en cours : le clic n'est pas une sélection. */
+  get handlesBusy(): boolean {
+    return this.sectionHandles.blocksPicking || this.boxHandles.blocksPicking;
   }
 
   /** Les douze arêtes de la boîte de coupe d'une vue, quand elle est active. */
@@ -647,6 +660,7 @@ export class Viewer {
     ortho.left = -ortho.top * (width / height);
     ortho.right = ortho.top * (width / height);
     ortho.updateProjectionMatrix();
+    this.cut.setResolution(width, height);
     // Rendu immédiat : évite une image vide ou étirée pendant le redimensionnement.
     this.draw();
   }
@@ -679,7 +693,12 @@ export class Viewer {
     this.sharpenTimer = window.setTimeout(this.sharpen, SHARPEN_DELAY);
   };
 
+  /**
+   * La vue est immobile depuis `SHARPEN_DELAY` : pleine résolution, et la coupe (contour, remplissage) est calculée pour
+   * les plans du moment (par tranches sur un gros modèle ; voir `CutDisplay`).
+   */
   private readonly sharpen = (): void => {
+    this.cut.idle();
     if (this.resolutionScale !== 1) {
       this.setResolutionScale(1);
       this.draw();
@@ -724,38 +743,15 @@ export class Viewer {
       renderer.clippingPlanes = NO_PLANES;
       renderer.render(scene, camera);
     } else {
-      // 1. Géométrie opaque, coupée par les plans (les trois plans libres, et ceux de la boîte d'une vue).
+      // 1. Géométrie opaque, coupée par les plans (les trois plans libres, et ceux de la boîte).
       const planes = sections.clipPlanes;
       renderer.clippingPlanes = planes;
       camera.layers.set(0);
       renderer.render(scene, camera);
+      // 2. Le remplissage et le contour de la coupe sont dans `overlay` (voir `CutDisplay`) : un appel par plan, aucun
+      //    rendu de la scène en plus.
 
-      // 2. Remplissage : pour chaque plan actif, le pochoir compte les faces arrière et avant
-      //    des solides fermés ; là où le compte n'est pas nul, le plan traverse de la matière.
-      if (sections.fill) {
-        for (let k = 0; k < planes.length; k++) {
-          if (!sections.planeEnabled(k)) continue;
-          renderer.clearStencil();
-          this.onePlane[0] = planes[k];
-          renderer.clippingPlanes = this.onePlane;
-          scene.overrideMaterial = this.model.stencilBack;
-          renderer.render(scene, camera);
-          scene.overrideMaterial = this.model.stencilFront;
-          renderer.render(scene, camera);
-          scene.overrideMaterial = null;
-
-          // Le remplissage est découpé par tous les autres plans : il ne déborde pas de la boîte.
-          this.otherPlanes.length = 0;
-          for (let j = 0; j < planes.length; j++) if (j !== k) this.otherPlanes.push(planes[j]);
-          renderer.clippingPlanes = this.otherPlanes;
-          planes[k].projectPoint(this.sphere.center, this.cap.position);
-          this.cap.quaternion.setFromUnitVectors(UNIT[2], planes[k].normal);
-          this.cap.scale.setScalar(this.sphere.radius * 4);
-          renderer.render(this.capScene, camera);
-        }
-      }
-
-      // 3. Géométrie transparente, par-dessus les remplissages.
+      // 3. Géométrie transparente.
       renderer.clippingPlanes = planes;
       camera.layers.set(TRANSPARENT_LAYER);
       renderer.render(scene, camera);

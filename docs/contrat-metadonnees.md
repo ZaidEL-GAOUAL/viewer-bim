@@ -123,7 +123,9 @@ de deux façons :
   propriétés verrouillées (pour un `.rvt` : « Identifiant Revit »…), qui disent quel élément du
   fichier source il désigne. `source` nomme ce fichier. Comme il ne contient que les modifications,
   il reste valable après un nouvel enregistrement du fichier dans Revit : les valeurs que
-  l'utilisateur n'a pas touchées viennent fraîches du fichier.
+  l'utilisateur n'a pas touchées viennent fraîches du fichier. Les vues que l'utilisateur a
+  enregistrées (§ 2 sexies, « Vues de l'utilisateur ») y sont aussi, dans `views` : ce sont des
+  modifications. Un tel fichier peut n'avoir que des vues (`"elements": {}`).
 - **« JSON ↓ »** : toutes les propriétés, dans le format ci-dessus (propriétés du GLB, du JSON et
   modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`).
 
@@ -361,8 +363,9 @@ isométrique, pas la vue 2D.
 
 **Boîte de coupe.** `min` et `max` sont les coins de la boîte **avant rotation** ; `rotation` (degrés, 0 par défaut) la
 tourne autour de la verticale (Y), dans le sens anti-horaire vu d'en haut, autour de son centre. Le viewer garde l'intérieur de
-la boîte : six plans, en plus des trois plans de coupe libres (la carte « Coupes » a une case « Boîte de coupe de la vue »
-pour la couper ou la remettre). Une boîte qui n'est pas active n'est pas écrite.
+la boîte : six plans, en plus des trois plans de coupe libres. La carte « Coupes » la coupe ou la remet (case « Boîte de
+coupe »), la pose autour de la sélection ou de ce qui est visible, et la modifie par ses poignées (une par face, et une
+rotation autour de la verticale), même posée par une vue. Une boîte qui n'est pas active n'est pas écrite.
 
 **Plans d'étage** (`kind: "plan"`). Un plan est vu de dessus, coupé à la hauteur de coupe du plan : il montre la maquette
 entre sa profondeur de vue (`range.bottom`) et son plan de coupe (`range.top`), moins ce qu'il masque (`hiddenElements`,
@@ -381,7 +384,8 @@ entre sa profondeur de vue (`range.bottom`) et son plan de coupe (`range.top`), 
 - **Étendue lisible.** Un plan a besoin d'un `range.top` fini ; `range.bottom`, s'il est écrit, doit être fini et plus bas
   que `range.top`. Sinon l'étendue est écartée et l'entrée est lue comme une vue ordinaire (sa caméra, ses masquages et sa
   phase restent). `range` sur une vue qui n'est pas un plan est sans effet.
-- **Menu « Vues ».** Deux groupes, « Vues 3D » et « Plans d'étage » (chacun s'il a des vues) ; la note d'un plan est son
+- **Menu « Vues ».** Les groupes « Mes vues », « Vues 3D », « Plans d'étage » et « Plans par niveau » (chacun s'il a des
+  vues) ; la note d'un plan est son
   `type` (ou « plan »), puis « masquages » et sa phase.
 - **Mode carte.** Comme pour toute vue : le reste de la vue est appliqué, la caméra attend la fermeture de la carte.
 
@@ -402,6 +406,47 @@ la première vue (en perspective, avec la rotation, si c'est ainsi qu'elle étai
 l'ouverture : ce que toutes les vues 3D masquent reste masqué, le reste est affiché (sans vue 3D, ou si aucun élément n'est
 masqué par toutes, tout est affiché).
 
+**Vues de l'utilisateur** (`origin: "user"`). Le menu « Vues » enregistre ce que l'utilisateur voit (« Enregistrer cette
+vue ») ; ses vues forment le groupe « Mes vues », au-dessus des vues du fichier, et se mettent à jour, se renomment, se
+dupliquent, se suppriment et se déplacent. Une vue du fichier ne se modifie pas, mais se duplique dans « Mes vues ». Elles
+s'écrivent dans `views`, à la suite des vues du fichier, avec ces champs en plus (tous facultatifs) :
+
+```json
+{
+  "name": "Coupe R+1", "origin": "user", "id": "6f1c0e3e-0b8e-4b1a-9d0c-6a2f2d1c9b47",
+  "camera": { "position": [651210, 40, -6861490], "direction": [0, -0.6, -0.8], "up": [0, 0.8, -0.6], "projection": "perspective", "fov": 50 },
+  "sectionBox": { "min": [651200, 35, -6861500], "max": [651210, 41, -6861494], "rotation": 20 },
+  "sections": [{ "name": "Niveau R+1", "point": [651205, 39.2, -6861497], "normal": [0, 1, 0], "enabled": true }],
+  "hiddenElements": ["2O2Fr$t4X7Zf8NOew3FLOH"],
+  "isolated": ["1kTvXnbbzCWw8lcMd1dR4o", "0BTBFw6f90Nfh9rP1dl_3P"],
+  "appearanceRules": [{ "id": "r1", "enabled": true, "conditions": [{ "property": "Niveau", "op": "equals", "value": "R+1" }], "color": "#3366ff" }],
+  "grouping": ["Niveau", "Catégorie"],
+  "phase": "New Construction"
+}
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `origin` | `"user"` : une vue enregistrée par l'utilisateur, modifiable dans le viewer. Absent (ou `"file"`) : une vue du fichier, en lecture seule. |
+| `id` | Identifiant stable de la vue (renommer ne le change pas) ; deux fichiers qui portent la même vue la donnent une fois. |
+| `sections` | Plans de coupe libres (trois au plus) : `point` et `normal` dans le repère du modèle (mètres, Y vers le haut, comme `sectionBox`), `normal` unitaire tournée vers la partie retirée (le côté d'où l'on regarde la coupe), `enabled` (vrai par défaut), `name` facultatif. |
+| `isolated` | Clés des éléments isolés : eux seuls sont affichés ; `hiddenElements` est alors ce que « Ne plus isoler » laisse masqué. |
+| `appearanceRules` | Les règles de présentation (§ 2 ter), dans leur ordre. Une liste illisible est ignorée en entier. |
+| `grouping` | Les propriétés de « Grouper par », dans l'ordre. Une propriété que le modèle n'a pas est ignorée. |
+
+Une vue de l'utilisateur est **tout** ce qu'il voyait : à son ouverture, tout est d'abord réaffiché, puis la vue masque,
+isole, coupe (ses plans ; sans `sections`, aucun plan libre) et colore. Les éléments masqués par la phase ne sont pas
+écrits (la phase les masque de nouveau). Enregistrée depuis un plan d'étage ouvert en 2D, elle est un plan (`kind: "plan"`)
+dont `range` et `sectionBox` sont la boîte du moment : elle se rouvre en 2D, sans rotation. Une clé qu'aucun élément ne
+porte (le fichier a changé depuis) est ignorée, et le viewer dit combien. Les vues de l'utilisateur ne comptent pas dans la
+règle « À l'ouverture » ci-dessus. Elles sont écrites par « JSON ↓ » et par « Modifications ↓ » ; à la relecture d'un
+`.rvt` avec un JSON complet déposé, les vues du fichier sont relues fraîches et celles de l'utilisateur viennent du JSON.
+
+**Plans par niveau.** Avec une section `levels` (§ 2 octies), le menu propose « Plan du niveau … » pour chaque niveau
+qu'aucun plan du fichier ne couvre (même nom, ou profondeur de vue à moins de 5 cm du niveau) : vu de dessus, cadré sur la
+maquette, `range` de l'altitude du niveau à 1,20 m au-dessus. Calculé à l'ouverture du menu, il n'est écrit nulle part tant
+que l'utilisateur ne l'enregistre pas.
+
 **Ce qui n'est pas repris** (un `.rvt` le contient, mais le viewer ne le dessine pas) : les remplacements graphiques par
 catégorie ou par élément, les filtres de vue, le niveau de détail, le style visuel, le rendu (ombres, arrière-plan), les
 gabarits de vue (la vue enregistre déjà les valeurs qu'un gabarit lui a appliquées) et la profondeur de découpe d'une vue
@@ -412,12 +457,33 @@ dont la caméra est illisible est ignorée sans empêcher les autres.
 
 ## 2 septies. Compatibilité
 
-Les sections `phases` et `views` sont facultatives et ajoutées sans changer la version du format : un fichier d'avant
+Les sections `phases`, `views` et `levels` sont facultatives et ajoutées sans changer la version du format : un fichier d'avant
 continue de s'ouvrir tel quel, un viewer qui ne les connaît pas les ignore, et une section illisible est ignorée (elle n'empêche
 pas d'ouvrir le modèle). `source` et la valeur `null` qui retire une propriété en mode fusion (§ 2 bis) sont des ajouts de même
 nature : un viewer qui ignore `source` lit le JSON de modifications comme un complément, et un viewer qui ignore le sens de `null`
 montre une valeur vide. Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
 viewer qui les ignore ouvre un plan comme une vue parallèle de dessus. « JSON ↓ » les réécrit telles qu'elles ont été lues.
+Les champs des vues de l'utilisateur (`origin`, `id`, `sections`, `isolated`, `appearanceRules`, `grouping`) le sont aussi :
+un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa boîte, ses masquages, sa phase).
+
+## 2 octies. Niveaux (`levels`)
+
+Une liste optionnelle à la racine donne les niveaux du modèle :
+
+```json
+"levels": [{ "name": "RDC", "elevation": 35.0 }, { "name": "R+1", "elevation": 38.0 }]
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `name` | Nom du niveau (texte non vide). |
+| `elevation` | Altitude du niveau, en mètres, dans le repère du modèle : le Y du GLB, c'est-à-dire la hauteur Z de l'IFC. |
+
+Le viewer la trie par altitude et écarte une entrée sans nom ou sans altitude finie. Il s'en sert pour les plans par niveau
+(§ 2 sexies) et la coupe « au niveau » (carte « Coupes » : un plan horizontal à 1,20 m au-dessus du niveau choisi, ou à une
+hauteur saisie dans le même repère). Le convertisseur IFC fourni l'écrit depuis les `IfcBuildingStorey` : la hauteur de leur
+placement (c'est elle qui place la géométrie), à défaut leur attribut `Elevation`, convertie en mètres. La lecture d'un
+`.rvt` ne l'écrit pas encore. « JSON ↓ » la réécrit telle qu'elle a été lue.
 
 ## 3. Groupes et sous-groupes
 
@@ -437,7 +503,7 @@ structure spatiale d'un IFC devient :
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
 (regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
-ignore les sections qu'il ne connaît pas. `georeference`, `phases` et `views` sont déjà de celles-là.
+ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views` et `levels` sont déjà de celles-là.
 
 ## 5. Variante USD
 

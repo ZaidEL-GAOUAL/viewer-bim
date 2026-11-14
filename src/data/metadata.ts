@@ -4,6 +4,7 @@
 import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
 import { parsePhases, type Phases } from './phases.ts';
 import { parseViews, type SavedView } from './savedViews.ts';
+import { parseLevels, type Level } from './levels.ts';
 import { numericValue, plainNumber } from './conditions.ts';
 import { isRecord } from './json.ts';
 import { decimal, fold } from './text.ts';
@@ -33,6 +34,8 @@ export interface Metadata {
   phases?: Phases;
   /** Vues enregistrées (voir data/savedViews.ts), si le fichier en donne. */
   views?: SavedView[];
+  /** Niveaux du modèle (voir data/levels.ts), si le fichier en donne. */
+  levels?: Level[];
 }
 
 /**
@@ -166,7 +169,9 @@ export function parseMetadata(json: unknown): Metadata {
     for (const [id, raw] of Object.entries(json)) if (id !== 'version') add(id, raw);
   }
 
-  if (elements.size === 0) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
+  // Un JSON de modifications qui n'apporte que des vues de l'utilisateur n'a aucun élément : il reste lisible.
+  const views = parseViews(json.views);
+  if (elements.size === 0 && (json.elements === undefined || views.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
   const metadata: Metadata = { version, elements };
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
@@ -176,8 +181,9 @@ export function parseMetadata(json: unknown): Metadata {
   // Sections facultatives : une section illisible est ignorée, elle n'empêche pas d'ouvrir le fichier.
   const phases = parsePhases(json.phases);
   if (phases) metadata.phases = phases;
-  const views = parseViews(json.views);
   if (views.length > 0) metadata.views = views;
+  const levels = parseLevels(json.levels);
+  if (levels.length > 0) metadata.levels = levels;
   return metadata;
 }
 
