@@ -101,6 +101,24 @@ propriétés (`Pset_*`) restent modifiables. Dans l'USD, la même liste est dans
   plus de quelques gigaoctets. Au-delà d'une centaine de mégaoctets d'IFC, préférer la ligne de
   commande.
 
+## Moteur dans le navigateur : installation et durée de vie
+
+- Le paquet est mis en cache dans le Cache Storage du navigateur (`ifcopenshell-wheel-v1`), sous
+  son empreinte SHA-256, qui est revérifiée à chaque lecture : une entrée abîmée est jetée et le
+  paquet retéléchargé. Sans cache (fenêtre privée, éviction), on retombe sur le réseau. Les octets
+  viennent toujours du site d'IfcOpenShell ; rien n'est hébergé ni embarqué ici.
+- Les dépendances de la 0.8.5, lues dans le `METADATA` du paquet officiel (empreinte ci-dessous) :
+  shapely, numpy, isodate, python-dateutil, lark, typing-extensions. Elles sont chargées depuis
+  Pyodide en parallèle du paquet, puis celui-ci est installé avec `deps=False`. Si l'une manque dans
+  Pyodide, micropip reprend sa résolution habituelle. Changer de version du paquet impose de relire
+  ce `METADATA`.
+- Deux niveaux de moteur : `python` (Python et numpy, suffisant pour `usd_writer.py` et `scene.py`)
+  et `ifc` (avec IfcOpenShell). L'export USD ne demande que le premier.
+- `scene.py` (scène : maillages, matériaux, éléments) ne dépend pas d'IfcOpenShell ; `ifc_to_glb.py`
+  et `usd_writer.py` l'importent. `usd_writer.py` n'importe donc plus `ifc_to_glb`.
+- Politique de durée de vie des workers : voir « Conversion d'un IFC : mesures » dans le README du
+  dépôt (5 min pour tous, puis un seul jusqu'à 10 min d'onglet caché ; un seul sous 4 Go).
+
 ## Version d'IfcOpenShell dans le navigateur
 
 Le viewer *charge* le paquet 0.8.5 depuis le site d'IfcOpenShell

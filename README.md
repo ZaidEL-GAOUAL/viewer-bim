@@ -390,10 +390,35 @@ sur un Apple M4 Pro :
 | Navigateur, 4 workers, premier IFC de la session | 11,5 s (dont 6 s de mise en route du convertisseur) |
 | Navigateur, 4 workers, moteur déjà initialisé | 5 s |
 
+Ces trois mesures datent d'**avant** la politique ci-dessous (à l'époque, chaque conversion
+préparait de nouveau tous les workers sauf un, et le dernier était arrêté après 30 s).
+
 Chaque convertisseur occupe en mémoire environ quinze fois la taille de l'IFC (320 Mo pour ce
-fichier). Le viewer en lance d'autant moins que le fichier est gros et la mémoire limitée.
-Ces mesures historiques ne comparent pas le parallélisme à conditions identiques. Les workers
-supplémentaires sont libérés après la conversion et le dernier après 30 secondes d’inactivité.
+fichier), plus environ 250 Mo de moteur au repos. Le viewer en lance d'autant moins que le fichier
+est gros et la mémoire limitée. Ces mesures historiques ne comparent pas le parallélisme à
+conditions identiques.
+
+**Moteur gardé prêt** (`src/ifc/enginePolicy.ts`, `convertIfc.ts`) :
+
+- Le fichier IfcOpenShell (14,6 Mo) est gardé dans le Cache Storage du navigateur, sous son
+  empreinte SHA-256, revérifiée à chaque lecture. Il vient toujours du site d'IfcOpenShell vers le
+  navigateur de l'utilisateur ; ce site ne le distribue pas. Si le cache est vide, abîmé ou
+  indisponible (fenêtre privée), le fichier est retéléchargé. Ses dépendances (numpy, shapely…) sont
+  chargées en parallèle du téléchargement, puis le paquet est installé sans résolution réseau.
+- Après la dernière opération, tous les workers préparés restent prêts 5 minutes ; ensuite un seul
+  reste, jusqu'à ce que l'onglet soit caché depuis 10 minutes. Sous 4 Go de mémoire, un seul worker
+  est gardé, tout de suite. Une erreur jette tout le groupe.
+- Le moteur est préparé d'avance quand on glisse un fichier sur la fenêtre, quand on approche ou
+  active « Ouvrir », ou après 2 s d'inactivité si ce navigateur a déjà converti un IFC. Jamais en
+  économie de données ni sous 4 Go ; un échec est silencieux.
+- L'export USD ne charge plus IfcOpenShell : Python et numpy suffisent.
+- La carte « IFC converti » donne la durée de chaque phase (démarrage du moteur, lecture, géométrie,
+  assemblage).
+
+Mesuré après ce changement sur l'IFC de démonstration (petit fichier, un seul worker, novembre 2026) :
+première conversion de la session 4,1 s, dont 3,9 s de mise en route ; seconde conversion 0,1 s
+(« Moteur déjà prêt »). L'export USD d'un modèle Revit ne charge plus IfcOpenShell (Python et numpy
+seulement). La mesure sur l'IFC de 21 Mo à 4 workers reste à refaire.
 
 ### Précautions d'affichage
 

@@ -14,7 +14,9 @@ import { ModelBuilder, buildModel, gltfSource } from '../engine/buildModel.ts';
 import { ModelFileError, filesFromDrop, filesFromList, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
 import { extensionOf, isIfcFile, isJsonFile, isModelFile, isRevitFile, isUsdFile, withoutExtension } from '../engine/fileKinds.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
-import { IfcTooLargeError, convertIfc, packageUsd } from '../ifc/convertIfc.ts';
+import { IfcTooLargeError, convertIfc, packageUsd, preloadIfc } from '../ifc/convertIfc.ts';
+import { rememberIfcUse, watchPreloadIntent } from '../ifc/preloadIntent.ts';
+import { describeTimings } from '../ifc/timings.ts';
 import { loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
 import { isMemoryFailure, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
 import { describeRevitReport } from '../revit/revitReport.ts';
@@ -327,6 +329,8 @@ export class App {
     };
 
     this.stats = h('div', { class: 'stats' });
+    const openButton = button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .ifc, un fichier Revit (.rvt, .rfa, gabarits .rte et .rft), ou un .glb ou .gltf avec son .json de métadonnées' });
+    watchPreloadIntent({ page: window, openControl: openButton, preload: preloadIfc, storage: stored });
     const topbar = h('header', { class: 'topbar' },
       panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
@@ -335,7 +339,7 @@ export class App {
         formats,
       ),
       h('div', { class: 'bar-group' },
-        button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .ifc, un fichier Revit (.rvt, .rfa, gabarits .rte et .rft), ou un .glb ou .gltf avec son .json de métadonnées' }),
+        openButton,
         button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
         button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
         samples, fileInput, folderInput, this.metadataInput,
@@ -1022,7 +1026,8 @@ export class App {
     this.originalGlb = result.glb;
     this.conversion = { name: base, source: file.name };
     this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
-    const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
+    const { elements, seconds, workers, linework, without_geometry: failedCount, failed, timings } = result.report;
+    rememberIfcUse(stored);
     const lines = [
       `${plural(elements, 'élément')} ${elements < 2 ? 'converti' : 'convertis'} en ${seconds.toLocaleString('fr-FR')} s${workers > 1 ? ` avec ${workers} tâches parallèles` : ''}, ${elements < 2 ? 'relié à ses propriétés par son' : 'reliés à leurs propriétés par leur'} identifiant IFC.`,
     ];
@@ -1035,6 +1040,7 @@ export class App {
       const more = failedCount > 5 ? ` et ${integer.format(failedCount - 5)} autres` : '';
       lines.push(`Attention : ${integer.format(failedCount)} ${failedCount > 1 ? 'éléments n’ont pas pu être convertis et manquent' : 'élément n’a pas pu être converti et manque'} à l’affichage (${shown}${more}).`);
     }
+    lines.push(describeTimings(timings));
     this.conversionTitle.textContent = 'IFC converti';
     this.conversionText.textContent = lines.join(' ');
     this.conversionText.classList.toggle('warning', failedCount > 0);

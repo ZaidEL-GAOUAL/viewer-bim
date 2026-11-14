@@ -27,7 +27,7 @@ from typing import Any
 
 import numpy as np
 
-from ifc_to_glb import ElementData, MaterialData, MeshData, Primitive, Scene
+from scene import ElementData, MaterialData, MeshData, Primitive, Scene
 
 CONTRACT_VERSION = 1
 ROOT = "/IFC"

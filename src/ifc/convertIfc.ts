@@ -1,4 +1,6 @@
-import type { ConvertMessage, ConvertRequest, UsdRequest } from './ifcWorker.ts';
+import type { ConvertMessage, ConvertRequest, PrepareRequest, UsdRequest } from './ifcWorker.ts';
+import { mayPreload, settle } from './enginePolicy.ts';
+import { combineTimings, type IfcTimings, type ShardTimings } from './timings.ts';
 import { mergeGlb, mergeMetadata } from './mergeGlb.ts';
 import { megabytes } from '../data/text.ts';
 import { ASSUMED_MEMORY_GB, deviceMemoryGB } from '../engine/deviceMemory.ts';
@@ -21,6 +23,8 @@ interface IfcReport {
   seconds: number;
   /** Nombre de convertisseurs lancés en parallèle. */
   workers: number;
+  /** Durée de chaque phase, pour voir où va le temps. */
+  timings: IfcTimings;
 }
 
 interface IfcConversion {
@@ -63,11 +67,40 @@ function isMemoryError(error: unknown): boolean {
 const pool: Worker[] = [];
 let nextId = 1;
 let operations: Promise<unknown> = Promise.resolve();
-let idleTimer: ReturnType<typeof setTimeout> | undefined;
+let running = false;
+let lastUsed = 0;
+let hiddenSince: number | null = null;
+let watching = false;
+let settleTimer: ReturnType<typeof setTimeout> | undefined;
+
+const newWorker = () => new Worker(new URL('./ifcWorker.ts', import.meta.url), { type: 'module' });
+
+/** Arrête les convertisseurs en trop, selon la règle de enginePolicy.ts, et programme la prochaine échéance. */
+function applyPolicy(): void {
+  clearTimeout(settleTimer);
+  if (running || pool.length === 0) return; // jamais en plein travail : les opérations en file la relancent
+  const { keep, recheckIn } = settle({ size: pool.length, lastUsed, hiddenSince, memoryGB: deviceMemoryGB() }, performance.now());
+  for (const worker of pool.splice(keep)) worker.terminate();
+  if (recheckIn !== null && pool.length > 0) settleTimer = setTimeout(applyPolicy, recheckIn);
+}
+
+/** Suit la visibilité de l'onglet : un onglet caché longtemps libère le dernier convertisseur. */
+function watchVisibility(): void {
+  if (watching || typeof document === 'undefined' || typeof document.addEventListener !== 'function') return;
+  watching = true;
+  const update = () => {
+    hiddenSince = document.visibilityState === 'hidden' ? (hiddenSince ?? performance.now()) : null;
+    applyPolicy();
+  };
+  document.addEventListener('visibilitychange', update);
+  update();
+}
 
 function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+  watchVisibility();
   const next = operations.then(async () => {
-    clearTimeout(idleTimer);
+    clearTimeout(settleTimer);
+    running = true;
     try { return await operation(); }
     catch (error) {
       // A worker error may leave a dead runtime which cannot answer the next queued job.
@@ -75,16 +108,64 @@ function enqueue<T>(operation: () => Promise<T>): Promise<T> {
       throw error;
     }
     finally {
-      // Only one warm runtime is useful between operations; release shard heaps immediately.
-      for (const worker of pool.splice(1)) worker.terminate();
-      idleTimer = setTimeout(() => {
-        for (const worker of pool.splice(0)) worker.terminate();
-      }, 30_000);
+      running = false;
+      lastUsed = performance.now();
+      applyPolicy();
     }
   });
   // Keep only completion in the queue, never the last model's large buffers.
   operations = next.then(() => undefined, () => undefined);
   return next;
+}
+
+let preloadQueued = false;
+
+/**
+ * Prépare un convertisseur d'avance (Python, IfcOpenShell), pour que la prochaine conversion démarre
+ * tout de suite. Passe par la même file que les conversions, ne fait rien en économie de données ou
+ * avec peu de mémoire, et ne signale jamais d'échec : un préchargement raté (hors ligne) laisse
+ * simplement le moteur à préparer au moment de la conversion.
+ */
+export function preloadIfc(): void {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (preloadQueued || !mayPreload({ saveData: connection?.saveData, memoryGB: deviceMemoryGB() })) return;
+  preloadQueued = true;
+  void enqueue(async () => {
+    preloadQueued = false;
+    const worker = pool[0] ?? (pool[0] = newWorker());
+    try { await prepareWorker(worker, 'ifc'); }
+    catch {
+      // Silencieux, et sans toucher aux autres convertisseurs : seul celui-ci est jeté.
+      const index = pool.indexOf(worker);
+      if (index >= 0) pool.splice(index, 1);
+      worker.terminate();
+    }
+  }).catch(() => undefined);
+}
+
+/** Demande à un convertisseur de se préparer, sans rien convertir. */
+function prepareWorker(worker: Worker, level: PrepareRequest['level']): Promise<void> {
+  const id = nextId++;
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+    };
+    const onMessage = (event: MessageEvent<ConvertMessage>) => {
+      const message = event.data;
+      if (message.id !== id) return;
+      if (message.type === 'ready') { finish(); resolve(); }
+      else if (message.type === 'error') { finish(); reject(new Error(message.message)); }
+    };
+    const onError = (event: ErrorEvent) => {
+      finish();
+      reject(new Error(event.message || 'Le convertisseur IFC s’est arrêté.'));
+    };
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    const request: PrepareRequest = { kind: 'prepare', id, level, wheelUrl: WHEEL, wheelSha256: WHEEL_SHA256 };
+    worker.postMessage(request);
+  });
 }
 
 /**
@@ -105,6 +186,7 @@ interface Part {
   glb: ArrayBuffer;
   metadata: string;
   report: Record<string, number> & { failed?: FailedElement[] };
+  timings: ShardTimings;
 }
 
 /** Lance la conversion d'une tranche sur un convertisseur du groupe. */
@@ -128,7 +210,7 @@ function convertShard(
       else if (message.type === 'progress') onProgress(message.percent);
       else if (message.type === 'done') {
         finish();
-        resolve({ glb: message.glb, metadata: message.metadata, report: message.report as Part['report'] });
+        resolve({ glb: message.glb, metadata: message.metadata, report: message.report as Part['report'], timings: message.timings });
       } else if (message.type === 'error') {
         finish();
         reject(new Error(message.message));
@@ -154,7 +236,7 @@ export function packageUsd(glb: ArrayBuffer, metadata: string, onStatus: (messag
 }
 
 function packageModel(glb: ArrayBuffer, metadata: string, onStatus: (message: string) => void): Promise<ArrayBuffer> {
-  if (pool.length === 0) pool.push(new Worker(new URL('./ifcWorker.ts', import.meta.url), { type: 'module' }));
+  if (pool.length === 0) pool.push(newWorker());
   const worker = pool[0];
   const id = nextId++;
   return new Promise<ArrayBuffer>((resolve, reject) => {
@@ -180,7 +262,7 @@ function packageModel(glb: ArrayBuffer, metadata: string, onStatus: (message: st
     };
     worker.addEventListener('message', onMessage);
     worker.addEventListener('error', onError);
-    const request: UsdRequest = { kind: 'usd', id, glb: glb.slice(0), metadata, wheelUrl: WHEEL, wheelSha256: WHEEL_SHA256 };
+    const request: UsdRequest = { kind: 'usd', id, glb: glb.slice(0), metadata };
     worker.postMessage(request, [request.glb]);
   });
 }
@@ -206,6 +288,7 @@ async function convertIfcNow(file: File, onStatus: (message: string) => void): P
   const memoryGB = deviceMemoryGB() ?? ASSUMED_MEMORY_GB;
   let count = workerCount(file.size, navigator.hardwareConcurrency || 2, memoryGB);
   const source = await file.arrayBuffer();
+  const read = Math.round(performance.now() - started);
 
   let parts: Part[];
   for (;;) {
@@ -223,10 +306,14 @@ async function convertIfcNow(file: File, onStatus: (message: string) => void): P
   }
 
   onStatus('Assemblage du modèle…');
+  const merging = performance.now();
   const sum = (key: string) => parts.reduce((total, part) => total + (part.report[key] ?? 0), 0);
+  const glb = mergeGlb(parts.map((part) => part.glb));
+  const metadata = mergeMetadata(parts.map((part) => part.metadata));
+  const merge = Math.round(performance.now() - merging);
   return {
-    glb: mergeGlb(parts.map((part) => part.glb)),
-    metadata: mergeMetadata(parts.map((part) => part.metadata)),
+    glb,
+    metadata,
     report: {
       elements: sum('elements'),
       triangles: sum('triangles'),
@@ -235,13 +322,14 @@ async function convertIfcNow(file: File, onStatus: (message: string) => void): P
       failed: parts.flatMap((part) => part.report.failed ?? []),
       seconds: Math.round((performance.now() - started) / 100) / 10,
       workers: count,
+      timings: combineTimings(parts.map((part) => part.timings), merge, read),
     },
   };
 }
 
 /** Convertit le fichier avec `count` convertisseurs en parallèle, chacun traitant une tranche. */
 async function convertWith(count: number, source: ArrayBuffer, onStatus: (message: string) => void): Promise<Part[]> {
-  while (pool.length < count) pool.push(new Worker(new URL('./ifcWorker.ts', import.meta.url), { type: 'module' }));
+  while (pool.length < count) pool.push(newWorker());
   const progress = new Array<number>(count).fill(0);
   let converting = false;
   return Promise.all(
