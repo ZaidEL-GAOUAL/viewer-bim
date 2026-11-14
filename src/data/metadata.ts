@@ -4,8 +4,9 @@
 import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
 import { parsePhases, type Phases } from './phases.ts';
 import { parseViews, type SavedView } from './savedViews.ts';
+import { numericValue, plainNumber } from './conditions.ts';
 import { isRecord } from './json.ts';
-import { decimal } from './text.ts';
+import { decimal, fold } from './text.ts';
 
 export type PropValue = string | number | boolean | null;
 export type FlatProps = Record<string, PropValue>;
@@ -24,6 +25,8 @@ export interface Metadata {
   readOnly?: string[];
   /** Complete snapshots replace embedded properties for matching elements. Older JSON merges. */
   propertiesMode?: 'replace';
+  /** Un JSON de modifications : le nom du fichier source qu'il complète (`source.name` du contrat). */
+  modifies?: string;
   /** Position de la maquette sur Terre (voir geo/georeference.ts), si le fichier la donne. */
   georeference?: Georeference;
   /** Phases du projet et leurs filtres (voir data/phases.ts), si le fichier les donne. */
@@ -56,7 +59,7 @@ export function isReadOnly(path: string, patterns: readonly string[]): boolean {
   return false;
 }
 
-const SUPPORTED_VERSION = 1;
+export const SUPPORTED_VERSION = 1;
 export const PATH_SEP = ' / ';
 
 /** Chemin d'une propriété écrit à la main : « Catégorie/Nom » ou « Catégorie /  Nom » deviennent « Catégorie / Nom ». */
@@ -87,12 +90,42 @@ export function flattenProperties(input: Record<string, unknown>, prefix = '', o
 
 /**
  * Réunit les propriétés déjà présentes dans le GLB et celles du JSON : celles du GLB d'abord,
- * celles du JSON ensuite. Pour une propriété de même nom, la valeur du JSON l'emporte.
+ * celles du JSON ensuite. Pour une propriété de même nom, la valeur du JSON l'emporte, et `null`
+ * la retire (sans propriétés du GLB, il n'y a rien à retirer : le JSON reste tel quel).
  */
 export function mergeProperties(fromModel: FlatProps | undefined, fromMetadata: FlatProps | undefined): FlatProps | undefined {
   if (!fromModel) return fromMetadata;
   if (!fromMetadata) return fromModel;
-  return { ...fromModel, ...fromMetadata };
+  const merged = { ...fromModel, ...fromMetadata };
+  for (const [path, value] of Object.entries(fromMetadata)) if (value === null) delete merged[path];
+  return merged;
+}
+
+const BOOLEANS: ReadonlyMap<string, boolean> = new Map([['oui', true], ['vrai', true], ['true', true], ['1', true], ['non', false], ['faux', false], ['false', false], ['0', false]]);
+
+/**
+ * La valeur saisie `raw`, dans le type de la valeur en place `existing` : un nombre reste un nombre (« 12,5 » compris),
+ * un booléen un booléen (« oui », « non »…), un texte un texte. Une propriété nouvelle ou vide prend le type que le
+ * texte a l'air d'avoir. Un champ vidé efface la valeur. Lève une erreur, à montrer telle quelle, si la valeur ne se
+ * convertit pas. Partagée par la fiche, les filtres et l'assistant (`set_property`).
+ */
+export function coerceTo(existing: PropValue | undefined, raw: PropValue): PropValue {
+  if (raw === null) return null;
+  const text = String(raw).trim();
+  if (text === '') return null;
+  if (typeof existing === 'number') {
+    const number = typeof raw === 'boolean' ? undefined : numericValue(text);
+    if (number === undefined) throw new Error(`« ${text} » n’est pas un nombre.`);
+    return number;
+  }
+  if (typeof existing === 'boolean') {
+    const value = typeof raw === 'boolean' ? raw : BOOLEANS.get(fold(text));
+    if (value === undefined) throw new Error(`« ${text} » n’est pas oui ou non.`);
+    return value;
+  }
+  if (typeof existing === 'string') return typeof raw === 'string' ? raw : text;
+  if (typeof raw !== 'string') return raw;
+  return text === 'true' ? true : text === 'false' ? false : plainNumber(text) ?? text;
 }
 
 /** Valeur d'une propriété propre à l'objet (jamais une méthode héritée comme `toString`). */
@@ -137,6 +170,7 @@ export function parseMetadata(json: unknown): Metadata {
   const metadata: Metadata = { version, elements };
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
+  if (json.elements !== undefined && isRecord(json.source) && typeof json.source.name === 'string') metadata.modifies = json.source.name;
   const georeference = parseGeoreference(json.georeference);
   if (georeference) metadata.georeference = georeference;
   // Sections facultatives : une section illisible est ignorée, elle n'empêche pas d'ouvrir le fichier.

@@ -86,8 +86,9 @@ fn run(path: &PathBuf, limit: usize) -> Run {
 fn check_contract(run: &Run) {
     let metadata = &run.metadata;
     assert_eq!(metadata["version"], 1);
+    // Seule l'identité est verrouillée (l'identifiant, le GUID et l'origine de la forme) : tout le reste se modifie dans le viewer.
     let read_only: Vec<&str> = metadata["readOnly"].as_array().expect("readOnly").iter().map(|v| v.as_str().expect("motif")).collect();
-    assert!(read_only.contains(&"Catégorie") && read_only.contains(&"Identifiant Revit"), "readOnly : {read_only:?}");
+    assert_eq!(read_only, ["Identifiant Revit", "GUID IFC", "Source de la géométrie"], "readOnly");
     let elements = metadata["elements"].as_object().expect("elements");
     assert_eq!(elements.len(), run.ids.len(), "un élément par identifiant demandé");
     for (index, key) in run.keys.iter().enumerate() {
@@ -100,9 +101,7 @@ fn check_contract(run: &Run) {
         // L'origine de la forme est là (sa place, juste après les matériaux, se vérifie côté JavaScript,
         // seul à garder l'ordre des propriétés d'un objet JSON).
         assert_eq!(properties["Source de la géométrie"], "Forme Revit", "source de la géométrie de {key}");
-        // Tout nom de propriété de tête ou de groupe est en lecture seule.
         for (name, value) in properties {
-            assert!(read_only.contains(&name.as_str()), "« {name} » n'est pas dans readOnly");
             if let Some(group) = value.as_object() {
                 assert!(!group.is_empty(), "groupe vide « {name} »");
             }

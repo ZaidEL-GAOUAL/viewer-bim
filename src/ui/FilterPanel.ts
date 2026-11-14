@@ -1,8 +1,8 @@
 import { suggestGrouping } from '../data/grouping.ts';
 import { categoryColor } from '../data/palette.ts';
-import { UNDEFINED_LABEL, ownValue, type PropValue } from '../data/metadata.ts';
+import { UNDEFINED_LABEL, coerceTo, ownValue } from '../data/metadata.ts';
 import { validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
-import { plainNumber, type RuleCondition, type RuleOp } from '../data/conditions.ts';
+import { type RuleCondition, type RuleOp } from '../data/conditions.ts';
 import { ELEMENT_FIELDS, fieldLabel, isElementField } from '../data/elementFields.ts';
 import type { App } from './App.ts';
 import { fold, integer, s } from '../data/text.ts';
@@ -281,10 +281,8 @@ export class FilterPanel {
       const row = h('div', { class: 'appearance-condition' }, property, op, value, scale,
         button('×', () => { row.remove(); readers.splice(readers.findIndex((entry) => entry.row === row), 1); }, { title: 'Retirer cette condition' }));
       readers.push({ row, read: () => {
-        const text = value.value.trim();
-        let parsed: PropValue = text;
-        if (text === 'true') parsed = true; else if (text === 'false') parsed = false;
-        else parsed = plainNumber(text) ?? text;
+        // Comme une propriété nouvelle : « 12,5 » est un nombre, true et false des booléens ; un champ vide reste vide.
+        const parsed = coerceTo(undefined, value.value) ?? '';
         return { property: property.value, op: op.value as RuleOp, ...(['missing', 'present'].includes(op.value) ? {} : { value: parsed }), numericScale: scale.value as RuleCondition['numericScale'] };
       } });
       conditions.append(row);

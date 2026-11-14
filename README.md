@@ -66,7 +66,8 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
     dans le nom : longueurs, surfaces, volumes et angles, mais aussi débits (L/s), vitesses (m/s),
     pressions (Pa), températures (°C), puissances (W, VA), tensions (V), courants (A), éclairements
     (lx), masses, efforts… Une grandeur dont l'unité interne n'est pas établie reste telle quelle,
-    sans unité dans le nom. Tout est en lecture seule, comme pour un IFC. Chaque élément est
+    sans unité dans le nom. Tout se modifie dans le viewer, sauf l'identité de l'élément
+    (identifiant Revit, GUID IFC, origine de la forme) ; le `.rvt` n'est jamais écrit. Chaque élément est
     relié à son JSON par le GlobalId IFC que calcule l'export IFC de Revit : un JSON écrit pour un
     export IFC du même modèle s'applique donc aussi au `.rvt`. La position sur Terre est reprise
     quand le fichier la donne : latitude, longitude, altitude, nord vrai et décalage de l'origine du
@@ -137,9 +138,12 @@ liens symboliques. Les scripts appellent donc les outils par leur chemin dans `n
   coup avec le bouton « Métadonnées… ». Le lien avec les objets 3D se fait par identifiant.
 - **Modification manuelle des métadonnées** : dans la fiche, chaque propriété se modifie sur place
   (texte, nombre, booléen ou date), pour un élément ou pour toute la sélection. On peut ajouter
-  ou supprimer une propriété et annuler/rétablir ces changements depuis la barre d’outils. Les propriétés `readOnly` (pour un IFC : classe,
-  type, niveau, matériaux, quantités…) s'affichent avec un cadenas. « JSON ↓ » télécharge les
-  métadonnées modifiées ; « Annuler les modifications » revient aux fichiers chargés.
+  ou supprimer une propriété et annuler/rétablir ces changements depuis la barre d’outils. Une saisie garde
+  le type de la propriété (« 12,5 » reste un nombre). Les propriétés `readOnly` (pour un IFC : classe,
+  type, niveau, matériaux, quantités… ; pour un `.rvt` : l'identité seule) s'affichent avec un cadenas. Une valeur
+  différente du fichier est marquée, « ↺ » y revient. « Modifications ↓ » télécharge seulement ce qui a changé :
+  ce JSON, déposé de nouveau avec le fichier, rétablit les modifications. « JSON ↓ » télécharge toutes les
+  métadonnées ; « Annuler les modifications » revient au fichier d'origine.
 - **Arborescence** calculée à partir d'une ou plusieurs propriétés choisies dans « Grouper par » :
   la première donne les groupes, les suivantes les sous-groupes. Le sélecteur présente d’abord
   les propriétés générales et partagées. La recherche et « Toutes les propriétés » donnent aussi

@@ -1,7 +1,7 @@
 // Outils mis à disposition du LLM. Ils tournent dans le navigateur, sur les données déjà
 // chargées : le modèle n'en reçoit que les résultats, jamais le fichier entier.
 
-import { PATH_SEP, UNDEFINED_LABEL, compareValues, formatValue, rankedValues, toPropertyPath, type PropValue, type PropertyStore } from '../data/metadata.ts';
+import { PATH_SEP, UNDEFINED_LABEL, coerceTo, compareValues, formatValue, ownValue, rankedValues, toPropertyPath, type PropValue, type PropertyStore } from '../data/metadata.ts';
 import { formatScheduleDate, parseDateInput } from '../data/schedule.ts';
 import { validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
 import { RULE_OPS, isMissing, matchesCondition, numericValue, valueAt, type ElementIdentity, type RuleCondition, type RuleOp } from '../data/conditions.ts';
@@ -705,7 +705,8 @@ function executeTool(name: string, args: Record<string, unknown>, context: ToolC
       const created = !store.paths.includes(path);
       const updates: [number, string, PropValue][] = [];
       for (const index of indices) {
-        if (!formula) { updates.push([index, path, constant as PropValue]); continue; }
+        // Le type de la propriété en place est gardé : « 12,5 » écrit sur un nombre est un nombre (une valeur inconvertible lève une erreur).
+        if (!formula) { updates.push([index, path, coerceTo(ownValue(store.propsOf(index), path), constant as PropValue)]); continue; }
         const value = formula.evaluate((name) => valueOf(context, index, name));
         if (value === null || (typeof value === 'number' && !Number.isFinite(value))) continue;
         updates.push([index, path, typeof value === 'number' ? Number(value.toPrecision(12)) : value]);

@@ -49,7 +49,8 @@ test('les métadonnées suivent le contrat JSON du viewer', () => {
   const { metadata, keys } = readRevit(new Uint8Array(fixture));
   const parsed = JSON.parse(metadata);
   assert.equal(parsed.version, 1);
-  assert.ok(Array.isArray(parsed.readOnly));
+  // Seule l'identité est verrouillée : tout le reste se modifie dans le viewer.
+  assert.deepEqual(parsed.readOnly, ['Identifiant Revit', 'GUID IFC', 'Source de la géométrie']);
   assert.equal(typeof parsed.elements, 'object');
   for (const key of keys) assert.ok(key in parsed.elements, `fiche manquante pour ${key}`);
 });

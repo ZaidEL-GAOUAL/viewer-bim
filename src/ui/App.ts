@@ -1,6 +1,7 @@
 import { Box3, Sphere } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { IFC_READ_ONLY, PropertyStore, flattenProperties, unflattenProperties, mergeProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
+import { PropertyStore, unflattenProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
+import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice } from '../data/sidecar.ts';
 import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
 import { cameraPose, hiddenByView, hiddenInEveryView, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
 import { combineHidden, layerChanges } from '../data/viewLayer.ts';
@@ -129,9 +130,9 @@ export class App {
    * déposé seul pendant la lecture y est ajouté au lieu de l'interrompre.
    */
   private revitReading: { controller: AbortController; candidates: Metadata[] } | null = null;
-  /** Nom de base de la dernière conversion d'IFC : les téléchargements s'appellent comme elle. */
-  private conversion: { name: string } | null = null;
-  /** Nombre d'étapes de modification (annulables) appliquées aux propriétés depuis le chargement : une étape peut toucher plusieurs valeurs, une valeur modifiée deux fois compte deux étapes. */
+  /** Nom de base de la dernière conversion d'IFC (les téléchargements s'appellent comme elle) et nom de l'IFC converti. */
+  private conversion: { name: string; source: string } | null = null;
+  /** Nombre d'éléments dont les propriétés diffèrent du fichier d'origine (barre d'état). */
   edits = 0;
   /** Dernière modification, pour que les panneaux ne refassent que ce qui en dépend. */
   lastEdit: { path: string } | null = null;
@@ -159,6 +160,7 @@ export class App {
   private originalGlb: ArrayBuffer | Blob | null = null;
   private originalNodeKeys = new Map<number, string>();
   private jsonDownload!: HTMLButtonElement;
+  private changesDownload!: HTMLButtonElement;
   format: ModelFormat = 'glb';
   private readonly formatButtons = new Map<ModelFormat, HTMLButtonElement>();
   private modelDownload!: HTMLButtonElement;
@@ -271,7 +273,8 @@ export class App {
     // Téléchargements du modèle affiché (le titre du bouton GLB/USD est posé par `syncDownloads`).
     this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
       (this.modelDownload = button('GLB ↓', () => void this.download('model'))),
-      (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger les métadonnées (JSON), modifications comprises' })),
+      (this.changesDownload = button('Modifications ↓', () => void this.download('changes'), { title: 'Télécharger seulement ce qui a été modifié (JSON) : rouvert avec le fichier d’origine, il rétablit les modifications' })),
+      (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger toutes les propriétés (JSON), modifications comprises' })),
       this.quickLookLink,
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
@@ -880,7 +883,9 @@ export class App {
         const { candidates, metadataError } = readCandidates();
         await this.loadRevit(ticket, sourceFile.file, candidates, metadataError);
       } else if (!modelFile && sourceFile) {
-        await this.loadIfc(ticket, sourceFile.file);
+        const { candidates, metadataError } = readCandidates();
+        await this.loadIfc(ticket, sourceFile.file, candidates);
+        if (metadataError) notices.push({ text: `JSON non pris en compte. ${metadataError}`, error: true });
         const hiddenSentence = ticket === this.loadTicket ? this.openingHiddenSentence(false) : '';
         if (hiddenSentence) notices.push({ text: hiddenSentence, error: false });
       } else if (modelFile) {
@@ -917,7 +922,7 @@ export class App {
         const { missingTextures, warnings } = loaded;
         // Un JSON déposé seul avant le modèle reste en attente et s'applique au premier modèle chargé.
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
-        const installed = await this.installModel(ticket, loaded.source, candidates, modelFile.file.name);
+        const installed = await this.installModel(ticket, loaded.source, null, candidates, modelFile.file.name);
         if (!installed) return;
         if (extensionOf(modelFile.file.name) === 'glb') this.originalGlb = modelFile.file;
         if (extensionOf(modelFile.file.name) === 'usdz') {
@@ -948,11 +953,13 @@ export class App {
         if (!this.model) {
           this.metadata = metadata;
           notices.push({ text: 'Métadonnées chargées. Déposez maintenant le fichier .glb ou .gltf.', error: false });
-        } else if (this.countMatches(metadata) === 0) {
+        } else if (countMatches(metadata, this.model.keys) === 0) {
           // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
           notices.push({ text: NO_MATCH, error: true });
         } else {
           this.propertyEdits?.import(metadata, this.model.keys);
+          const orphans = metadata.propertiesMode === 'replace' ? '' : orphanNotice(metadata, this.model.keys);
+          if (orphans) notices.push({ text: orphans, error: true });
           this.emit('selection');
         }
       }
@@ -974,9 +981,9 @@ export class App {
 
   /**
    * Convertit un IFC dans le navigateur (même script que pipeline/ifc_to_glb.py), puis charge le
-   * GLB et les métadonnées obtenus comme s'ils avaient été déposés.
+   * GLB et les métadonnées obtenus comme s'ils avaient été déposés. `dropped` : les JSON déposés avec l'IFC.
    */
-  private async loadIfc(ticket: number, file: File): Promise<void> {
+  private async loadIfc(ticket: number, file: File, dropped: Metadata[]): Promise<void> {
     const base = withoutExtension(file.name);
     const result = await convertIfc(file, (message) => {
       if (ticket === this.loadTicket) this.busy(message);
@@ -1010,10 +1017,10 @@ export class App {
       source = (await loadModelFiles({ file: glb, path: glb.name }, [])).gltf;
       produced = { model: glb, extension: 'glb' };
     }
-    if (!(await this.installModel(ticket, source, [metadata], `${base}.${produced.extension}`))) return;
+    if (!(await this.installModel(ticket, source, metadata, dropped, `${base}.${produced.extension}`))) return;
 
     this.originalGlb = result.glb;
-    this.conversion = { name: base };
+    this.conversion = { name: base, source: file.name };
     this.modelDownload.textContent = `${produced.extension === 'usdz' ? 'USD' : 'GLB'} ↓`;
     const { elements, seconds, workers, linework, without_geometry: failedCount, failed } = result.report;
     const lines = [
@@ -1042,7 +1049,7 @@ export class App {
    * sa réception (`ModelBuilder`), sans GLB entre les deux, et la vue grandit ; la caméra se cadre sur le premier
    * morceau, puis sur le modèle entier à la fin. L'interface (arbre, fiches, métadonnées : le JSON du contrat n'est
    * complet qu'à la fin) n'est reliée au modèle qu'une fois la lecture terminée. Le fichier n'est envoyé à aucun serveur.
-   * `candidates` : JSON déposés avec le fichier, ou pendant sa lecture, essayés après les métadonnées du fichier lui-même ;
+   * `candidates` : JSON déposés avec le fichier, ou pendant sa lecture, départagés avec les métadonnées du fichier lui-même ;
    * `metadataError` : ce qui a empêché de lire l'un d'eux (le fichier Revit s'affiche quand même, avec ses propres propriétés).
    */
   private async loadRevit(ticket: number, file: File, candidates: Metadata[], metadataError = ''): Promise<void> {
@@ -1100,10 +1107,9 @@ export class App {
         for (let i = 0; i < result.names.length; i++) built.names[i] = result.names[i] || built.keys[i];
       }
       const source = built ?? result.raw;
-      // Le JSON du fichier d'abord, puis ceux déposés avec lui ou pendant la lecture : `installModel` lit cette liste au
-      // moment d'installer, donc un JSON qui arrive encore pendant qu'il prépare le modèle compte aussi.
-      reading.candidates.unshift(metadata);
-      if (!(await this.installModel(ticket, source, reading.candidates, `${base}.${extension}`))) {
+      // Le JSON du fichier, et ceux déposés avec lui ou pendant la lecture : `installModel` lit cette liste au moment
+      // d'installer, donc un JSON qui arrive encore pendant qu'il prépare le modèle compte aussi.
+      if (!(await this.installModel(ticket, source, metadata, reading.candidates, `${base}.${extension}`))) {
         discard();
         return;
       }
@@ -1148,7 +1154,7 @@ export class App {
    * Télécharge le fichier 3D issu de la conversion, ou les métadonnées. Le JSON reflète toujours
    * les modifications faites dans le viewer ; un paquet USD est reconstruit pour les contenir.
    */
-  private async download(kind: 'model' | 'json' | 'quicklook'): Promise<void> {
+  private async download(kind: 'model' | 'json' | 'changes' | 'quicklook'): Promise<void> {
     const model = this.model;
     if (!model) return;
     const revision = this.quickLookRevision;
@@ -1159,6 +1165,10 @@ export class App {
     if (kind === 'json') {
       blob = new Blob([this.exportMetadata()], { type: 'application/json' });
       extension = 'json';
+    } else if (kind === 'changes') {
+      if (!this.propertyEdits) return;
+      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName))], { type: 'application/json' });
+      extension = 'modifications.json';
     } else {
       this.busy('Écriture des métadonnées du modèle…');
       try {
@@ -1229,6 +1239,9 @@ export class App {
     this.modelDownload.textContent = `${this.format === 'usd' ? 'USD' : 'GLB'} ↓`;
     this.modelDownload.title = 'Télécharger le modèle avec ses métadonnées actuelles';
     this.jsonDownload.hidden = !hasMetadata;
+    const modified = this.propertyEdits?.modifiedCount ?? 0;
+    this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
+    this.changesDownload.disabled = modified === 0;
     this.downloads.hidden = this.model === null;
   }
 
@@ -1240,18 +1253,20 @@ export class App {
   editProperties(updates: readonly (readonly [number, string, PropValue])[]): boolean { return this.propertyEdits?.setMany(updates) ?? false; }
   /** Opens the 4D planning from two date properties; returns its task count. */
   openPlanning(startProperty: string, endProperty: string): number { return this.planning.fromMetadata({ startProperty, endProperty }); }
+  /** Back to the file's value of `path` for these elements (one undoable step). */
+  revertProperty(indices: readonly number[], path: string): boolean { return this.propertyEdits?.revert(indices, path) ?? false; }
   undoProperties(): void { this.propertyEdits?.undo(); this.emit('selection'); }
   redoProperties(): void { this.propertyEdits?.redo(); this.emit('selection'); }
-  revertEdits(): void { this.propertyEdits?.revert(); this.emit('selection'); }
+  revertEdits(): void { this.propertyEdits?.revertAll(); this.emit('selection'); }
   private afterPropertyEdit(path: string): void {
-    this.edits = this.propertyEdits?.count ?? 0; this.lastEdit = { path };
+    this.edits = this.propertyEdits?.modifiedCount ?? 0; this.lastEdit = { path };
     this.setQuickLook(null); this.syncDownloads(); this.updateStats();
     // Une phase de création modifiée change l'état de l'élément dans la phase choisie.
     if (this.phaseSelection) { this.applyPhase(this.phaseSelection); this.syncLayerVisibility(); this.emit('phase'); }
     this.refreshAppearance(); this.emit('metadata'); this.emit('history');
   }
   private confirmReplace(): boolean {
-    return !this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. Les exporter avant de remplacer le modèle permet de les conserver. Remplacer le modèle ?');
+    return !this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?');
   }
 
   async loadSample(name: string): Promise<void> {
@@ -1275,7 +1290,7 @@ export class App {
     try {
       const base = `${import.meta.env.BASE_URL}samples/${name}`;
       const [gltf, text, glb] = await Promise.all([loadModelUrl(`${base}.glb`), fetch(`${base}.json`).then((r) => r.text()), fetch(`${base}.glb`).then((r) => r.blob())]);
-      if (await this.installModel(ticket, gltf, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) {
+      if (await this.installModel(ticket, gltf, null, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) {
         this.originalGlb = glb;
         this.announceOpeningHidden();
       }
@@ -1386,9 +1401,10 @@ export class App {
 
   /**
    * Installe un modèle : construit d'une scène ou d'un modèle brut, ou déjà construit (lecture Revit par morceaux).
+   * `own` : les métadonnées que le fichier donne lui-même (Revit, IFC converti) ; `dropped` : les JSON déposés avec lui.
    * Renvoie faux si le chargement a été abandonné au profit d'un plus récent.
    */
-  private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, candidates: Metadata[], name: string): Promise<boolean> {
+  private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, own: Metadata | null, dropped: readonly Metadata[], name: string): Promise<boolean> {
     if (ticket !== this.loadTicket) return false;
     const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
     let model: Model;
@@ -1416,16 +1432,8 @@ export class App {
     const previous = this.detachModel();
     this.model = model;
     this.originalNodeKeys = nodeKeys;
-    // Parmi plusieurs fichiers de métadonnées, celui dont les identifiants correspondent le mieux.
-    let metadata: Metadata | null = candidates[0] ?? null;
-    let bestMatches = metadata ? this.countMatches(metadata) : 0;
-    for (const candidate of candidates.slice(1)) {
-      const matches = this.countMatches(candidate);
-      if (matches > bestMatches) {
-        metadata = candidate;
-        bestMatches = matches;
-      }
-    }
+    // La base (le JSON complet qui correspond le mieux) et les JSON de modifications à appliquer par-dessus.
+    const { metadata, overlays } = chooseMetadata(own, dropped, model.keys);
     this.metadata = metadata;
     this.georeference = metadata?.georeference ?? null;
     this.fileName = name;
@@ -1435,6 +1443,8 @@ export class App {
 
     this.emptyEl.hidden = true;
     this.rebuildStore();
+    if (Array.isArray(embeddedReadOnly)) this.store.readOnly = [...new Set([...this.store.readOnly, ...embeddedReadOnly.filter((p): p is string => typeof p === 'string')])];
+    const orphans = this.propertyEdits ? applyOverlays(this.propertyEdits, overlays, model.keys) : [];
     // À l'ouverture, ce que toutes les vues enregistrées masquent l'est aussi ici (Revit ne le montre dans aucune vue 3D) :
     // la couche des vues s'en charge, l'arbre, le cadrage, les clics et la carte le voient. `'visibility'` est émis plus bas.
     this.openingHidden = hiddenInEveryView(this.savedViews, model.count, this.indexOfKey(), (index, property) => ownValue(this.store.propsOf(index), property));
@@ -1442,10 +1452,9 @@ export class App {
       this.viewHidden = this.openingHidden;
       this.refreshLayers();
     }
-    if (Array.isArray(embeddedReadOnly)) this.store.readOnly = [...new Set([...this.store.readOnly, ...embeddedReadOnly.filter((p): p is string => typeof p === 'string')])];
     this.emit('selection');
     this.emit('visibility');
-    if (metadata) this.reportMatching();
+    this.reportMatching(orphans);
     return true;
   }
 
@@ -1454,17 +1463,7 @@ export class App {
     const model = this.model;
     if (!model) return;
     this.setQuickLook(null);
-    const store = new PropertyStore(model.count);
-    for (let i = 0; i < model.count; i++) {
-      const entry = this.metadata?.elements.get(model.keys[i]);
-      const extras = model.extras[i];
-      const props = entry && this.metadata?.propertiesMode === 'replace' ? entry.props : mergeProperties(extras ? flattenProperties(extras) : undefined, entry?.props);
-      if (props) store.set(i, props, entry?.label);
-    }
-    store.finalize();
-    // Le fichier dit ce qui est verrouillé ; à défaut, des métadonnées issues d'un IFC (par un
-    // convertisseur plus ancien) gardent les verrous habituels.
-    store.readOnly = this.metadata?.readOnly ?? (store.paths.includes('Classe IFC') ? [...IFC_READ_ONLY] : []);
+    const store = buildStore(model.keys, model.extras, this.metadata);
     this.store = store;
     this.propertyEdits = new PropertyEdits(store, (path) => this.afterPropertyEdit(path));
     this.edits = 0;
@@ -1474,12 +1473,6 @@ export class App {
     this.viewer.invalidate();
     this.updateStats();
     this.emit('model');
-  }
-
-  private countMatches(metadata: Metadata): number {
-    let matched = 0;
-    for (const key of this.model?.keys ?? []) if (metadata.elements.has(key)) matched++;
-    return matched;
   }
 
   /** Le nombre d'éléments que l'ouverture a masqués (voir `openingHidden`). */
@@ -1510,16 +1503,17 @@ export class App {
     return !this.toastEl.hidden && this.toastEl.classList.contains('error');
   }
 
-  private reportMatching(): void {
+  /** `orphans` : ce que les JSON de modifications n'ont pas trouvé dans le modèle (voir `orphanNotice`). */
+  private reportMatching(orphans: readonly string[]): void {
     const model = this.model;
     const metadata = this.metadata;
-    if (!model || !metadata) return;
-    const matched = this.countMatches(metadata);
-    if (matched === 0) {
-      this.toast(NO_MATCH, true);
-    } else if (matched < model.count) {
-      this.toast(`Métadonnées associées à ${plural(matched, 'élément')} sur ${integer.format(model.count)}.`);
-    }
+    if (!model) return;
+    const notices: Notice[] = orphans.map((text) => ({ text, error: true }));
+    const matched = metadata ? countMatches(metadata, model.keys) : -1;
+    if (matched === 0) notices.push({ text: NO_MATCH, error: true });
+    else if (matched > 0 && matched < model.count) notices.push({ text: `Métadonnées associées à ${plural(matched, 'élément')} sur ${integer.format(model.count)}.`, error: false });
+    const notice = combineNotices(notices);
+    if (notice) this.toast(notice.text, notice.error);
   }
 
   // -------------------------------------------------------------- interface
@@ -1557,7 +1551,7 @@ export class App {
         : 'sans fichier de métadonnées',
     );
     if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${s(hidden)}`);
-    if (this.edits > 0) parts.push(plural(this.edits, 'modification'));
+    if (this.edits > 0) parts.push(plural(this.edits, 'élément modifié', 'éléments modifiés'));
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
     if (frameTime > 0) {

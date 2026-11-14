@@ -591,8 +591,9 @@ Les noms des paramètres intégrés viennent d'une table générée à partir de
 sont rédigés pour ce projet : ceux de Revit en français pour les paramètres courants, une
 lecture française de l'identifiant pour les autres.
 
-`readOnly` liste tous les noms de premier niveau et tous les noms de groupe utilisés : les données
-de Revit sont en lecture seule, comme celles d'un IFC. Le bloc `georeference` est écrit quand
+`readOnly` ne liste que l'identité de l'élément : « Identifiant Revit », « GUID IFC » et « Source de la
+géométrie ». Tout le reste se modifie dans le viewer ; les modifications vont dans un JSON à part
+(contrat, § 2 bis), jamais dans le `.rvt`. Le bloc `georeference` est écrit quand
 rvt-rs donne l'emplacement du site (voir `src/geo/georeference.ts` pour sa forme) ; la carte du viewer
 s'en sert. Les blocs `phases` et `views` (§ 4 bis, plans d'étage compris) viennent des mêmes enregistrements que la géométrie décode déjà
 (`properties::Retained`, module `revit/src/views/`) : aucune passe de plus sur le fichier.

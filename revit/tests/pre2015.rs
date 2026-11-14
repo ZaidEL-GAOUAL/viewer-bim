@@ -788,11 +788,9 @@ fn records_of(file: &mut rvt::RevitFile, classes: &[&str]) -> Vec<(String, u64, 
 /// sont identiques en tout point (noms, nombre, caméras, phase et filtre de chaque vue), comme `version` et `georeference`. Les
 /// caméras de 2014 et de 2023 sont les mêmes : rien n'a été retouché entre les deux enregistrements.
 ///
-/// Reste `readOnly`, la liste des noms de propriétés et de groupes des fiches, dans l'ordre où elles les rencontrent. Elle diffère
-/// pour ce que les fiches de 2023 ont de plus que celles de 2014, sans rapport avec les familles chargées : un groupe
-/// « Modèle analytique » que 48 éléments portent en 2023 (un seul paramètre, « Propriétés thermiques définies par (type) », que
-/// Revit 2014 n'écrit pas), et l'ordre des groupes dans une fiche, qui suit l'ordre des paramètres de chaque version. Rien d'autre :
-/// les noms de 2014 sont tous ceux de 2023.
+/// `readOnly` aussi est le même (l'identité seule). Les fiches de 2023 ont de plus que celles de 2014, sans rapport avec les familles
+/// chargées : un groupe « Modèle analytique » que 48 éléments portent en 2023 (un seul paramètre, « Propriétés thermiques définies
+/// par (type) », que Revit 2014 n'écrit pas), et l'ordre des groupes dans une fiche suit l'ordre des paramètres de chaque version.
 #[test]
 fn dynamo_sample_2014_et_2023_ont_les_memes_vues_et_les_memes_phases() {
     let (Some(old_bytes), Some(new_bytes)) = (sample("DynamoSample_2014.rvt"), sample("DynamoSample_2023.rvt")) else { return };
@@ -811,11 +809,7 @@ fn dynamo_sample_2014_et_2023_ont_les_memes_vues_et_les_memes_phases() {
     assert_eq!(new_meta["phases"]["order"], serde_json::json!(["Existing", "Working Drawings", "Learning Content"]));
     assert_eq!(new_meta["phases"]["filters"].as_array().map(Vec::len), Some(7));
     assert_eq!(old_meta["phases"], new_meta["phases"]);
-    // `readOnly` : les noms de 2014 sont ceux de 2023, moins le groupe analytique.
-    let read_only = |meta: &serde_json::Value| meta["readOnly"].as_array().expect("readOnly").iter().map(|name| name.as_str().expect("nom").to_string()).collect::<BTreeSet<_>>();
-    let (old_names, new_names) = (read_only(&old_meta), read_only(&new_meta));
-    assert!(old_names.is_subset(&new_names), "noms de 2014 absents de 2023 : {:?}", old_names.difference(&new_names).collect::<Vec<_>>());
-    assert_eq!(new_names.difference(&old_names).collect::<Vec<_>>(), vec!["Modèle analytique"]);
+    assert_eq!(old_meta["readOnly"], new_meta["readOnly"]);
     let analytical = new_meta["elements"].as_object().expect("éléments").values().filter(|element| element["properties"].get("Modèle analytique").is_some()).count();
     let old_analytical = old_meta["elements"].as_object().expect("éléments").values().filter(|element| element["properties"].get("Modèle analytique").is_some()).count();
     assert_eq!((old_analytical, analytical), (0, 48));
@@ -967,50 +961,54 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// (ou créent la section quand ils n'ont aucune vue 3D), et rien d'autre : `dump` de tous les fichiers avant et après, seule la section `views` change
 /// (les fichiers d'avant 2015 plus loin, `.txt` compris, ne changent pas non plus), et aucune vue 3D ne change (le masquage des catégories d'import
 /// et des imports n'en touche aucune dans les fichiers d'essai).
+///
+/// Mis à jour de nouveau quand `readOnly` s'est réduit à l'identité (« Identifiant Revit », « GUID IFC », « Source de la géométrie ») : les 34
+/// fichiers changent, et rien d'autre que `readOnly` (la liste d'avant, recomposée à partir des fiches d'après, redonne octet pour octet
+/// l'empreinte d'avant de chacun). Les longueurs citées dans les commentaires ci-dessous sont celles d'avant ce changement.
 const METADATA_2015_PLUS: &[(&str, usize, u64)] = &[
-    ("2024_Core_Interior.rvt", 613337, 0x9f9f41fd851c15e7),
-    ("AdaptivePanel.rfa", 1554, 0x0d97bf2cd79ddfcb),
-    ("CeilingType.rvt", 3551, 0x5ba41a1e85a9b7e8),
-    ("ConnectorTestR20.rvt", 6131, 0xe02044db27985b82),
-    ("DuctSegmentFlow.rvt", 6441, 0x9ccc88c8985fc33c),
-    ("DynamoSample_2023.rvt", 171739, 0xc05c77678caddd03),
-    ("DynamoSample_2024.rvt", 172328, 0x644ec85f054a3dca),
-    ("DynamoSample_2025.rvt", 172328, 0x88162e2ef96f091e),
-    ("FamilyDocumentTests.rfa", 3733, 0xdbe6af62152e7748),
-    ("MassWithBoxAndCone.rfa", 895, 0x8d2836bf7cf1c265),
-    ("Project1-BIM360-Local.rvt", 3022, 0x0f2183d4645a528e),
-    ("Project1-Central.rvt", 3022, 0x0f2183d4645a528e),
-    ("Project1-LocalFile.rvt", 3022, 0x0f2183d4645a528e),
-    ("RE1-Architecture.rvt", 58159, 0x6c7cf0b7b85e5e6c),
-    ("RE1-Electrical.rvt", 74815, 0x7a00c377a93884f5),
-    ("RefineryPrimer-2023-BuildingGenerator.rvt", 85438, 0x0c6d3b720099944d),
-    ("RefineryPrimer-2024-BuildingGenerator.rvt", 87724, 0xc4fb48c4d7f0bf47),
-    ("RefineryPrimer-2026-BuildingGenerator.rvt", 87973, 0x87304ba11070804d),
-    ("Revit_IFC5_Einhoven.rvt", 13368, 0xc7c702cf0c2cbb2a),
-    ("RiR-Template-2018.rte", 1621, 0xa7f2a5d9dba2d385),
-    ("RoomsAndExits.rvt", 12564, 0x7aca17e2ae72d7af),
+    ("2024_Core_Interior.rvt", 613086, 0x17cca72f00fdc650),
+    ("AdaptivePanel.rfa", 1445, 0x881147216772ada4),
+    ("CeilingType.rvt", 3390, 0x8d9ea4d68a2ea23f),
+    ("ConnectorTestR20.rvt", 5965, 0x425f1402fd203eda),
+    ("DuctSegmentFlow.rvt", 6260, 0x9644ad412deced1e),
+    ("DynamoSample_2023.rvt", 171511, 0xc29ea5fa650f5b62),
+    ("DynamoSample_2024.rvt", 172087, 0x933812e0b695b9a2),
+    ("DynamoSample_2025.rvt", 172087, 0x6bdff09f33332976),
+    ("FamilyDocumentTests.rfa", 3602, 0x5d2e3bac01685a02),
+    ("MassWithBoxAndCone.rfa", 799, 0xa1ca88b270841eb1),
+    ("Project1-BIM360-Local.rvt", 2926, 0xec03ad446852f48a),
+    ("Project1-Central.rvt", 2926, 0xec03ad446852f48a),
+    ("Project1-LocalFile.rvt", 2926, 0xec03ad446852f48a),
+    ("RE1-Architecture.rvt", 57886, 0x5ce8d2c6ac2051b4),
+    ("RE1-Electrical.rvt", 74443, 0xce2bc46158a93378),
+    ("RefineryPrimer-2023-BuildingGenerator.rvt", 85306, 0x5647d9aeb125cbd8),
+    ("RefineryPrimer-2024-BuildingGenerator.rvt", 87581, 0xcb8091d34d3341ec),
+    ("RefineryPrimer-2026-BuildingGenerator.rvt", 87830, 0x837dc6ed2c5dd9a8),
+    ("Revit_IFC5_Einhoven.rvt", 13187, 0xe3ce1c9fe0b5bb53),
+    ("RiR-Template-2018.rte", 1525, 0xddc979dda45733b9),
+    ("RoomsAndExits.rvt", 12362, 0x1f39aebb7c50e46d),
     // 333 868 → 332 831 octets depuis que le contenu des familles sur place est dessiné par leur instance : les fiches de trois formes en moins
     // (`wardrobe1` 506161, `wardrobe2` 523524, `hood enclosure` 697449), et le groupe « Graphismes » du `readOnly`, que seules ces formes portaient ;
     // aucun des 472 autres éléments ne change.
-    ("SampleModel.rvt", 335172, 0x7961b06b340303b5),
-    ("ShellFamily.rfa", 2007, 0x974fb9a7fb154ae9),
+    ("SampleModel.rvt", 334949, 0x5c34564d45690244),
+    ("ShellFamily.rfa", 1890, 0xc8ae628c4ef157a9),
     // 427 818 octets : l'élément `existingSite-meerkat.sat` (308836), que les imports CAD du projet avaient ajouté (428 135 octets), est le contenu d'une famille sur place de masse
     // (« Mass 1 », dont l'instance est une masse que Revit masque par défaut) : il n'est plus dessiné, comme sa famille. Le JSON est celui d'avant les imports CAD.
-    ("Vignette-04-BaseFile.rvt", 429823, 0x8252bc9c1ffdeeb5),
-    ("dynamo-indexed-family-instances-2016.rfa", 2350, 0xac7bbd3be6d3e32f),
-    ("dynamo-inst-param-2016.rvt", 3502, 0xceabace9786bf427),
-    ("dynamo-topography-2016.rvt", 3086, 0x3e6fd98a57f30456),
-    ("dynamo-walls-floors-levels-2016.rvt", 6275, 0x4a438deea3cb041b),
+    ("Vignette-04-BaseFile.rvt", 429719, 0xb09e0b44098bc2ee),
+    ("dynamo-indexed-family-instances-2016.rfa", 2219, 0x22b32886e7412611),
+    ("dynamo-inst-param-2016.rvt", 3406, 0xdd59d83c3bc25bdb),
+    ("dynamo-topography-2016.rvt", 2990, 0xdc6bae9b445b5532),
+    ("dynamo-walls-floors-levels-2016.rvt", 6102, 0x7f626507281e9175),
     // 3 010 454 → 3 008 989 et 2 944 299 → 2 942 834 octets (1 465 chacun) depuis que le contenu des familles sur place est dessiné par leur instance : la fiche de la poutre
     // courbe 201286 en moins, que son instance 201308 dessine à son tour, et celles des formes de masse « Main Building » 139682 et « Pavillion » 139763, dont les instances sont des
     // masses que Revit masque par défaut ; et, dans les sept vues 3D enregistrées, l'entrée `hiddenCategories` « Masses » (elle ne liste que les catégories des éléments dessinés,
     // et ces deux formes étaient les seuls éléments « Masses »). Aucun autre élément ne change.
-    ("mega_advanced_sample_file.rvt", 3012124, 0x5414bd268e96597c),
-    ("rac_advanced_sample_project.rvt", 2947127, 0x20049c7a47a6e47b),
-    ("revit-curtainwall-byprofile_v21.rvt", 73008, 0xa881b00cc787dcc0),
-    ("revit-docs_v20_project_ws.rvt", 4620, 0x92cafab5044014bd),
-    ("revit-openings_v22.rvt", 11655, 0xeaf467bef3067936),
-    ("singleDirectShape.rvt", 2675, 0x95f93f761de3312d),
+    ("mega_advanced_sample_file.rvt", 3011896, 0xf63d6fab7bff5153),
+    ("rac_advanced_sample_project.rvt", 2946912, 0x6d5e24e1c32f29d1),
+    ("revit-curtainwall-byprofile_v21.rvt", 72842, 0xeadf8acb2de5a2ab),
+    ("revit-docs_v20_project_ws.rvt", 4475, 0x8f3a174f176dd43f),
+    ("revit-openings_v22.rvt", 11502, 0x1317fe51c6168581),
+    ("singleDirectShape.rvt", 2579, 0x6904a20db02845b9),
 ];
 
 /// La règle des familles chargées est éteinte à partir de 2015 : le JSON de métadonnées de chaque fichier de 2015 et plus présent est

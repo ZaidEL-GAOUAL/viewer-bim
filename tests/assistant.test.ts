@@ -376,6 +376,20 @@ test('set_property crée ou modifie une propriété, calcule par élément et re
   assert.equal(store.propsOf(1)?.['Lot / Nom'], 'GO');
 });
 
+test('set_property garde le type de la propriété : un nombre tapé en texte reste un nombre', () => {
+  const { context, store } = writableContext();
+  const walls = [{ property: 'Classe IFC', op: 'equals', value: 'IfcWall' }];
+  runTool('set_property', { filters: walls, property: 'Épaisseur (m)', value: '0,2' }, context);
+  assert.equal(store.propsOf(0)?.['Épaisseur (m)'], 0.2, 'une propriété nouvelle prend le type du texte');
+  runTool('set_property', { filters: walls, property: 'Épaisseur (m)', value: '0,25' }, context);
+  assert.equal(store.propsOf(1)?.['Épaisseur (m)'], 0.25);
+  const refused = runTool('set_property', { filters: walls, property: 'Épaisseur (m)', value: 'épais' }, context);
+  assert.match((refused.result as { error: string }).error, /« épais » n’est pas un nombre/);
+  assert.equal(store.propsOf(0)?.['Épaisseur (m)'], 0.25, 'rien n’est écrit');
+  runTool('set_property', { filters: walls, property: 'Pset_WallCommon / FireRating', value: 120 }, context);
+  assert.equal(store.propsOf(0)?.['Pset_WallCommon / FireRating'], '120', 'un texte reste un texte');
+});
+
 test('plan_dates écrit des dates ordonnées par étage, dans le chantier, en une étape annulable, puis ouvre le planning', () => {
   const { context, store, edits, plannings } = writableContext();
   const args = { filters: [], start: '04/01/2026', end: '2027-12-12', minDays: '15', maxDays: 45, orderBy: 'Niveau', order: ['RDC', 'R+1'] };

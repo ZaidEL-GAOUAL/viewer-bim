@@ -15,7 +15,7 @@ test('manual property CRUD is reversible, handles missing fields and preserves s
   assert.equal(store.paths.includes('CO2'), false);
   edits.undo(); assert.equal(store.propsOf(0)?.CO2, 1200); assert.equal(Object.hasOwn(store.propsOf(1)!, 'CO2'), false);
   edits.redo(); assert.equal(store.paths.includes('CO2'), false);
-  edits.revert(); assert.equal(store.labelOf(0), 'Mur'); assert.equal(store.labelOf(1), 'Dalle'); assert.equal(store.propsOf(0)?.Date, '2026-10-03');
+  edits.revertAll(); assert.equal(store.labelOf(0), 'Mur'); assert.equal(store.labelOf(1), 'Dalle'); assert.equal(store.propsOf(0)?.Date, '2026-10-03');
   assert.equal(edits.changed, false); assert.equal(events.at(-1), '*');
 });
 
@@ -86,4 +86,74 @@ test('setMany writes one value per element and property, undone in one step', ()
   store.readOnly = ['Fin'];
   assert.equal(edits.setMany([[0, 'Début', 'x'], [0, 'Fin', 'y']]), false, 'a locked field rejects the whole batch');
   assert.equal(store.propsOf(0)?.Début, undefined);
+});
+
+test('the baseline is the file: diff() holds only what differs, deletions as null, plus the identity', () => {
+  const store = new PropertyStore(3);
+  store.set(0, { 'Identifiant Revit': 101, Niveau: 'R+1', Lot: 'GO', Hauteur: 2.7 }, 'Mur');
+  store.set(1, { 'Identifiant Revit': 102, Niveau: 'R+1' }, 'Porte');
+  store.set(2, { Niveau: 'R+2' });
+  store.readOnly = ['Identifiant Revit']; store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  assert.deepEqual(edits.diff(['a', 'b', 'c']), { version: 1, elements: {} });
+  edits.set([0], 'Niveau', 'R+2');
+  edits.set([0], 'Niveau', 'R+3');
+  edits.delete([0], 'Lot');
+  edits.set([0], 'Planning / Début', '2027-01-04');
+  edits.set([1], 'Niveau', 'R+3');
+  edits.set([1], 'Niveau', 'R+1'); // back to the file's value: no entry
+  edits.set([2], 'Niveau', 'R+3');
+  assert.equal(edits.isModified(0, 'Niveau'), true);
+  assert.equal(edits.isModified(0, 'Lot'), true);
+  assert.equal(edits.isModified(0, 'Hauteur'), false);
+  assert.equal(edits.isModified(1, 'Niveau'), false);
+  assert.equal(edits.isModified(0, 'Identifiant Revit'), false);
+  assert.equal(edits.modifiedCount, 2);
+  assert.deepEqual(edits.diff(['a', 'b', 'c']), {
+    version: 1,
+    elements: {
+      a: { properties: { 'Identifiant Revit': 101, Niveau: 'R+3', Lot: null, Planning: { Début: '2027-01-04' } } },
+      c: { properties: { Niveau: 'R+3' } },
+    },
+  });
+  // Undoing everything leaves nothing modified, though the baseline stays recorded.
+  edits.revertAll();
+  assert.equal(edits.modifiedCount, 0);
+  assert.deepEqual(edits.diff(['a', 'b', 'c']).elements, {});
+});
+
+test('revert puts the file value back in one undo step, and the baseline is recorded once', () => {
+  const store = new PropertyStore(2);
+  store.set(0, { Niveau: 'R+1', Nom: 'Mur' }, 'Mur'); store.set(1, { Niveau: 'R+1' }); store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  edits.set([0, 1], 'Niveau', 'R+2');
+  edits.set([0, 1], 'Niveau', 'R+3');
+  edits.set([0], 'Nom', 'Voile');
+  edits.set([1], 'Lot', 'GO');
+  const steps = edits.count;
+  assert.equal(edits.revert([0, 1], 'Niveau'), true);
+  assert.equal(edits.count, steps + 1, 'one undo step');
+  assert.equal(store.propsOf(0)?.Niveau, 'R+1');
+  assert.equal(store.propsOf(1)?.Niveau, 'R+1', 'the first value, not the previous one');
+  assert.equal(store.propsOf(0)?.Nom, 'Voile', 'other properties untouched');
+  assert.equal(edits.revert([1], 'Lot'), true, 'a property the file did not have is removed');
+  assert.equal(Object.hasOwn(store.propsOf(1)!, 'Lot'), false);
+  assert.equal(edits.revert([0], 'Niveau'), false, 'nothing left to revert');
+  edits.undo(); edits.undo();
+  assert.equal(store.propsOf(0)?.Niveau, 'R+3');
+  assert.equal(edits.revert([0], 'Nom'), true);
+  assert.equal(store.labelOf(0), 'Mur', 'the label follows the name back');
+});
+
+test('a merge-mode import removes on null, keeps locked file values and counts as a modification', () => {
+  const store = new PropertyStore(2);
+  store.set(0, { 'Identifiant Revit': 101, 'Source de la géométrie': 'Forme Revit', Niveau: 'R+1', Lot: 'GO' }, 'Mur');
+  store.set(1, { 'Identifiant Revit': 102, Niveau: 'R+1' });
+  store.readOnly = ['Identifiant Revit', 'Source de la géométrie']; store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  const overlay = parseMetadata({ elements: { a: { properties: { 'Identifiant Revit': 101, 'Source de la géométrie': 'Forme reconstruite', Niveau: 'R+2', Lot: null } } } });
+  assert.equal(edits.import(overlay, ['a', 'b']), true);
+  assert.deepEqual(store.propsOf(0), { 'Identifiant Revit': 101, 'Source de la géométrie': 'Forme Revit', Niveau: 'R+2' });
+  assert.equal(edits.modifiedCount, 1);
+  assert.deepEqual(edits.diff(['a', 'b']).elements, { a: { properties: { 'Identifiant Revit': 101, 'Source de la géométrie': 'Forme Revit', Niveau: 'R+2', Lot: null } } });
 });

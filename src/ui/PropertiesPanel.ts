@@ -1,5 +1,4 @@
-import { plainNumber } from '../data/conditions.ts';
-import { PATH_SEP, formatValue, toPropertyPath, ownValue, type PropValue } from '../data/metadata.ts';
+import { PATH_SEP, coerceTo, formatValue, toPropertyPath, ownValue, type PropValue } from '../data/metadata.ts';
 import { formatLength } from '../engine/Measure.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
@@ -8,7 +7,8 @@ import { integer } from '../data/text.ts';
 const MULTI_LIMIT = 5000;
 const MIXED = '(valeurs multiples)';
 const ADD_TITLE = 'Ajouter une propriété';
-const LOCKED_HINT = 'Propriété verrouillée par le fichier de métadonnées : elle découle de la structure du modèle (classe, type, emplacement, matériaux, quantités) et ne se modifie pas ici.';
+const LOCKED_HINT = 'Propriété verrouillée par le fichier : elle identifie l’élément ou découle de la structure du modèle, et ne se modifie pas ici.';
+const MODIFIED_HINT = 'Modifiée : différente du fichier d’origine';
 
 /** Une ligne de la fiche : la valeur commune aux éléments sélectionnés, ou `undefined` si elle diffère. */
 interface Row {
@@ -16,15 +16,15 @@ interface Row {
   name: string;
   value: PropValue | undefined;
   kind: 'text' | 'number' | 'boolean' | 'date';
+  /** La valeur qui donne son type au champ : une saisie est convertie dans ce type (`coerceTo`). */
+  sample: PropValue | undefined;
   editable: boolean;
+  /** Différente du fichier d'origine pour au moins un élément de la sélection. */
+  modified: boolean;
 }
 
-/** Valeur saisie dans un champ texte : un nombre si elle en a l'air, rien si le champ est vide. */
-function parseInput(text: string): PropValue {
-  const trimmed = text.trim();
-  if (trimmed === '') return null;
-  return plainNumber(trimmed) ?? trimmed;
-}
+/** Une valeur à modifier, telle qu'on la tape : virgule décimale à la française. */
+const editText = (value: PropValue | undefined): string => value === undefined || value === null ? '' : typeof value === 'number' ? String(value).replace('.', ',') : String(value);
 
 /** Fiche de l'élément sélectionné : ses métadonnées, regroupées par catégorie, modifiables sauf verrou. */
 export class PropertiesPanel {
@@ -34,6 +34,8 @@ export class PropertiesPanel {
   private titleEl: HTMLElement | null = null;
   /** Catégories repliées par l'utilisateur. */
   private readonly folded = new Set<string>([ADD_TITLE]);
+  /** « Modifiées seulement » : la fiche ne montre que ce qui diffère du fichier. */
+  private modifiedOnly = false;
 
   constructor(app: App) {
     this.app = app;
@@ -79,13 +81,22 @@ export class PropertiesPanel {
 
     this.syncEdits();
 
-    const rows = this.collectRows(indices);
+    const all = this.collectRows(indices);
+    const rows = this.modifiedOnly ? all.filter((row) => row.modified) : all;
+    if (all.length > 0) {
+      const only = h('input', { attrs: { type: 'checkbox' } });
+      only.checked = this.modifiedOnly;
+      only.addEventListener('change', () => { this.modifiedOnly = only.checked; this.render(); });
+      this.body.append(h('label', { class: 'check modified-only', title: 'Ne montrer que les propriétés différentes du fichier d’origine' }, only, 'Modifiées seulement'));
+    }
     if (rows.length === 0) {
-      const message = single
-        ? 'Aucune métadonnée pour cet élément.'
-        : indices.length > MULTI_LIMIT
-          ? 'Sélection trop grande pour comparer les propriétés.'
-          : 'Aucune métadonnée pour ces éléments.';
+      const message = all.length > 0
+        ? 'Aucune propriété modifiée.'
+        : single
+          ? 'Aucune métadonnée pour cet élément.'
+          : indices.length > MULTI_LIMIT
+            ? 'Sélection trop grande pour comparer les propriétés.'
+            : 'Aucune métadonnée pour ces éléments.';
       this.body.append(h('p', { class: 'hint', text: message }));
     } else {
       // Le préfixe avant le dernier séparateur sert de titre de catégorie.
@@ -118,12 +129,14 @@ export class PropertiesPanel {
 
   /** Propriétés de la sélection : pour plusieurs éléments, une valeur n'est retenue que si elle est identique partout. */
   private collectRows(indices: number[]): Row[] {
-    const { store } = this.app;
+    const { store, propertyEdits: edits } = this.app;
     const rows: Row[] = [];
+    const anyModified = (edits?.modifiedCount ?? 0) > 0;
     const push = (path: string, value: PropValue | undefined, sample: PropValue | undefined) => {
       const cut = path.lastIndexOf(PATH_SEP);
       const kind = typeof sample === 'number' ? 'number' : typeof sample === 'boolean' ? 'boolean' : typeof sample === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(sample) ? 'date' : 'text';
-      rows.push({ path, name: cut < 0 ? path : path.slice(cut + PATH_SEP.length), value, kind, editable: store.isEditable(path) });
+      const modified = anyModified && indices.some((index) => edits!.isModified(index, path));
+      rows.push({ path, name: cut < 0 ? path : path.slice(cut + PATH_SEP.length), value, kind, sample, editable: store.isEditable(path), modified });
     };
     if (indices.length === 1) {
       const props = store.propsOf(indices[0]);
@@ -165,13 +178,26 @@ export class PropertiesPanel {
         );
         continue;
       }
-      list.append(h('dt', { text: row.name, title: row.name }), h('dd', { class: 'editable property-edit-cell' }, this.field(row, indices), button('×', () => { if (app.deleteProperty(indices, row.path)) this.render(); }, { class: 'property-delete', title: `Supprimer la propriété ${row.path} de la sélection`, attrs: { 'aria-label': `Supprimer la propriété ${row.path}` } })));
+      const name = h('dt', { text: row.name });
+      const revert = button('↺', () => { if (app.revertProperty(indices, row.path)) this.render(); }, { class: 'property-revert', title: 'Revenir à la valeur du fichier d’origine', attrs: { 'aria-label': `Revenir à la valeur du fichier pour ${row.path}` } });
+      // Une saisie ne redessine pas la fiche : la marque « modifiée » suit ici.
+      const mark = () => {
+        name.classList.toggle('modified', row.modified);
+        name.title = row.modified ? `${row.name} — ${MODIFIED_HINT}` : row.name;
+        revert.hidden = !row.modified;
+      };
+      const changed = () => { row.modified = indices.some((index) => app.propertyEdits?.isModified(index, row.path)); mark(); };
+      mark();
+      list.append(name, h('dd', { class: 'editable property-edit-cell' }, this.field(row, indices, changed), revert, button('×', () => { if (app.deleteProperty(indices, row.path)) this.render(); }, { class: 'property-delete', title: `Supprimer la propriété ${row.path} de la sélection`, attrs: { 'aria-label': `Supprimer la propriété ${row.path}` } })));
     }
     return list;
   }
 
-  /** Champ de saisie d'une propriété : case à cocher, nombre ou texte selon la valeur actuelle. */
-  private field(row: Row, indices: number[]): HTMLElement {
+  /**
+   * Champ de saisie d'une propriété : case à cocher, date ou texte selon la valeur actuelle. Une saisie garde le type de la
+   * propriété (un nombre reste un nombre, « 12,5 » compris) ; une valeur qui ne s'y convertit pas est refusée avec un message.
+   */
+  private field(row: Row, indices: number[], changed: () => void): HTMLElement {
     const { app } = this;
     const label = `${row.name} (modifiable)`;
     if (row.kind === 'boolean') {
@@ -185,15 +211,15 @@ export class PropertiesPanel {
       };
       show();
       checkbox.addEventListener('change', () => {
-        if (app.editProperty(indices, row.path, checkbox.checked)) row.value = checkbox.checked;
+        if (app.editProperty(indices, row.path, checkbox.checked)) { row.value = checkbox.checked; changed(); }
         show();
       });
       return h('label', { class: 'check' }, checkbox, valueLabel);
     }
 
-    const input = h('input', { attrs: { type: row.kind === 'number' ? 'number' : row.kind === 'date' ? 'date' : 'text', 'aria-label': label } });
-    if (row.kind === 'number') input.step = 'any';
-    let shown = row.value === undefined ? '' : row.value === null ? '' : String(row.value);
+    const input = h('input', { attrs: { type: row.kind === 'date' ? 'date' : 'text', 'aria-label': label } });
+    if (row.kind === 'number') input.inputMode = 'decimal';
+    let shown = editText(row.value);
     const show = () => {
       input.value = shown;
       input.placeholder = row.value === undefined ? MIXED : row.value === null ? formatValue(null) : '';
@@ -209,18 +235,17 @@ export class PropertiesPanel {
     });
     input.addEventListener('change', () => {
       let value: PropValue;
-      if (row.kind === 'number') {
-        value = input.value.trim() === '' ? null : input.valueAsNumber;
-        if (value !== null && !Number.isFinite(value)) {
-          show();
-          return;
-        }
-      } else {
-        value = input.value.trim() === '' ? null : input.value;
+      try {
+        value = coerceTo(row.sample, input.value);
+      } catch (error) {
+        app.toast(`${error instanceof Error ? error.message : String(error)} Valeur refusée pour « ${row.name} ».`, true);
+        show();
+        return;
       }
       if (app.editProperty(indices, row.path, value)) {
         row.value = value;
-        shown = value === null ? '' : String(value);
+        shown = editText(value);
+        changed();
       }
       show();
     });
@@ -244,7 +269,14 @@ export class PropertiesPanel {
         app.toast(`« ${path} » est une propriété verrouillée.`, true);
         return;
       }
-      if (!app.editProperty(indices, path, parseInput(value.value))) return;
+      let typed: PropValue;
+      try {
+        typed = coerceTo(indices.map((index) => ownValue(app.store.propsOf(index), path)).find((existing) => existing !== undefined && existing !== null), value.value);
+      } catch (error) {
+        app.toast(`${error instanceof Error ? error.message : String(error)} Valeur refusée pour « ${path} ».`, true);
+        return;
+      }
+      if (!app.editProperty(indices, path, typed)) return;
       this.render();
       // La fiche a été redessinée : on rouvre le formulaire pour enchaîner les ajouts.
       const next = this.body.querySelector<HTMLInputElement>('.props-add input');

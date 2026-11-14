@@ -56,6 +56,7 @@ Règles :
 | `version` | non (1 par défaut) | Version du format. Le viewer refuse une version plus récente que celle qu'il connaît. |
 | `readOnly` | non | Liste des propriétés que le viewer affiche sans permettre de les modifier (voir § 2 bis). |
 | `propertiesMode` | non | `"replace"` indique un état complet des propriétés pour chaque élément présent. Sans ce champ, le JSON complète les propriétés du GLB. |
+| `source` | non | `{ "name": "maison.rvt", "kind": "revit" }` : le fichier source que ce JSON de modifications complète (`kind` : `revit`, `ifc`, `glb` ou `usd`). Informatif ; voir § 2 bis. |
 | `elements` | oui | Objet indexé par identifiant : la même valeur que `extras.id` dans le GLB. |
 | `label` | non | Nom affiché dans l'arborescence et la fiche. À défaut, le `name` du nœud glTF. |
 | `properties` | non | Propriétés libres de l'élément. |
@@ -89,9 +90,11 @@ Le viewer les réunit avec celles du JSON :
 
 - les propriétés du GLB viennent en premier, celles du JSON à la suite ;
 - pour une propriété de même nom des deux côtés, la valeur du JSON l'emporte ;
+- une valeur `null` dans le JSON **retire** la propriété du GLB (sans propriété du même nom dans le GLB, rien n'est
+  retiré et la valeur reste vide) ;
 - sans fichier JSON, ou pour un élément absent du JSON, seules les propriétés du GLB s'affichent.
 
-Les JSON exportés par le viewer portent `"propertiesMode": "replace"`. Pour les identifiants
+Les JSON complets exportés par le viewer (« JSON ↓ ») portent `"propertiesMode": "replace"`. Pour les identifiants
 présents, leurs propriétés remplacent celles embarquées dans le modèle : une propriété supprimée
 ne réapparaît donc pas à la réouverture. Les éléments absents gardent leurs propriétés d’origine.
 Les anciens JSON et les fichiers complémentaires sans ce marqueur conservent la fusion décrite
@@ -105,10 +108,54 @@ courantes peuvent être réinjectées dans les extras du fichier exporté.
 Dans la fiche d'un élément (ou d'une sélection de plusieurs éléments), chaque propriété est un
 champ : texte, nombre, booléen ou date selon la valeur en place. Une valeur modifiée s'applique
 à toute la sélection ; « Ajouter une propriété » en crée une nouvelle, avec `Catégorie / Nom`
-pour la ranger dans une catégorie. Les modifications ne vivent que dans la page : le bouton
-« JSON ↓ » télécharge les métadonnées courantes dans le format ci-dessus (propriétés du GLB,
-du JSON et modifications réunies, `readOnly` compris), et « Annuler les modifications » revient
-aux fichiers chargés.
+pour la ranger dans une catégorie. Une saisie garde le type de la propriété : un nombre reste un
+nombre (« 12,5 » avec la virgule française est lu), un booléen un booléen (« oui », « non ») ; une
+valeur qui ne se convertit pas est refusée avec un message. Une propriété nouvelle prend le type
+que le texte a l'air d'avoir. Une valeur différente du fichier d'origine est marquée, « ↺ » y
+revient, et la case « Modifiées seulement » ne montre qu'elles.
+
+Le fichier ouvert n'est jamais modifié. Les modifications vivent dans la page et se téléchargent
+de deux façons :
+
+- **« Modifications ↓ »** (le nombre d'éléments modifiés entre parenthèses) : un JSON de
+  modifications, qui ne contient que ce qui diffère du fichier d'origine, en mode fusion (sans
+  `propertiesMode`). Une propriété supprimée y vaut `null`. Chaque élément y porte aussi ses
+  propriétés verrouillées (pour un `.rvt` : « Identifiant Revit »…), qui disent quel élément du
+  fichier source il désigne. `source` nomme ce fichier. Comme il ne contient que les modifications,
+  il reste valable après un nouvel enregistrement du fichier dans Revit : les valeurs que
+  l'utilisateur n'a pas touchées viennent fraîches du fichier.
+- **« JSON ↓ »** : toutes les propriétés, dans le format ci-dessus (propriétés du GLB, du JSON et
+  modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`).
+
+« Annuler les modifications » revient au fichier d'origine.
+
+```json
+{
+  "version": 1,
+  "source": { "name": "maison.rvt", "kind": "revit" },
+  "elements": {
+    "2O2Fr$t4X7Zf8NOew3FLOH": {
+      "properties": { "Identifiant Revit": 318215, "Niveau": "R+2", "Commentaires": null }
+    }
+  }
+}
+```
+
+**À l'ouverture**, le modèle et ses JSON déposés ensemble sont réunis ainsi :
+
+- la base est le JSON complet qui décrit le plus d'éléments du modèle : les métadonnées que le
+  fichier donne lui-même (lecture d'un `.rvt`, conversion d'un `.ifc`) ou un JSON
+  `"propertiesMode": "replace"` déposé avec lui, qui l'emporte à égalité. Les vues, les phases, la
+  position et `readOnly` restent alors ceux du fichier, relus frais ;
+- chaque JSON en mode fusion déposé avec un `.rvt` ou un `.ifc`, et chaque JSON qui porte `source`
+  déposé avec un glb, un glTF ou un USD, s'applique par-dessus la base, par ordre de nom de fichier.
+  Ses valeurs comptent comme des modifications : le prochain « Modifications ↓ » les garde, et
+  « Annuler » y revient. Une valeur verrouillée par le fichier n'est pas remplacée ;
+- un JSON de modifications dont moins de la moitié des éléments se trouve dans le modèle est
+  appliqué quand même, et le viewer le dit (« 12 éléments modifiés sur 40 introuvables dans ce
+  modèle »).
+
+Avec un glb, un glTF ou un USD, un JSON en mode fusion sans `source` le complète comme décrit plus haut.
 
 Le fichier décide de ce qui ne doit pas être modifié avec `readOnly`, une liste de motifs :
 
@@ -122,7 +169,8 @@ Le fichier décide de ce qui ne doit pas être modifié avec `readOnly`, une lis
 - un préfixe suivi de `*` verrouille tout ce qui commence ainsi (`"Qto_*"` : toutes les quantités).
 
 Sans `readOnly`, tout est modifiable. L'identifiant, lui, ne l'est jamais : c'est le lien avec
-la géométrie. Le convertisseur IFC fourni verrouille ce qui découle de la structure du modèle
+la géométrie. La lecture d'un `.rvt` ne verrouille que l'identité de l'élément : « Identifiant
+Revit », « GUID IFC » et « Source de la géométrie ». Le convertisseur IFC fourni verrouille ce qui découle de la structure du modèle
 plutôt que d'une saisie : la classe, le type, l'emplacement (site, bâtiment, niveau, local), les
 matériaux et les quantités calculées. Le nom, la description, le repère et les jeux de
 propriétés (`Pset_…`) restent modifiables.
@@ -133,7 +181,9 @@ Les propriétés se modifient par les contrôles manuels (ajout, valeur, date, s
 annulation et rétablissement) et par l’assistant, qui n’a que deux outils d’écriture :
 `set_property` (une valeur fixe ou une formule par élément) et `plan_dates` (des dates de début
 et de fin, groupées et ordonnées). Ces écritures passent par la même étape annulable que les
-contrôles manuels et respectent `readOnly` ; l’assistant ne modifie jamais la géométrie. Les
+contrôles manuels, respectent `readOnly` et gardent le type de la propriété comme une saisie dans
+la fiche ; elles font partie des modifications que « Modifications ↓ » télécharge. L’assistant
+ne modifie jamais la géométrie. Les
 coordonnées et mesures absentes du JSON ne sont pas calculées depuis le maillage pour le
 modèle d’IA : `plan_dates` lit la hauteur des éléments dans la maquette pour les ordonner, et
 cette géométrie reste dans le navigateur, elle n’est jamais envoyée au modèle.
@@ -361,7 +411,9 @@ dont la caméra est illisible est ignorée sans empêcher les autres.
 
 Les sections `phases` et `views` sont facultatives et ajoutées sans changer la version du format : un fichier d'avant
 continue de s'ouvrir tel quel, un viewer qui ne les connaît pas les ignore, et une section illisible est ignorée (elle n'empêche
-pas d'ouvrir le modèle). Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
+pas d'ouvrir le modèle). `source` et la valeur `null` qui retire une propriété en mode fusion (§ 2 bis) sont des ajouts de même
+nature : un viewer qui ignore `source` lit le JSON de modifications comme un complément, et un viewer qui ignore le sens de `null`
+montre une valeur vide. Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
 viewer qui les ignore ouvre un plan comme une vue parallèle de dessus. « JSON ↓ » les réécrit telles qu'elles ont été lues.
 
 ## 3. Groupes et sous-groupes

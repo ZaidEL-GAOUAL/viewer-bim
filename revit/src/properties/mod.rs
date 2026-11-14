@@ -24,7 +24,7 @@ use crate::Context;
 use crate::geometry::Stopwatch;
 use fiche::Resolver;
 use json::{Val, push_str};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 pub use native::{Retained, definition_classes, is_support_class};
 
@@ -196,17 +196,9 @@ pub fn double_parameters(file: &mut rvt::RevitFile, ids: &[u64]) -> anyhow::Resu
 /// Écrit le document de métadonnées.
 /// Le JSON de métadonnées en trois parts (voir `Properties`).
 fn write(keys: &[String], fiches: &[fiche::Fiche], georeference: Option<&geo::Georeference>, sections: &Sections) -> (String, Vec<String>, String) {
-    // Les noms de propriété et de groupe employés : tout ce que Revit donne est en lecture seule.
-    let mut read_only: Vec<String> = Vec::new();
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut note = |name: &str| {
-        if seen.insert(name.to_string()) {
-            read_only.push(name.to_string());
-        }
-    };
-    for name in [fiche::CATEGORY, fiche::FAMILY, fiche::TYPE, fiche::LEVEL, fiche::REVIT_ID, fiche::IFC_GUID, fiche::PHASE_CREATED, fiche::PHASE_DEMOLISHED, fiche::MATERIALS, fiche::GEOMETRY_SOURCE] {
-        note(name);
-    }
+    // Seule l'identité est verrouillée : le lien avec l'élément du fichier et l'origine de sa forme. Tout le reste se modifie
+    // dans le viewer, et ses modifications vont dans un JSON à part (le fichier n'est jamais écrit).
+    let read_only = [fiche::REVIT_ID, fiche::IFC_GUID, fiche::GEOMETRY_SOURCE];
 
     let mut fragments: Vec<String> = Vec::with_capacity(fiches.len());
     for (key, fiche) in keys.iter().zip(fiches) {
@@ -223,7 +215,6 @@ fn write(keys: &[String], fiches: &[fiche::Fiche], georeference: Option<&geo::Ge
             first = false;
         };
         for (name, value) in &fiche.head {
-            note(name);
             comma(&mut elements);
             push_str(&mut elements, name);
             elements.push(':');
@@ -233,7 +224,6 @@ fn write(keys: &[String], fiches: &[fiche::Fiche], georeference: Option<&geo::Ge
             if entries.is_empty() {
                 continue;
             }
-            note(group);
             comma(&mut elements);
             push_str(&mut elements, group);
             elements.push_str(":{");

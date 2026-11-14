@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { buildTree, suggestGrouping } from '../src/data/grouping.ts';
-import { PropertyStore, UNDEFINED_LABEL, compareValues, flattenProperties, formatValue, isReadOnly, mergeProperties, parseMetadata, rankedValues, toPropertyPath, unflattenProperties } from '../src/data/metadata.ts';
+import { PropertyStore, UNDEFINED_LABEL, coerceTo, compareValues, flattenProperties, formatValue, isReadOnly, mergeProperties, parseMetadata, rankedValues, toPropertyPath, unflattenProperties } from '../src/data/metadata.ts';
 
 test('flattenProperties aplatit les objets imbriqués et les tableaux', () => {
   const flat = flattenProperties({ Type: 'Mur', Dimensions: { Longueur: 4.2, Détail: { Unité: 'm' } }, Tags: ['a', 'b'], Vide: null });
@@ -145,6 +145,40 @@ test('mergeProperties place les propriétés du GLB avant celles du JSON, le JSO
   assert.deepEqual(mergeProperties({ A: 1 }, undefined), { A: 1 });
   assert.deepEqual(mergeProperties(undefined, { B: 2 }), { B: 2 });
   assert.equal(mergeProperties(undefined, undefined), undefined);
+});
+
+test('en mode fusion, null retire la propriété ; un JSON sans null fusionne comme avant', () => {
+  const metadata = parseMetadata({ elements: { a: { properties: { Niveau: null, Lot: 'GO' } } } });
+  assert.equal(metadata.propertiesMode, undefined);
+  assert.deepEqual(metadata.elements.get('a')?.props, { Niveau: null, Lot: 'GO' }, 'parseMetadata garde null');
+  assert.deepEqual(mergeProperties({ Niveau: 'R+1', Type: 'Mur' }, metadata.elements.get('a')!.props), { Type: 'Mur', Lot: 'GO' });
+  // Sans propriétés sous le JSON, il n'y a rien à retirer : le JSON s'affiche tel quel.
+  assert.deepEqual(mergeProperties(undefined, { Niveau: null }), { Niveau: null });
+  const old = parseMetadata({ elements: { a: { properties: { Niveau: 'R+2' } } } });
+  assert.deepEqual(mergeProperties({ Niveau: 'R+1', Type: 'Mur' }, old.elements.get('a')!.props), { Niveau: 'R+2', Type: 'Mur' });
+});
+
+test('coerceTo garde le type de la valeur en place et refuse ce qui ne s’y convertit pas', () => {
+  assert.equal(coerceTo(4.2, '12,5'), 12.5);
+  assert.equal(coerceTo(4.2, ' 1 200,5 '), 1200.5);
+  assert.equal(coerceTo(4.2, 7), 7);
+  assert.throws(() => coerceTo(4.2, 'abc'), /« abc » n’est pas un nombre/);
+  assert.throws(() => coerceTo(4.2, true), /n’est pas un nombre/);
+  assert.equal(coerceTo(true, 'non'), false);
+  assert.equal(coerceTo(false, 'Oui'), true);
+  assert.equal(coerceTo(false, 'true'), true);
+  assert.throws(() => coerceTo(true, 'peut-être'), /oui ou non/);
+  assert.equal(coerceTo('A12', '12'), '12', 'un texte reste un texte');
+  assert.equal(coerceTo('A12', 12), '12');
+  // Vider un champ efface la valeur, quel que soit son type.
+  assert.equal(coerceTo(4.2, '  '), null);
+  assert.equal(coerceTo(true, null), null);
+  // Une propriété nouvelle (ou vide) prend le type que le texte a l'air d'avoir.
+  assert.equal(coerceTo(undefined, '12,5'), 12.5);
+  assert.equal(coerceTo(null, 'true'), true);
+  assert.equal(coerceTo(undefined, ' Gros œuvre '), 'Gros œuvre');
+  assert.equal(coerceTo(undefined, '+33612'), '+33612');
+  assert.equal(coerceTo(undefined, 3), 3);
 });
 
 test('suggestGrouping préfère une propriété générale à une propriété rangée dans une catégorie', () => {
