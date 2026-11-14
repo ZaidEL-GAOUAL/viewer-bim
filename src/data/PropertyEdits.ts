@@ -121,6 +121,29 @@ export class PropertyEdits {
     this.counted = null;
   }
 
+  /**
+   * A value the viewer itself gives each element (the `Modèle` of a session with several models, see data/federation.ts):
+   * written in the store, the baseline and every step of the history, so that undo and redo keep it. Not a modification.
+   * `undefined` removes it.
+   */
+  stamp(path: string, valueOf: (index: number) => PropValue | undefined): void {
+    const put = (i: number, props: FlatProps | undefined): FlatProps | undefined => {
+      const value = valueOf(i);
+      if (value === undefined && !(props && Object.hasOwn(props, path))) return props;
+      const out: FlatProps = { ...props };
+      if (value === undefined) delete out[path];
+      else define(out, path, value);
+      return out;
+    };
+    for (let i = 0; i < this.store.count; i++) this.store.set(i, put(i, this.store.propsOf(i)), this.store.labelOf(i));
+    for (const entries of [this.baseline, ...this.changes.flatMap((change) => [change.before, change.after])]) {
+      for (const [i, entry] of entries) entry.props = put(i, entry.props);
+    }
+    this.store.finalize();
+    this.counted = null;
+    this.notify(path);
+  }
+
   /** True if the element's value of `path` differs from the file's. Locked properties are the file's: never modified. */
   isModified(index: number, path: string): boolean {
     const base = this.baseline.get(index);

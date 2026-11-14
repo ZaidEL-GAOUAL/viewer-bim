@@ -3,8 +3,14 @@ import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { PropertyStore, unflattenProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
 import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice, userViewsOf } from '../data/sidecar.ts';
 import { levelsToJson, type Level } from '../data/levels.ts';
-import { SplitSet, applyTailChange, loadSplits, splitsOf, splitsToJson, type TailChange } from '../data/splits.ts';
+import { SplitSet, applyTailChange, loadSplits, splitRefusalsOf, splitsOf, splitsToJson, type TailChange } from '../data/splits.ts';
 import { zonesOf, zonesToJson, type Zone } from '../data/zones.ts';
+import { clashesToJson, type ClashRecord, type ClashTest } from '../data/clashes.ts';
+import { documentsBySource } from '../data/federation.ts';
+import type { ElementAppearance } from '../data/appearanceRules.ts';
+import { ClashPanel } from './ClashPanel.ts';
+import { ComparePanel } from './ComparePanel.ts';
+import { ModelsPanel } from './ModelsPanel.ts';
 import { Sketch } from '../engine/sketch.ts';
 import { PanelMenu } from './PanelMenu.ts';
 import { QuantitiesPanel } from './QuantitiesPanel.ts';
@@ -107,6 +113,12 @@ export class App {
   splits: SplitSet | null = null;
   /** Les zones dessinées (section `zones`), exportées dans les deux JSON. */
   zones: Zone[] = [];
+  /** Le test de conflits et les conflits trouvés (sections `clashTests` et `clashes`), exportés dans les deux JSON. */
+  clashes: { tests: ClashTest[]; records: ClashRecord[] } = { tests: [], records: [] };
+  /** Change à chaque renumérotation des éléments (pièces, maquette ajoutée ou retirée) : un résultat calculé avant est périmé. */
+  revision = 0;
+  /** États passagers (comparaison) : couleur et opacité par élément, par-dessus les règles ; ni propriété ni export. */
+  transient: ReadonlyMap<number, ElementAppearance> | null = null;
   model: Model | null = null;
   store = new PropertyStore(0);
   metadata: Metadata | null = null;
@@ -238,7 +250,9 @@ export class App {
     this.selectButton = selectTool;
     const quantitiesPanel = new QuantitiesPanel(this), requirementsPanel = new RequirementsPanel(this), splitPanel = new SplitPanel(this), zonesPanel = new ZonesPanel(this);
     const metres = new PanelMenu('Métrés', 'Quantités manquantes, propriétés requises, découpage en pièces, zones', [quantitiesPanel, requirementsPanel, splitPanel, zonesPanel]);
-    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el);
+    const modelsPanel = new ModelsPanel(this), comparePanel = new ComparePanel(this), clashPanel = new ClashPanel(this);
+    const checks = new PanelMenu('Contrôles', 'Plusieurs maquettes, comparaison de versions, conflits', [modelsPanel, comparePanel, clashPanel]);
+    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el);
 
     const mapToggle = button('Carte', () => {
       void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
@@ -363,6 +377,7 @@ export class App {
       ),
       h('div', { class: 'bar-group' },
         openButton,
+        modelsPanel.addButton,
         button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
         button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
         samples, fileInput, folderInput, this.metadataInput,
@@ -429,7 +444,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -650,11 +665,25 @@ export class App {
     for (let i = 0; i < model.count; i++) { model.state.clearColor(i); model.state.setOpacity(i, null); }
     // Les remplacements de la phase passent sous les règles : une règle d'apparence l'emporte, attribut par attribut.
     const rules = evaluateAppearanceRules(this.store, this.appearanceRules, { keys: model.keys, label: (index) => this.elementLabel(index) });
-    for (const [i, appearance] of this.phaseEvaluation ? mergeAppearance(this.phaseEvaluation.appearance, rules) : rules) {
+    const layers = this.phaseEvaluation ? mergeAppearance(this.phaseEvaluation.appearance, rules) : rules;
+    for (const [i, appearance] of this.transient ? mergeAppearance(layers, this.transient) : layers) {
       if (appearance.color) model.state.setColor(i, ...hexToRgb(appearance.color));
       if (appearance.opacity !== undefined) model.state.setOpacity(i, appearance.opacity);
     }
     model.state.commit(); this.viewer.invalidate();
+  }
+  /** Pose (ou retire, null) l'état passager des éléments : il passe par-dessus les règles et la phase. */
+  setTransient(layer: ReadonlyMap<number, ElementAppearance> | null): void {
+    this.transient = layer;
+    this.refreshAppearance();
+  }
+  setClashes(clashes: { tests: ClashTest[]; records: ClashRecord[] }): void {
+    this.clashes = clashes;
+    this.syncDownloads();
+  }
+  /** Le fichier ouvert tel que l'utilisateur l'a choisi (l'IFC, pas le GLB de sa conversion). */
+  get sourceName(): string {
+    return this.conversion?.source ?? this.fileName;
   }
   groupBy(paths: string[]): void {
     if (paths.some((path) => !this.store.paths.includes(path))) throw new Error('Une propriété de regroupement est introuvable.');
@@ -694,10 +723,13 @@ export class App {
    * masquages et isolement suivent les nouveaux numéros (`change`) ; les panneaux se mettent à jour comme après une
    * modification de propriétés. Un découpage n'est pas une étape d'« Annuler » : « Retirer le découpage » est son inverse.
    */
-  changeParts(change: TailChange): void {
+  changeParts(change: TailChange, metadata: Metadata | null = this.metadata): void {
     const model = this.model;
     if (!model) return;
-    applyTailChange(change, model, this.store, this.propertyEdits, this.metadata);
+    // `metadata` : celles des éléments nouveaux (une maquette ajoutée a les siennes, voir data/federation.ts).
+    applyTailChange(change, model, this.store, this.propertyEdits, metadata);
+    this.revision++;
+    this.transient = null;
     const moved = (indices: Iterable<number>) => [...indices].flatMap((i) => (i < change.next.length && change.next[i] >= 0 ? [change.next[i]] : []));
     const selection = moved(this.selection), masked = moved(this.masked);
     this.selection.clear();
@@ -1251,6 +1283,7 @@ export class App {
     if (this.levels.length > 0) out.levels = levelsToJson(this.levels);
     if (this.splits?.definitions.length) out.splits = splitsToJson(this.splits.definitions);
     if (this.zones.length > 0) out.zones = zonesToJson(this.zones);
+    Object.assign(out, clashesToJson(this.clashes.tests, this.clashes.records));
     return JSON.stringify(out);
   }
 
@@ -1271,14 +1304,20 @@ export class App {
     const name = conversion?.name ?? this.fileName.replace(/\.[^.]+$/, '');
     let blob: Blob;
     let extension: string;
-    if (kind === 'json') {
-      blob = new Blob([this.exportMetadata()], { type: 'application/json' });
-      extension = 'json';
-    } else if (kind === 'changes') {
-      if (!this.propertyEdits) return;
-      const sections = { splits: splitsToJson(this.splits?.definitions ?? []), zones: zonesToJson(this.zones) };
-      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName, this.userViews, sections))], { type: 'application/json' });
-      extension = 'modifications.json';
+    if (kind === 'json' || kind === 'changes') {
+      if (kind === 'changes' && !this.propertyEdits) return;
+      const sections = { splits: splitsToJson(this.splits?.definitions ?? []), zones: zonesToJson(this.zones), ...clashesToJson(this.clashes.tests, this.clashes.records) };
+      const text = kind === 'json' ? this.exportMetadata() : JSON.stringify(modificationsFile(this.propertyEdits!, model.keys, this.sourceName, this.userViews, sections));
+      extension = kind === 'json' ? 'json' : 'modifications.json';
+      if (model.sources.length > 1) {
+        // Plusieurs maquettes : un fichier par maquette, avec ses propres clés (voir data/federation.ts).
+        for (const { source, document } of documentsBySource(JSON.parse(text) as Record<string, unknown>, model)) download(new Blob([JSON.stringify(document)], { type: 'application/json' }), `${withoutExtension(source.name)}.${extension}`);
+        this.toast(`${model.sources.length} fichiers téléchargés, un par maquette.`);
+        this.propertyEdits?.markSaved();
+        this.emit('history');
+        return;
+      }
+      blob = new Blob([text], { type: 'application/json' });
     } else {
       this.busy('Écriture des métadonnées du modèle…');
       try {
@@ -1287,13 +1326,15 @@ export class App {
         const properties = new Map(model.keys.map((id, i) => [id, unflattenProperties(this.store.propsOf(i) ?? {})]));
         const labels = new Map(model.keys.flatMap((id, i) => { const label = this.store.labelOf(i); return label ? [[id, label] as const] : []; }));
         const metadata = this.exportMetadata();
-        const source = this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
+        // Avec plusieurs maquettes, le fichier exporté est leur réunion : écrit depuis le modèle affiché.
+        const source = model.sources.length > 1 ? null : this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
         // Avec des pièces, le fichier exporté est le modèle affiché : les pièces à la place de leurs originaux.
         const parts = this.splits?.hasParts === true;
         const glb = updateGlbMetadata(source && !parts ? source : writeGlb(model, undefined, { skip: (i) => model.state.isReplaced(i) }), properties, this.store.readOnly, {
           nodeKeys: source && !parts && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
         });
         if (parts) this.toast('Le fichier exporté contient les pièces à la place des éléments découpés.');
+        if (model.sources.length > 1) this.toast(`Le fichier exporté réunit les ${model.sources.length} maquettes ; les JSON, eux, sont écrits un par maquette.`);
         if (this.format === 'usd' || kind === 'quicklook') {
           const usdz = await packageUsd(glb, metadata, (message) => this.busy(message));
           blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' }); extension = 'usdz';
@@ -1355,7 +1396,7 @@ export class App {
     const modified = this.propertyEdits?.modifiedCount ?? 0;
     this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
     // Les vues de l'utilisateur sont aussi des modifications : elles s'enregistrent même sans propriété changée.
-    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0;
+    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0 && this.clashes.records.length === 0;
     this.downloads.hidden = this.model === null;
   }
 
@@ -1435,7 +1476,7 @@ export class App {
     this.metadataInput.click();
   }
 
-  private readMetadata(text: string, name: string): Metadata {
+  readMetadata(text: string, name: string): Metadata {
     let json: unknown;
     try {
       json = JSON.parse(text);
@@ -1483,6 +1524,9 @@ export class App {
     this.userViews = [];
     this.splits = null;
     this.zones = [];
+    this.clashes = { tests: [], records: [] };
+    this.transient = null;
+    this.revision++;
     this.viewHidden = null;
     this.openingHidden = null;
     this.layerHidden = null;
@@ -1551,12 +1595,12 @@ export class App {
     // Les pièces des découpages enregistrés d'abord : leurs propriétés se lisent ensuite comme celles de tout élément.
     const splits = new SplitSet(model, this.viewer.selectColor);
     const definitions = splitsOf(metadata, overlays);
-    let splitNotes: string[] = [];
+    const splitNotes = splitRefusalsOf(metadata, overlays);
     if (definitions.length > 0) {
       try {
-        splitNotes = await loadSplits(splits, definitions, metadata, metadata?.levels ?? [], (progress) => this.busy(`Découpage des éléments… ${Math.round(progress * 100)} %`));
+        splitNotes.push(...await loadSplits(splits, definitions, metadata, metadata?.levels ?? [], (progress) => this.busy(`Découpage des éléments… ${Math.round(progress * 100)} %`)));
       } catch (error) {
-        splitNotes = [`Découpages non appliqués : ${error instanceof Error ? error.message : String(error)}`];
+        splitNotes.push(`Découpages non appliqués : ${error instanceof Error ? error.message : String(error)}`);
       }
       if (ticket !== this.loadTicket) return false;
     }
@@ -1564,6 +1608,8 @@ export class App {
     this.model = model;
     this.splits = splits;
     this.zones = zonesOf(metadata, overlays);
+    const withClashes = [metadata, ...overlays].reverse().find((item) => item?.clashTests || item?.clashes);
+    this.clashes = { tests: withClashes?.clashTests ?? [], records: withClashes?.clashes ?? [] };
     this.originalNodeKeys = nodeKeys;
     this.metadata = metadata;
     this.userViews = userViewsOf(metadata, overlays);
@@ -1658,7 +1704,7 @@ export class App {
     this.toastTimer = window.setTimeout(() => (this.toastEl.hidden = true), isError ? 9000 : 5000);
   }
 
-  private busy(message: string | null): void {
+  busy(message: string | null): void {
     this.busyEl.hidden = message === null;
     if (message !== null) this.busyEl.textContent = message;
   }

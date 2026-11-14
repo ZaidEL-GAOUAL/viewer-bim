@@ -7,6 +7,7 @@ import { parseViews, type SavedView } from './savedViews.ts';
 import { parseLevels, type Level } from './levels.ts';
 import { parseSplits, type SplitDefinition } from './splits.ts';
 import { parseZones, type Zone } from './zones.ts';
+import { parseClashes, parseClashTests, type ClashRecord, type ClashTest } from './clashes.ts';
 import { numericValue, plainNumber } from './conditions.ts';
 import { isRecord } from './json.ts';
 import { decimal, fold } from './text.ts';
@@ -40,8 +41,13 @@ export interface Metadata {
   levels?: Level[];
   /** Découpages en pièces (voir data/splits.ts), si le fichier en donne. */
   splits?: SplitDefinition[];
+  /** Découpages écartés à la lecture (trop de coupes), en phrases à montrer à l'utilisateur. */
+  splitRefusals?: string[];
   /** Zones dessinées (voir data/zones.ts), si le fichier en donne. */
   zones?: Zone[];
+  /** Tests de conflits et conflits trouvés, statuts et commentaires compris (voir data/clashes.ts). */
+  clashTests?: ClashTest[];
+  clashes?: ClashRecord[];
 }
 
 /**
@@ -177,10 +183,16 @@ export function parseMetadata(json: unknown): Metadata {
 
   // Un JSON de modifications qui n'apporte que des vues de l'utilisateur, des découpages ou des zones n'a aucun élément : il reste lisible.
   const views = parseViews(json.views);
-  const splits = parseSplits(json.splits);
+  const splitRefusals: string[] = [];
+  const splits = parseSplits(json.splits, splitRefusals);
   const zones = parseZones(json.zones);
-  if (elements.size === 0 && (json.elements === undefined || views.length + splits.length + zones.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
+  const clashTests = parseClashTests(json.clashTests);
+  const clashes = parseClashes(json.clashes);
+  if (elements.size === 0 && (json.elements === undefined || views.length + splits.length + zones.length + splitRefusals.length + clashTests.length + clashes.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
   const metadata: Metadata = { version, elements };
+  if (splitRefusals.length > 0) metadata.splitRefusals = splitRefusals;
+  if (clashTests.length > 0) metadata.clashTests = clashTests;
+  if (clashes.length > 0) metadata.clashes = clashes;
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
   if (json.elements !== undefined && isRecord(json.source) && typeof json.source.name === 'string') metadata.modifies = json.source.name;

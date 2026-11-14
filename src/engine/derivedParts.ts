@@ -45,17 +45,21 @@ export function elementSolid(model: Model, element: number): { solid: Solid; mat
 
 /**
  * Découpe des éléments, élément par élément, avec une pause (avancement de 0 à 1) chaque fois que `budget` triangles ont été
- * traités. `planesOf` : les plans de coupe d'un élément, dans le repère du viewer. Un élément ouvert, une coupe partielle ou
- * aucune coupe donnent un refus motivé, sans pièce.
+ * traités. `planesOf` : les plans de coupe d'un élément, dans le repère du viewer, ou la raison de leur refus (trop de
+ * coupes). Un élément ouvert, une coupe partielle ou aucune coupe donnent aussi un refus motivé, sans pièce.
  */
 export function* splitJob(
-  model: Model, elements: readonly number[], planesOf: (element: number) => CutPlane[],
+  model: Model, elements: readonly number[], planesOf: (element: number) => CutPlane[] | string,
   out: { splits: ElementSplit[]; refused: SplitRefusal[] }, budget = 40_000,
 ): Generator<number, void, unknown> {
   let work = 0;
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
     const planes = planesOf(element);
+    if (typeof planes === 'string') {
+      out.refused.push({ element, reason: planes });
+      continue;
+    }
     const { solid, materials } = elementSolid(model, element);
     const result = planes.length === 0 ? { parts: [] } : splitSolid(solid, planes);
     if (result.error) out.refused.push({ element, reason: result.error });

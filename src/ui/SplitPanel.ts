@@ -1,6 +1,7 @@
 import { Box3 } from 'three';
 import { toModelPoint, type Vec3 } from '../data/modelFrame.ts';
-import { describeOutcome, type OriginalOf, type SplitDefinition, type SplitReferences } from '../data/splits.ts';
+import { sourceIndexOf } from '../data/federation.ts';
+import { MAX_CUTS, MIN_INTERVAL, describeOutcome, type OriginalOf, type SplitDefinition, type SplitReferences } from '../data/splits.ts';
 import { integer, plural } from '../data/text.ts';
 import { runSliced } from '../engine/sliced.ts';
 import type { App } from './App.ts';
@@ -62,6 +63,7 @@ export class SplitPanel {
       h('div', { class: 'dimensions-actions' }, this.stop, this.run),
       this.report,
       h('p', { class: 'field-label', text: 'Découpages' }), this.list, this.merge,
+      h('p', { class: 'hint', text: 'Avec plusieurs maquettes, seuls les éléments de la première se découpent.' }),
       h('p', { class: 'hint', text: 'Les pièces copient les propriétés de l’original et reçoivent « Pièce / Numéro », « Pièce / Séquence » (à modifier pour l’ordre du planning) et leurs propres quantités. Elles s’enregistrent comme une définition de coupe avec « JSON ↓ » et « Modifications ↓ » ; « GLB ↓ » contient les pièces à la place des originaux.' }),
     );
     app.sketch.onChange = () => this.sync();
@@ -88,7 +90,7 @@ export class SplitPanel {
     const { app } = this;
     const mode = this.mode.value as Mode;
     const blocked = this.blocked;
-    const originals = [...app.selection].filter((i) => (app.model?.parents[i] ?? 0) < 0);
+    const originals = this.originals();
     this.status.textContent = blocked || (originals.length > 0 ? `${plural(originals.length, 'élément sélectionné', 'éléments sélectionnés')} à découper.` : 'Sélectionnez les éléments à découper.');
     this.lines.hidden = mode !== 'lines';
     this.levels.hidden = mode !== 'levels';
@@ -131,6 +133,16 @@ export class SplitPanel {
     });
   }
 
+  /**
+   * Les éléments sélectionnés à découper : des éléments du fichier, de la première maquette seulement quand il y en a
+   * plusieurs (les découpages s'enregistrent avec elle, voir data/federation.ts).
+   */
+  private originals(): number[] {
+    const model = this.app.model;
+    if (!model) return [];
+    return [...this.app.selection].filter((i) => model.parents[i] < 0 && sourceIndexOf(model, i) <= 0);
+  }
+
   private toggleSketch(): void {
     const { app } = this;
     if (app.tool === 'sketch' && app.sketch.mode === 'lines') {
@@ -156,6 +168,7 @@ export class SplitPanel {
     const offset = model.offset.toArray();
     const base = { id: newViewId(), elements: elements.map((i) => model.keys[i]) };
     const mode = this.mode.value as Mode;
+    if (mode === 'lines' && app.sketch.lines.length > MAX_CUTS) return `Au plus ${MAX_CUTS} lignes par découpage.`;
     if (mode === 'lines') return { ...base, lines: app.sketch.lines.map(([a, b]) => [toModelPoint(a.toArray(), offset), toModelPoint(b.toArray(), offset)] as [Vec3, Vec3]) };
     if (mode === 'levels') {
       const levels = [...this.levels.querySelectorAll<HTMLInputElement>('input:checked')].map((input) => input.value);
@@ -165,13 +178,14 @@ export class SplitPanel {
     const values = this.amount.value.split(/[;\s]+/).filter(Boolean).map((text) => Number(text.replace(',', '.'))).filter(Number.isFinite);
     const references: SplitReferences = { axis };
     if (this.kind.value === 'count') {
-      if (!Number.isInteger(values[0]) || values[0] < 2) return 'Un nombre de parts entier, au moins 2.';
+      if (!Number.isInteger(values[0]) || values[0] < 2 || values[0] > MAX_CUTS) return `Un nombre de parts entier, de 2 à ${MAX_CUTS}.`;
       references.count = values[0];
     } else if (this.kind.value === 'interval') {
-      if (!(values[0] > 0)) return 'Un pas en mètres, plus grand que 0.';
+      if (!(values[0] >= MIN_INTERVAL)) return 'Un pas en mètres, d’au moins 1 cm (0,01).';
       references.interval = values[0];
     } else {
       if (values.length === 0) return 'Une ou plusieurs distances en mètres, séparées par « ; ».';
+      if (values.length > MAX_CUTS) return `Au plus ${MAX_CUTS} distances.`;
       // Des distances depuis le bord ouest (X) ou sud (Y, le nord étant −Z) de la sélection, en coordonnées du modèle.
       const box = model.boxOf(elements, new Box3());
       references.positions = values.map((d) => (axis === 'x' ? box.min.x + d + offset[0] : box.max.z - d + offset[2]));
@@ -183,7 +197,7 @@ export class SplitPanel {
     const { app } = this;
     const model = app.model, splits = app.splits;
     if (!model || !splits || this.blocked) return;
-    const elements = [...app.selection].filter((i) => model.parents[i] < 0);
+    const elements = this.originals();
     const definition = this.definition(elements);
     if (typeof definition === 'string') {
       this.report.textContent = definition;

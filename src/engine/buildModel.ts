@@ -116,7 +116,7 @@ interface Piece {
 }
 
 /** Ce que la collecte (scène ou modèle brut) remet à la cuisson des lots. */
-interface Collected {
+export interface Collected {
   keys: string[];
   names: string[];
   extras: (Record<string, unknown> | undefined)[];
@@ -274,6 +274,18 @@ export function buildModel(input: GLTF | ModelSource | RawInput, selectColor: IU
   const builder = new ModelBuilder(selectColor);
   builder.bake(collected);
   return builder.model;
+}
+
+/**
+ * Collecte une scène ou un modèle brut sans le cuire, pour une maquette ajoutée à un modèle déjà ouvert (voir
+ * data/federation.ts) : `triangles` permet de refuser l'ajout avant tout changement. `origin` : `Model.offset` du modèle
+ * ouvert (un modèle brut y est ramené ; une scène l'est à la cuisson).
+ */
+export function collect(input: ModelSource | RawModel, origin: Vector3): { collected: Collected; triangles: number } {
+  const collected = (input as { kind?: unknown }).kind === 'raw' ? collectRaw(input as RawModel, origin) : collectScene(input as ModelSource);
+  let indices = 0;
+  for (const piece of collected.pieces) indices += piece.indexCount;
+  return { collected, triangles: indices / 3 };
 }
 
 // ------------------------------------------------------------------ collecte d'une scène

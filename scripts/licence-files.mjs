@@ -7,6 +7,7 @@ export const LICENCE_FILES = {
   'licences/revit-THIRD_PARTY.txt': 'revit/THIRD_PARTY.md',
   'licences/three.txt': 'node_modules/three/LICENSE',
   'licences/cesium.txt': 'node_modules/cesium/LICENSE.md',
+  'licences/three-mesh-bvh.txt': 'node_modules/three-mesh-bvh/LICENSE',
   // Servi en .txt : un .md part en téléchargement dans certains navigateurs au lieu de s'afficher.
   'licences/revit-demo.txt': 'public/samples/revit-demo.LICENSE.md',
 };

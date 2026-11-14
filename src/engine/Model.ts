@@ -88,6 +88,27 @@ interface Candidate {
   t: number;
 }
 
+/**
+ * Une maquette d'une session à plusieurs maquettes (voir data/federation.ts) : ses éléments du fichier sont `count` éléments
+ * consécutifs à partir de `start`, dans ses propres lots ; les pièces dérivées restent toutes à la fin du modèle.
+ */
+export interface ModelSourceInfo {
+  /** `m1`, `m2`… : préfixe des clés de cette maquette déjà prises par une autre (`m2|clé`). */
+  id: string;
+  /** Nom du fichier : la valeur de la propriété `Modèle` de ses éléments. */
+  name: string;
+  kind: 'glb' | 'ifc' | 'revit' | 'usd';
+  /** `reference` : l'ancienne version chargée par « Comparer avec… » ; exclue des conflits par défaut. */
+  role: 'model' | 'reference';
+  start: number;
+  count: number;
+  chunkStart: number;
+  chunkCount: number;
+  triangles: number;
+  /** Le centre de cette maquette dans le repère du modèle : le décalage qu'elle aurait pris ouverte seule. */
+  offset: [number, number, number];
+}
+
 const DET_EPSILON = 1e-14;
 const BLOCK_INDICES = BLOCK_TRIANGLES * 3;
 
@@ -140,6 +161,8 @@ export class Model {
    * fichier. Les pièces sont toujours à la fin de la liste : `truncate` les retire sans toucher aux éléments du fichier.
    */
   readonly parents: number[] = [];
+  /** Les maquettes réunies dans ce modèle (voir data/federation.ts) ; vide pour une maquette ouverte seule. */
+  readonly sources: ModelSourceInfo[] = [];
   /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. Réalloué par `grow` : à relire, jamais à garder. */
   boxes: Float32Array;
   readonly ranges: ElementRange[][];
@@ -212,10 +235,11 @@ export class Model {
 
   /**
    * Retire les éléments à partir de `count` et les lots à partir de `chunkCount` : les pièces dérivées, toujours en fin de
-   * liste et dans leurs propres lots (`ModelBuilder` les cuit à part). Les éléments du fichier ne sont jamais retirés.
+   * liste et dans leurs propres lots (`ModelBuilder` les cuit à part). Les éléments du fichier ne sont retirés qu'avec
+   * `files` : la dernière maquette ajoutée d'une session (voir data/federation.ts), ses pièces déjà retirées.
    */
-  truncate(count: number, chunkCount: number): void {
-    if (this.parents.slice(count).includes(-1)) throw new Error('Seules les pièces dérivées peuvent être retirées du modèle.');
+  truncate(count: number, chunkCount: number, files = false): void {
+    if (!files && this.parents.slice(count).includes(-1)) throw new Error('Seules les pièces dérivées peuvent être retirées du modèle.');
     for (const range of this.ranges.slice(count).flat()) if (range.chunk < chunkCount) throw new Error('Pièces et lots du modèle ne correspondent pas.');
     const removed = this.chunks.splice(chunkCount);
     const geometries = new Set(removed.map((chunk) => chunk.mesh.geometry));
@@ -237,6 +261,8 @@ export class Model {
     this.boxes = this.boxes.slice(0, count * 6);
     this.state.truncate(count);
     this.count = count;
+    // La boîte du modèle suit ce qui reste (une maquette retirée la réduit ; des pièces, jamais : l'original reste).
+    this.boxOf(Array.from({ length: count }, (_, i) => i), this.box);
   }
 
   /**

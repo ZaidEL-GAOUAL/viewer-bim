@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "cesium": "^1.146.0",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "three-mesh-bvh": "0.9.18"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

@@ -7,10 +7,11 @@ import type { App } from './App.ts';
  * vue, écriture annulable des propriétés. Partagé par le chat IA et l'API offerte aux agents.
  */
 export function toolContext(app: App): ToolContext {
-  const initialModel = app.model;
+  const initialModel = app.model, initialRevision = app.revision;
   const box = new Box3();
   return {
-    isCurrent: () => app.model === initialModel,
+    // Une maquette ajoutée ou retirée, des pièces refaites : les numéros d'éléments ont changé, le tour de l'assistant aussi.
+    isCurrent: () => app.model === initialModel && app.revision === initialRevision,
     get store() { return app.store; },
     get count() { return app.model?.count ?? 0; },
     get keys() { return app.model?.keys ?? []; },

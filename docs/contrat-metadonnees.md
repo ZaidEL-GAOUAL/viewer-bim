@@ -468,7 +468,8 @@ Les champs des vues de l'utilisateur (`origin`, `id`, `sections`, `isolated`, `a
 un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa boîte, ses masquages, sa phase). Les sections
 `splits` et `zones` aussi : un viewer qui les ignore montre les éléments entiers, et les propriétés écrites sur des pièces
 (clés `<clé>~<n>`) ne trouvent pas leur élément, sans empêcher l'ouverture. Un JSON de modifications peut n'avoir que des
-découpages ou des zones (`"elements": {}`).
+découpages ou des zones (`"elements": {}`). Les sections `clashTests` et `clashes` aussi : un viewer qui les ignore ouvre le
+fichier sans conflits ; un JSON de modifications peut n'avoir qu'elles.
 
 ## 2 octies. Niveaux (`levels`)
 
@@ -510,6 +511,11 @@ fichier garde la **définition** des coupes, jamais les maillages. Le viewer en 
 | `references` | À la place de `lines`, une coupe automatique : `levels` (noms de la section `levels` : coupe horizontale à l'altitude du niveau), ou `axis` (`"x"` ou `"z"`, axes du repère du modèle) avec `positions` (coordonnées sur cet axe), `interval` (un pas en mètres depuis le bord de chaque élément) ou `count` (nombre de parts égales de chaque élément). |
 | `merged` | Facultatif : groupes de clés de pièces réunies ; chaque groupe devient la pièce du plus petit numéro. |
 
+**Limites.** Une définition donne au plus 200 plans de coupe (lignes, niveaux et coupes le long d'un axe réunis) ; `count`
+vaut au plus 200, `positions` a au plus 200 valeurs et `interval` vaut au moins 0,01 m. Une définition qui demande plus est
+écartée à la lecture, et le viewer le dit (« Découpage « c1 » ignoré : plus de 200 coupes ») ; un pas accepté qui donnerait
+plus de 200 coupes sur un élément très long est refusé pour cet élément. Le reste du fichier s'ouvre normalement.
+
 **Pièces.** Une pièce est un élément de plus, ajouté au modèle : clé `<clé de l'original>~<n>`, numérotée de bas en haut, puis
 du sud au nord, puis d'ouest en est (centre de sa boîte, au millimètre) : les mêmes coupes redonnent les mêmes numéros, donc les
 propriétés et les dates écrites sur une pièce la retrouvent à la réouverture. Elle reprend les propriétés de l'original, plus
@@ -534,6 +540,72 @@ part de son emprise, écrite dans une propriété choisie à ce moment (« Zone 
 `name` : nom de la zone (non vide) ; `points` : au moins trois sommets du polygone, dans le repère du modèle (mètres, Y vers le
 haut) ; seuls x et z comptent. Une zone de même nom dans deux fichiers est donnée une fois (la plus récente).
 
+## 2 undecies. Plusieurs maquettes
+
+« Ajouter… » (et la carte « Maquettes » du menu « Contrôles ») ouvre une maquette de plus dans la même scène : un `.glb`, un
+`.gltf`, un `.usdz` ou un `.ifc` (converti), avec son JSON. Un fichier Revit ne s'ajoute pas encore. Rien ne change dans les
+fichiers ; c'est un comportement du viewer :
+
+- **Repère.** Un seul, celui de la première maquette. Les suivantes sont placées par leurs coordonnées d'origine, jamais
+  recentrées sur elles-mêmes : deux fichiers d'un même projet se superposent s'ils partagent leur repère. Quand deux maquettes
+  sont plus loin l'une de l'autre que leur propre taille, le viewer dit que leurs repères diffèrent peut-être.
+- **`Modèle`.** Chaque élément reçoit la propriété `Modèle`, le nom du fichier de sa maquette (une pièce, celui de son
+  original), verrouillée : l'arbre, les filtres, les couleurs et le planning l'utilisent comme toute propriété.
+- **Clés.** Chaque maquette garde les clés de son fichier. Une clé déjà prise par une maquette ouverte avant elle devient
+  `<id>|<clé>` dans la session (`m2|2O2Fr$t4X7Zf8NOew3FLOH`), ce qui est le cas normal en comparant deux versions ; les
+  maquettes déjà ouvertes ne changent jamais de clés.
+- **Exports.** « JSON ↓ » et « Modifications ↓ » écrivent un fichier par maquette (`<nom>.json`, `<nom>.modifications.json`),
+  chacun avec les clés de son fichier et sans `Modèle` : chaque JSON reste celui de son fichier. Les sections de la session
+  (`views`, `splits`, `zones`, `georeference`, `phases`, `levels`, `clashTests`, `clashes`) vont avec la première maquette.
+  « GLB ↓ » écrit la réunion des maquettes, sous les clés de la session, et le dit.
+- **Limites.** Toutes les maquettes partagent le budget de triangles de l'appareil : un ajout qui le dépasserait est refusé,
+  avec les chiffres. Seule la dernière maquette ajoutée se retire. Le découpage en pièces ne porte que sur la première. En
+  mode carte, ajouter, comparer et chercher des conflits attendent la fermeture de la carte.
+
+**Comparer deux versions.** « Comparer avec… » (carte « Comparaison ») ajoute l'autre version comme maquette de référence
+et apparie les éléments par leur clé : propriétés ajoutées, retirées ou changées (des motifs ignorés, même syntaxe que
+`readOnly`), et géométrie (boîte au millimètre, nombre de triangles, volume et surface à 4 chiffres significatifs : même
+forme au même endroit, déplacée, ou modifiée). Un élément sans paire qui a la même catégorie (une propriété choisie), le même
+nom et la même forme qu'un élément supprimé, à moins de 50 cm, est montré « identifiant changé, probablement le même », jamais
+fusionné. Le résultat colore la vue (ajouté vert, supprimé rouge translucide, modifié orange, inchangé estompé) : ce n'est pas
+une propriété, rien n'en est exporté dans les JSON ; le rapport se télécharge à part (CSV ou JSON).
+
+## 2 duodecies. Conflits (`clashTests`, `clashes`)
+
+Deux listes optionnelles à la racine gardent le test de conflits et les conflits trouvés, avec le statut et le commentaire que
+l'utilisateur leur a donnés (carte « Conflits ») :
+
+```json
+"clashTests": [{
+  "id": "t1", "name": "Structure × réseaux", "type": "hard", "tolerance": 0.01,
+  "a": { "model": "structure.ifc", "conditions": [{ "property": "Catégorie", "op": "equals", "value": "Poutre" }] },
+  "b": { "model": "reseaux.ifc", "conditions": [] },
+  "exclude": [{ "property": "Catégorie", "op": "equals", "value": "Réservation" }],
+  "sameValue": "Hôte"
+}],
+"clashes": [{
+  "test": "t1", "status": "active", "comment": "réservation à prévoir", "depth": 0.045, "point": [12.4, 3.1, -8.2],
+  "a": { "key": "2O2Fr$t4X7Zf8NOew3FLOH", "model": "structure.ifc" },
+  "b": { "key": "1kTvXnbbzCWw8lcMd1dR4o", "model": "reseaux.ifc" }
+}]
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `clashTests[].a`, `.b` | Les deux ensembles : `model`, le nom du fichier d'une maquette (absent : toutes, sauf une version de référence) ; `conditions`, comme celles des règles de présentation (§ 2 ter), toutes vraies. |
+| `type`, `tolerance` | `hard` : un conflit franc, qui pénètre de plus que `tolerance` (mètres, 0,01 par défaut). Deux éléments qui se touchent n'en sont pas un. |
+| `exclude` | Les éléments qui répondent à ces conditions ne sont dans aucun ensemble. |
+| `sameValue` | Facultatif : les paires d'une même maquette qui ont la même valeur de cette propriété sont ignorées (un élément et son hôte). |
+| `clashes[].a`, `.b` | Les deux éléments : `key`, la clé dans le fichier de leur maquette (sans préfixe de session), et `model`, le nom de ce fichier. |
+| `status` | `new` (trouvé au dernier calcul), `active` (retrouvé), `resolved` (n'est plus trouvé), `ignored` (choisi par l'utilisateur). |
+| `comment` | Texte libre. |
+| `depth`, `point` | Profondeur approchée (mètres) et centre de la zone de recouvrement, dans le repère du modèle (mètres, Y vers le haut). |
+
+Un nouveau calcul retrouve chaque conflit par ses deux éléments : il garde son commentaire, un conflit ignoré le reste, un
+conflit qui n'est plus trouvé devient `resolved`. Un conflit dont une maquette n'est pas ouverte est gardé tel quel. Le viewer
+ne connaît aucun nom de propriété : les ensembles, les exclusions et `sameValue` sont choisis par l'utilisateur. « JSON ↓ » et
+« Modifications ↓ » écrivent ces deux sections ; une section illisible, ou une entrée illisible, est ignorée.
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
@@ -552,7 +624,8 @@ structure spatiale d'un IFC devient :
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
 (regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
-ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits` et `zones` sont déjà de celles-là.
+ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits`, `zones`, `clashTests` et `clashes` sont déjà de
+celles-là.
 
 ## 5. Variante USD
 

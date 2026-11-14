@@ -55,26 +55,49 @@ const partNumber = (key: string): number => Number(key.slice(key.lastIndexOf(PAR
 const isVec3 = (value: unknown): value is Vec3 => Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n));
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'string' && item !== '');
 
-/** Lit la section `splits` ; une entrée illisible est écartée. */
-export function parseSplits(raw: unknown): SplitDefinition[] {
+/** Plans de coupe au plus par définition (et parts au plus pour `count`) : au-delà, un fichier pourrait figer l'onglet. */
+export const MAX_CUTS = 200;
+/** Pas le plus petit accepté pour `interval`, en mètres. */
+export const MIN_INTERVAL = 0.01;
+const TOO_MANY = `plus de ${MAX_CUTS} coupes`;
+const TOO_SMALL = 'pas de moins de 1 cm';
+
+/**
+ * Lit la section `splits` ; une entrée illisible est écartée. Une entrée qui demanderait trop de coupes (plus de `MAX_CUTS`,
+ * ou un pas sous `MIN_INTERVAL`) est écartée aussi, et dite dans `refusals`.
+ */
+export function parseSplits(raw: unknown, refusals: string[] = []): SplitDefinition[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((item): SplitDefinition[] => {
     if (!isRecord(item) || typeof item.id !== 'string' || !item.id || !strings(item.elements)) return [];
     const definition: SplitDefinition = { id: item.id, elements: [...item.elements] };
+    const refuse = (reason: string): [] => {
+      refusals.push(`Découpage « ${item.id} » ignoré : ${reason}.`);
+      return [];
+    };
     if (Array.isArray(item.lines)) {
+      if (item.lines.length > MAX_CUTS) return refuse(TOO_MANY);
       const lines = item.lines.filter((line): line is [Vec3, Vec3] => Array.isArray(line) && line.length === 2 && isVec3(line[0]) && isVec3(line[1]) && Math.hypot(line[1][0] - line[0][0], line[1][2] - line[0][2]) > 0);
       if (lines.length === 0 || lines.length !== item.lines.length) return [];
       definition.lines = lines.map(([a, b]) => [[...a], [...b]] as [Vec3, Vec3]);
     } else if (isRecord(item.references)) {
       const r = item.references;
       const references: SplitReferences = {};
-      if (strings(r.levels)) references.levels = [...r.levels];
-      else if (r.axis === 'x' || r.axis === 'z') {
+      if (strings(r.levels)) {
+        if (r.levels.length > MAX_CUTS) return refuse(TOO_MANY);
+        references.levels = [...r.levels];
+      } else if (r.axis === 'x' || r.axis === 'z') {
         references.axis = r.axis;
-        if (Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((n) => typeof n === 'number' && Number.isFinite(n))) references.positions = [...r.positions];
-        else if (typeof r.interval === 'number' && r.interval > 0) references.interval = r.interval;
-        else if (typeof r.count === 'number' && Number.isInteger(r.count) && r.count >= 2) references.count = r.count;
-        else return [];
+        if (Array.isArray(r.positions) && r.positions.length > 0 && r.positions.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+          if (r.positions.length > MAX_CUTS) return refuse(TOO_MANY);
+          references.positions = [...r.positions];
+        } else if (typeof r.interval === 'number' && r.interval > 0) {
+          if (!(r.interval >= MIN_INTERVAL)) return refuse(TOO_SMALL);
+          references.interval = r.interval;
+        } else if (typeof r.count === 'number' && Number.isInteger(r.count) && r.count >= 2) {
+          if (r.count > MAX_CUTS) return refuse(TOO_MANY);
+          references.count = r.count;
+        } else return [];
       } else return [];
       definition.references = references;
     } else return [];
@@ -83,7 +106,10 @@ export function parseSplits(raw: unknown): SplitDefinition[] {
   });
 }
 
-export const splitsToJson = (definitions: readonly SplitDefinition[]): SplitDefinition[] => structuredClone([...definitions]);
+/** Ce que la lecture des sections `splits` a écarté (voir `parseSplits`), en phrases. */
+export const splitRefusalsOf = (metadata: Metadata | null, overlays: readonly Metadata[]): string[] => [metadata, ...overlays].flatMap((source) => source?.splitRefusals ?? []);
+
+export const splitsToJson =(definitions: readonly SplitDefinition[]): SplitDefinition[] => structuredClone([...definitions]);
 
 /** Les définitions de la base et des JSON de modifications, dans cet ordre ; une même définition (`id`) n'est gardée qu'une fois, la plus récente. */
 export function splitsOf(metadata: Metadata | null, overlays: readonly Metadata[]): SplitDefinition[] {
@@ -94,23 +120,31 @@ export function splitsOf(metadata: Metadata | null, overlays: readonly Metadata[
 
 /**
  * Les plans de coupe d'un élément (repère du viewer) : `box` est sa boîte dans ce repère, `offset` le décalage du modèle.
- * `missing` : les niveaux nommés que le modèle n'a pas.
+ * `missing` : les niveaux nommés que le modèle n'a pas. `error` : plus de `MAX_CUTS` plans, refusés avant d'en calculer un.
  */
-export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max: number[] }, levels: readonly Level[], offset: readonly number[]): { planes: CutPlane[]; missing: string[] } {
+export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max: number[] }, levels: readonly Level[], offset: readonly number[]): { planes: CutPlane[]; missing: string[]; error?: string } {
   const missing: string[] = [];
   const planes: CutPlane[] = [];
+  const references = definition.references;
+  // Le nombre de plans d'abord : un pas minuscule ou un nombre énorme ne doit jamais faire tourner une boucle.
+  const axis = references?.axis === 'x' ? 0 : 2;
+  const span = box.max[axis] - box.min[axis];
+  const axisCount = !references?.axis ? 0
+    : references.positions ? references.positions.length
+      : references.interval ? (references.interval > 0 ? Math.floor(span / references.interval) : Infinity)
+        : references.count ? references.count - 1 : 0;
+  const total = (definition.lines?.length ?? 0) + (references?.levels?.length ?? 0) + axisCount;
+  if (!(total <= MAX_CUTS)) return { planes, missing, error: `${TOO_MANY} pour cet élément (au plus ${MAX_CUTS})` };
   for (const [a, b] of definition.lines ?? []) {
     const [ax, , az] = toViewerPoint(a, offset), [bx, , bz] = toViewerPoint(b, offset);
     planes.push(verticalPlane([ax, az], [bx, bz]));
   }
-  const references = definition.references;
   for (const name of references?.levels ?? []) {
     const level = levels.find((item) => item.name === name);
     if (level) planes.push({ normal: [0, 1, 0], constant: -(level.elevation - offset[1]) });
     else missing.push(name);
   }
   if (references?.axis) {
-    const axis = references.axis === 'x' ? 0 : 2;
     const normal: [number, number, number] = axis === 0 ? [1, 0, 0] : [0, 0, 1];
     const min = box.min[axis], max = box.max[axis];
     let at: number[] = [];
@@ -222,9 +256,9 @@ export class SplitSet {
       const at = element * 6;
       box.min = [model.boxes[at], model.boxes[at + 1], model.boxes[at + 2]];
       box.max = [model.boxes[at + 3], model.boxes[at + 4], model.boxes[at + 5]];
-      const { planes, missing: absent } = cutPlanes(definition, box, levels, offset);
+      const { planes, missing: absent, error } = cutPlanes(definition, box, levels, offset);
       for (const name of absent) missing.add(name);
-      return planes;
+      return error ?? planes;
     }, outcome);
     outcome.missingLevels = [...missing];
     return outcome;
@@ -241,6 +275,20 @@ export class SplitSet {
     else this.definitions[at] = definition;
     if (splits) this.results.set(definition.id, splits);
     return this.rebuild(at, source, renew);
+  }
+
+  /** Où commencent les pièces : premier élément et premier lot de la fin du modèle (la fin elle-même s'il n'y en a pas). */
+  get tailStart(): { element: number; chunk: number } {
+    return this.spans[0] ?? { element: this.model.count, chunk: this.model.chunks.length };
+  }
+
+  /**
+   * Retire toutes les pièces, laisse `edit` changer la fin des éléments du fichier (ajouter ou retirer une maquette, voir
+   * data/federation.ts), puis remet les pièces. `edit` rend où ces éléments ont changé (`cut`) et combien il en a ajouté
+   * (`inserted`, à partir de `cut`) : les éléments d'avant `cut` gardent leur numéro, ceux qu'il a retirés disparaissent.
+   */
+  reshape(edit: () => { cut: number; inserted: number }, source: OriginalOf): TailChange {
+    return this.rebuild(0, source, [], edit);
   }
 
   /** Retire une définition : ses pièces disparaissent, ses originaux reviennent. */
@@ -308,7 +356,7 @@ export class SplitSet {
    * celles de chaque définition depuis `from`. Les propriétés des pièces sont posées dans `extras` (comme celles d'un nœud
    * glTF) : `buildStore` ou `applyTailChange` les lisent.
    */
-  private rebuild(from: number, source: OriginalOf, renew: readonly string[] = []): TailChange {
+  private rebuild(from: number, source: OriginalOf, renew: readonly string[] = [], edit?: () => { cut: number; inserted: number }): TailChange {
     const model = this.model;
     const oldCount = model.count;
     const start = this.spans[from]?.element ?? model.count;
@@ -317,6 +365,8 @@ export class SplitSet {
     for (const parent of new Set(model.parents.slice(start))) model.state.setReplaced(parent, false);
     model.truncate(start, this.spans[from]?.chunk ?? model.chunks.length);
     this.spans.length = Math.min(this.spans.length, from);
+    // Une maquette ajoutée ou retirée (voir `reshape`) : les éléments du fichier changent entre les deux.
+    const { cut, inserted } = edit ? edit() : { cut: start, inserted: 0 };
     for (let d = from; d < this.definitions.length; d++) {
       this.spans.push({ element: model.count, chunk: model.chunks.length });
       const parts = this.partsOf(this.definitions[d], source);
@@ -335,12 +385,12 @@ export class SplitSet {
     const next = new Int32Array(oldCount).fill(-1);
     const previous = new Int32Array(model.count).fill(-1);
     for (let i = 0; i < model.count; i++) {
-      const old = i < start ? i : previousKey.get(model.keys[i]) ?? -1;
+      const old = i < cut ? i : i < cut + inserted ? -1 : previousKey.get(model.keys[i]) ?? -1;
       previous[i] = old;
       if (old >= 0) next[old] = i;
     }
     // Une pièce qui reste garde sa visibilité ; une nouvelle est visible.
-    for (let i = start; i < model.count; i++) if (previous[i] >= 0) model.state.setVisible(i, visible[previous[i] - start]);
+    for (let i = cut + inserted; i < model.count; i++) if (previous[i] >= 0) model.state.setVisible(i, visible[previous[i] - start]);
     model.state.commit();
     return { next, previous };
   }

@@ -6,7 +6,7 @@ import { parseMetadata, type PropValue } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
 import { parseScheduleDate } from '../src/data/schedule.ts';
 import { applyOverlays, buildStore, modificationsFile, openingProps } from '../src/data/sidecar.ts';
-import { PART_SEQUENCE, SplitSet, applyTailChange, parseSplits, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition } from '../src/data/splits.ts';
+import { MAX_CUTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition } from '../src/data/splits.ts';
 import type { Model } from '../src/engine/Model.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
 import { CUBE, buildFromNodes, loadGlb } from './helpers.ts';
@@ -137,4 +137,32 @@ test('the GLB export contains the parts instead of their original; reopened with
   const set = new SplitSet(reopened, select);
   const outcome = run(set.compute(cross, []));
   assert.deepEqual(outcome, { splits: [], refused: [], missingLevels: [] }, 'the parts are already in the file');
+});
+
+test('a definition asking for too many cuts is dropped at reading and refused when computed, quickly and without parts', async () => {
+  const hostile: SplitDefinition[] = [
+    { id: 'pas', elements: ['dalle'], references: { axis: 'x', interval: 1e-9 } },
+    { id: 'nombre', elements: ['dalle'], references: { axis: 'x', count: 1e9 } },
+    { id: 'positions', elements: ['dalle'], references: { axis: 'x', positions: Array.from({ length: 10_000 }, (_, i) => i * 1e-4) } },
+  ];
+  const started = performance.now();
+  const refusals: string[] = [];
+  assert.deepEqual(parseSplits(splitsToJson(hostile), refusals), []);
+  assert.equal(refusals.length, 3);
+  assert.match(refusals[0], /« pas » ignoré : pas de moins de 1 cm/);
+  assert.match(refusals[1], new RegExp(`« nombre » ignoré : plus de ${MAX_CUTS} coupes`));
+  // Lu par parseMetadata : le fichier s'ouvre, sans découpage, et dit pourquoi.
+  const metadata = parseMetadata({ elements: {}, splits: splitsToJson(hostile) });
+  assert.equal(metadata.splits, undefined);
+  assert.equal(splitRefusalsOf(metadata, []).length, 3);
+  // Calculées directement (sans passer par la lecture), les mêmes définitions sont refusées avant toute boucle.
+  const model = await build();
+  const set = new SplitSet(model, select);
+  for (const definition of [...hostile, { id: 'long', elements: ['dalle'], references: { axis: 'x' as const, interval: MIN_INTERVAL } }]) {
+    const outcome = run(set.compute(definition, []));
+    assert.equal(outcome.splits.length, 0, definition.id);
+    assert.match(outcome.refused[0].reason, /plus de 200 coupes/, definition.id);
+  }
+  assert.equal(model.count, 2, 'no part was produced');
+  assert.ok(performance.now() - started < 2000, 'refused quickly');
 });
