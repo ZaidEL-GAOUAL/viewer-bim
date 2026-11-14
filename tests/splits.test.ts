@@ -6,8 +6,10 @@ import { parseMetadata, type PropValue } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
 import { parseScheduleDate } from '../src/data/schedule.ts';
 import { applyOverlays, buildStore, modificationsFile, openingProps } from '../src/data/sidecar.ts';
-import { MAX_CUTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition } from '../src/data/splits.ts';
+import { MAX_CUTS, MAX_PARTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, loadSplits, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition } from '../src/data/splits.ts';
+import { splitJob, type ElementSplit, type SplitRefusal } from '../src/engine/derivedParts.ts';
 import type { Model } from '../src/engine/Model.ts';
+import type { CutPlane } from '../src/engine/splitMesh.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
 import { CUBE, buildFromNodes, loadGlb } from './helpers.ts';
 
@@ -165,4 +167,83 @@ test('a definition asking for too many cuts is dropped at reading and refused wh
   }
   assert.equal(model.count, 2, 'no part was produced');
   assert.ok(performance.now() - started < 2000, 'refused quickly');
+});
+
+/** Un cube unité, et `n` lignes en plan (n/2 dans chaque sens) qui le traversent toutes. */
+async function crossedCube(n: number) {
+  const model = await buildFromNodes([{ mesh: 0, extras: { id: 'cube' } }], [0], CUBE);
+  const lines: number[][][] = [];
+  for (let k = 1; k <= n / 2; k++) {
+    const t = k / (n / 2 + 1);
+    lines.push([[t, 0, -1], [t, 0, 2]], [[-1, 0, t], [2, 0, t]]);
+  }
+  return { model, definition: parseSplits([{ id: 'grille', elements: ['cube'], lines }])[0] };
+}
+
+test('200 crossing lines from a file (10 201 parts) are refused before any cut, quickly', async () => {
+  const { model, definition } = await crossedCube(MAX_CUTS);
+  assert.ok(definition, 'the reading accepts 200 lines');
+  const started = performance.now();
+  const outcome = run(new SplitSet(model, select).compute(definition, []));
+  assert.equal(outcome.splits.length, 0);
+  assert.match(outcome.refused[0].reason, new RegExp(`plus de ${MAX_PARTS} pièces`));
+  assert.ok(performance.now() - started < 1000, 'refused before cutting');
+});
+
+test('a definition stops at MAX_PARTS parts in all, the next elements are refused', async () => {
+  const count = Math.ceil(MAX_PARTS / 10) + 5;
+  const model = await buildFromNodes(Array.from({ length: count }, (_, i) => ({ mesh: 0, translation: [i * 2, 0, 0], extras: { id: `c${i}` } })), Array.from({ length: count }, (_, i) => i), CUBE);
+  const outcome = run(new SplitSet(model, select).compute({ id: 'tous', elements: model.keys, references: { axis: 'z', count: 10 } }, []));
+  const parts = outcome.splits.reduce((sum, split) => sum + split.parts.length, 0);
+  assert.ok(parts <= MAX_PARTS && parts > 0, String(parts));
+  assert.ok(outcome.refused.length > 0);
+  assert.match(outcome.refused[0].reason, new RegExp(`plus de ${MAX_PARTS} pièces`));
+});
+
+test('cutting one element pauses between plane cuts, not only between elements', async () => {
+  const model = await buildFromNodes([{ mesh: 0, extras: { id: 'cube' } }], [0], CUBE);
+  const [min, max] = [model.boxes[0], model.boxes[3]];
+  const planes: CutPlane[] = Array.from({ length: 20 }, (_, k) => ({ normal: [1, 0, 0], constant: -(min + ((k + 1) * (max - min)) / 21) }));
+  const out: { splits: ElementSplit[]; refused: SplitRefusal[] } = { splits: [], refused: [] };
+  let pauses = 0;
+  for (const _ of splitJob(model, [0], () => planes, out, 50)) pauses++;
+  assert.equal(out.splits[0].parts.length, 21);
+  assert.ok(pauses > 5, `${pauses} pauses`);
+});
+
+test('an element whose key another element carries too is refused, the other is not cut', async () => {
+  const model = await buildFromNodes([{ mesh: 0, name: 'Mur' }, { mesh: 0, name: 'Mur', translation: [10, 0, 0] }], [0, 1], CUBE);
+  assert.deepEqual(model.keys, ['Mur', 'Mur']);
+  const outcome = run(new SplitSet(model, select).compute({ id: 'd', elements: ['Mur'], references: { axis: 'x', count: 2 } }, []));
+  assert.equal(outcome.splits.length, 0);
+  assert.match(outcome.refused[0].reason, /identifiant en double/);
+});
+
+test('splits of a JSON dropped on the open model go through loadSplits; its edits of parts then land on them', async () => {
+  const { model, set, store, edits } = await open([]);
+  edits.set([1], 'Lot', 'GO');
+  const overlay = parseMetadata({ elements: { 'dalle~3': { properties: { Lot: 'Coulage 3' } } }, splits: splitsToJson([cross]) });
+  const source: OriginalOf = (i) => ({ props: store.propsOf(i), label: model.names[i] });
+  const apply = { source, onChange: (change: Parameters<typeof applyTailChange>[0]) => applyTailChange(change, model, store, edits, null) };
+  assert.deepEqual(await loadSplits(set, splitsOf(null, [overlay]), null, [], undefined, apply), []);
+  assert.deepEqual(model.keys, ['dalle', 'mur', 'dalle~1', 'dalle~2', 'dalle~3', 'dalle~4']);
+  assert.equal(store.count, model.count);
+  assert.equal(store.propsOf(1)?.Lot, 'GO', 'the edit made before stays');
+  edits.import(overlay, model.keys);
+  assert.equal(store.propsOf(4)?.Lot, 'Coulage 3');
+  // The same JSON dropped again: the definition is already there, nothing is cut twice.
+  const again = await loadSplits(set, splitsOf(null, [overlay]), null, [], undefined, apply);
+  assert.match(again.join(' '), /déjà en place/);
+  assert.equal(model.count, 6);
+  assert.equal(store.propsOf(4)?.Lot, 'Coulage 3');
+});
+
+test('a failing reshape (a model that cannot be added) puts the parts back as they were', async () => {
+  const { model, set, store } = await open([cross]);
+  const keys = [...model.keys], parents = [...model.parents];
+  assert.throws(() => set.reshape(() => { throw new Error('mémoire'); }, (i) => ({ props: store.propsOf(i), label: model.names[i] })), /mémoire/);
+  assert.deepEqual(model.keys, keys);
+  assert.deepEqual(model.parents, parents);
+  assert.equal(model.state.isReplaced(0), true);
+  assert.deepEqual(set.tailStart.element, 2);
 });

@@ -84,12 +84,11 @@ export async function writeZip(entries: Iterable<ZipInput>, date = new Date()): 
   return new Blob([...parts, ...central, end.buffer], { type: 'application/zip' });
 }
 
-/** Décompresse un flux deflate brut. Injectable : les tests passent celui de Node. */
-export type Inflate = (data: Uint8Array) => Promise<Uint8Array>;
+/** Décompresse un flux deflate brut, en flux : la lecture s'arrête dès que la sortie dépasse ce qu'elle peut être. Injectable : les tests passent celui de Node. */
+export type Inflate = (data: Uint8Array) => ReadableStream<Uint8Array>;
 
 /** Celui du navigateur (`DecompressionStream`), hors du fil principal. */
-export const inflateRaw: Inflate = async (data) =>
-  new Uint8Array(await new Response(new Blob([data.slice()]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+export const inflateRaw: Inflate = (data) => new Blob([data.slice()]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
 
 export interface ZipEntry {
   name: string;
@@ -99,8 +98,32 @@ export interface ZipEntry {
   bytes(): Promise<Uint8Array>;
 }
 
-/** Au-delà, une entrée est refusée avant décompression (fichier abîmé ou malveillant). */
-const MAX_ENTRY = 512e6;
+/** Taille annoncée au plus d'une entrée, entrées au plus, et octets décompressés au plus par archive (toutes lectures comprises). */
+export const MAX_ENTRY = 512e6;
+export const MAX_ENTRIES = 20_000;
+export const MAX_TOTAL = 1e9;
+
+/** Lit un flux jusqu'au bout, ou lève dès qu'il dépasse `max` octets : une bombe de décompression n'est jamais déroulée. */
+async function readAtMost(stream: ReadableStream<Uint8Array>, max: number, name: string): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (let next = await reader.read(); !next.done; next = await reader.read()) {
+    length += next.value.length;
+    if (length > max) {
+      void reader.cancel().catch(() => {});
+      throw new Error(`« ${name} » est abîmé (plus grand qu’annoncé).`);
+    }
+    chunks.push(next.value);
+  }
+  const out = new Uint8Array(length);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.length;
+  }
+  return out;
+}
 
 /** Le répertoire de l'archive ; le contenu de chaque entrée se lit à la demande. Les dossiers sont ignorés. */
 export async function readZip(file: Blob, inflate: Inflate = inflateRaw): Promise<Map<string, ZipEntry>> {
@@ -111,9 +134,11 @@ export async function readZip(file: Blob, inflate: Inflate = inflateRaw): Promis
   if (at < 0) throw new Error('Ce fichier n’est pas une archive zip.');
   const count = tail.getUint16(at + 10, true), size = tail.getUint32(at + 12, true), start = tail.getUint32(at + 16, true);
   if (count === 0xffff || start === LIMIT) throw new Error('Archive zip64 non prise en charge.');
+  if (count > MAX_ENTRIES) throw new Error(`Archive trop grande (plus de ${MAX_ENTRIES.toLocaleString('fr-FR')} fichiers).`);
   const directory = new DataView(await file.slice(start, start + size).arrayBuffer());
   const decoder = new TextDecoder();
   const entries = new Map<string, ZipEntry>();
+  let inflated = 0;
   let p = 0;
   for (let n = 0; n < count; n++) {
     if (p + 46 > directory.byteLength || directory.getUint32(p, true) !== 0x02014b50) throw new Error('Archive zip abîmée (répertoire illisible).');
@@ -130,11 +155,14 @@ export async function readZip(file: Blob, inflate: Inflate = inflateRaw): Promis
         if (flags & 1) throw new Error(`« ${name} » est chiffré : non pris en charge.`);
         if (method !== 0 && method !== 8) throw new Error(`« ${name} » : compression ${method} non prise en charge.`);
         if (length > MAX_ENTRY) throw new Error(`« ${name} » est trop grand (${Math.round(length / 1e6)} Mo).`);
+        // Chaque lecture réserve sa taille annoncée, que la décompression ne peut pas dépasser.
+        if (inflated + length > MAX_TOTAL) throw new Error(`Archive trop grande une fois décompressée (plus de ${MAX_TOTAL / 1e6} Mo).`);
+        inflated += length;
         const header = new DataView(await file.slice(local, local + 30).arrayBuffer());
         if (header.byteLength < 30 || header.getUint32(0, true) !== 0x04034b50) throw new Error(`« ${name} » est abîmé (en-tête illisible).`);
         const from = local + 30 + header.getUint16(26, true) + header.getUint16(28, true);
         const raw = new Uint8Array(await file.slice(from, from + packed).arrayBuffer());
-        const data = method === 0 ? raw : await inflate(raw);
+        const data = method === 0 ? raw : await readAtMost(inflate(raw), length, name);
         if (data.length !== length || crc32(data) !== crc) throw new Error(`« ${name} » est abîmé (somme de contrôle).`);
         return data;
       },

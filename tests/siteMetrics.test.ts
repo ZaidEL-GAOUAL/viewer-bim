@@ -79,3 +79,12 @@ test('sans limite de terrain, les ratios restent vides ; le tableau compare les 
   study.settings.units = 'ft2';
   assert.equal(new Map(figureRows(study, study.proposals).map((row) => [row[0], row[1]])).get('Surface de plancher (ft²)'), '10764');
 });
+
+test('un usage nommé comme un membre d’Object est un usage comme un autre ; le TSV désamorce les formules', () => {
+  const f = proposalFigures(SITE, [volume('a', rect(0, 0, 10, 10), 2, { use: 'constructor' }), volume('b', rect(20, 0, 10, 10), 1, { use: '__proto__' })], settings);
+  assert.equal(f.gfaByUse.constructor, 200);
+  assert.equal(Object.getOwnPropertyDescriptor(f.gfaByUse, '__proto__')?.value, 100);
+  assert.equal(f.gfa, 300);
+  assert.equal(f.dwellings, 0);
+  assert.equal(toTsv([['=cmd', '-5'], ['@x', 'ok']]), "'=cmd\t-5\n'@x\tok");
+});

@@ -1,10 +1,11 @@
-import { deflateRawSync, inflateRawSync } from 'node:zlib';
+import { Readable } from 'node:stream';
+import { createInflateRaw, deflateRawSync } from 'node:zlib';
 import { crc32, type Inflate } from '../src/data/zip.ts';
 
 const text = (value: string) => new TextEncoder().encode(value);
 
-/** Node's zlib stands in for the browser's DecompressionStream: the tests run offline and deterministically. */
-export const nodeInflate: Inflate = async (data) => new Uint8Array(inflateRawSync(data));
+/** Node's zlib stands in for the browser's DecompressionStream, as a stream too: readZip stops it as soon as it says too much. */
+export const nodeInflate: Inflate = (data) => Readable.toWeb(Readable.from([data]).pipe(createInflateRaw())) as ReadableStream<Uint8Array>;
 
 /** A zip whose entries are deflated (method 8), built by hand as other tools write them, with a data descriptor flag. */
 export function deflatedZip(files: Record<string, string | Uint8Array>): Blob {

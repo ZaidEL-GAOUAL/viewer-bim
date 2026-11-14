@@ -5,6 +5,7 @@
 
 import { isMissing, matchesCondition, valueAt, type ElementIdentity, type RuleCondition } from './conditions.ts';
 import { PATH_SEP, formatValue, type PropValue, type PropertyStore } from './metadata.ts';
+import { csvCell } from './text.ts';
 import { child, parseXml, type XmlNode } from './xml.ts';
 
 export interface Requirement {
@@ -40,10 +41,24 @@ const requiredText = ({ value, cardinality }: Requirement): string =>
 
 /** Vérifie les règles sur les éléments donnés (tous par défaut). Pur : ne lit que les propriétés. */
 export function checkRequirements(store: PropertyStore, rules: readonly RequirementRule[], identity?: ElementIdentity, elements?: Iterable<number>): Failure[] {
+  const job = checkRequirementsJob(store, rules, identity, elements);
+  for (;;) {
+    const next = job.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** `checkRequirements` par tranches (voir `runSliced`) : une pause, avec l'avancement de 0 à 1, toutes les `budget` vérifications d'élément. */
+export function* checkRequirementsJob(store: PropertyStore, rules: readonly RequirementRule[], identity?: ElementIdentity, elements?: Iterable<number>, budget = 20_000): Generator<number, Failure[], unknown> {
   const failures: Failure[] = [];
   const indices = elements ? [...elements] : Array.from({ length: store.count }, (_, i) => i);
-  rules.forEach((rule, r) => {
-    for (const element of indices) {
+  let work = 0;
+  for (const [r, rule] of rules.entries()) {
+    for (const [k, element] of indices.entries()) {
+      if (++work >= budget) {
+        work = 0;
+        yield (r * indices.length + k) / (rules.length * indices.length);
+      }
       if (!rule.applies.every((condition) => matchesCondition(valueAt(store, identity, element, condition.property), condition))) continue;
       for (const requirement of rule.requirements) {
         const actual = valueAt(store, identity, element, requirement.property);
@@ -55,7 +70,7 @@ export function checkRequirements(store: PropertyStore, rules: readonly Requirem
         if (fails) failures.push({ rule: r, element, property: requirement.property, required: requiredText(requirement), actual: formatValue(actual), cardinality: requirement.cardinality });
       }
     }
-  });
+  }
   return failures;
 }
 
@@ -153,7 +168,7 @@ export function parseIds(xml: string, mapping: IdsMapping): { title: string; rul
       if (node.name === 'attribute') {
         const attribute = simple(child(node, 'name'), 'le nom d’attribut');
         if (!attribute) return null;
-        property = mapping.attributes?.[attribute];
+        property = mapping.attributes && Object.hasOwn(mapping.attributes, attribute) ? mapping.attributes[attribute] : undefined;
         if (!property) {
           unsupported.add(`« ${name} » : attribut IFC « ${attribute} » sans propriété correspondante dans le viewer`);
           return null;
@@ -197,10 +212,9 @@ export function parseIds(xml: string, mapping: IdsMapping): { title: string; rul
 
 /** Le rapport en CSV (séparateur « ; », pour un tableur réglé en français) : une ligne par manquement. */
 export function failuresCsv(failures: readonly Failure[], rules: readonly RequirementRule[], keys: readonly string[], labelOf: (element: number) => string): string {
-  const cell = (value: string) => (/[;"\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
   const lines = [['Règle', 'Élément', 'Identifiant', 'Propriété', 'Requis', 'Valeur actuelle'].join(';')];
   for (const failure of failures) {
-    lines.push([rules[failure.rule]?.name ?? '', labelOf(failure.element), keys[failure.element] ?? '', failure.property, failure.required, failure.actual].map(cell).join(';'));
+    lines.push([rules[failure.rule]?.name ?? '', labelOf(failure.element), keys[failure.element] ?? '', failure.property, failure.required, failure.actual].map((cell) => csvCell(cell)).join(';'));
   }
   return lines.join('\r\n');
 }

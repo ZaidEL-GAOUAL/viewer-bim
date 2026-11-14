@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { crc32, readZip, writeZip } from '../src/data/zip.ts';
+import { deflateRawSync } from 'node:zlib';
+import { MAX_ENTRIES, MAX_ENTRY, MAX_TOTAL, crc32, readZip, writeZip, type Inflate } from '../src/data/zip.ts';
 import { deflatedZip, nodeInflate } from './zipHelpers.ts';
 
 const text = (value: string) => new TextEncoder().encode(value);
@@ -30,10 +31,41 @@ test('deflated entries read through the injected inflate, and a damaged entry is
   const entries = await readZip(zip, nodeInflate);
   assert.equal(new TextDecoder().decode(await entries.get('a.xml')!.bytes()), '<a>'.repeat(500));
   assert.equal(new TextDecoder().decode(await entries.get('b/c.txt')!.bytes()), 'bonjour');
-  const broken = await readZip(zip, async () => text('autre chose'));
+  const broken = await readZip(zip, () => new Blob([text('autre chose')]).stream());
   await assert.rejects(broken.get('b/c.txt')!.bytes(), /abîmé/);
 });
 
 test('something that is not a zip is refused with a message', async () => {
   await assert.rejects(readZip(new Blob([text('pas une archive')]), nodeInflate), /pas une archive zip/);
+});
+
+/** Une archive d'une entrée deflate dont le répertoire annonce `declared` octets (`count` : nombre d'entrées annoncé). */
+function lyingZip(content: Uint8Array, declared: number, count = 1): Blob {
+  const packed = deflateRawSync(content);
+  const name = text('x/markup.bcf');
+  const local = new DataView(new ArrayBuffer(30));
+  local.setUint32(0, 0x04034b50, true); local.setUint16(8, 8, true); local.setUint32(18, packed.length, true); local.setUint32(22, declared, true); local.setUint16(26, name.length, true);
+  const central = new DataView(new ArrayBuffer(46));
+  central.setUint32(0, 0x02014b50, true); central.setUint16(10, 8, true); central.setUint32(16, crc32(content), true); central.setUint32(20, packed.length, true); central.setUint32(24, declared, true); central.setUint16(28, name.length, true);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, count, true); end.setUint16(10, count, true); end.setUint32(12, 46 + name.length, true); end.setUint32(16, 30 + name.length + packed.length, true);
+  return new Blob([local.buffer, name, packed, central.buffer, name, end.buffer]);
+}
+
+test('a small entry that inflates far beyond its declared size is stopped early (zip bomb)', async () => {
+  let produced = 0;
+  const counting: Inflate = (data) => nodeInflate(data).pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform(chunk, controller) { produced += chunk.length; controller.enqueue(chunk); } }));
+  const entries = await readZip(lyingZip(new Uint8Array(50e6), 10), counting);
+  await assert.rejects(entries.get('x/markup.bcf')!.bytes(), /abîmé|trop grand/);
+  assert.ok(produced < 2e6, `${produced} bytes inflated`);
+});
+
+test('declared sizes, entry count and the total inflated per archive are capped', async () => {
+  await assert.rejects((await readZip(lyingZip(text('a'), MAX_ENTRY + 1), nodeInflate)).get('x/markup.bcf')!.bytes(), /trop grand/);
+  await assert.rejects(readZip(lyingZip(text('a'), 1, MAX_ENTRIES + 1), nodeInflate), /fichiers/);
+  // Chaque lecture réserve sa taille annoncée : au-delà du total, refusée avant toute décompression.
+  const entry = (await readZip(lyingZip(text('a'), MAX_ENTRY), nodeInflate)).get('x/markup.bcf')!;
+  const reads = Math.floor(MAX_TOTAL / MAX_ENTRY);
+  for (let i = 0; i < reads; i++) await assert.rejects(entry.bytes(), /abîmé/);
+  await assert.rejects(entry.bytes(), /trop grande/);
 });

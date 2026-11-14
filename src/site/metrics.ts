@@ -2,6 +2,7 @@
 // bâtie (surface couverte, un socle et sa tour ne comptent qu'une fois) et son taux, surface de plancher totale et par
 // usage, COS, point le plus haut, pleine terre, logements estimés. Le tableau compare les propositions et se copie en TSV.
 
+import { csvCell } from '../data/text.ts';
 import { signedArea } from '../data/zones.ts';
 import { useOf, type Proposal, type Study, type StudySettings, type Volume, type XY } from './study.ts';
 
@@ -107,25 +108,26 @@ export function coveredArea(polygons: readonly (readonly XY[])[], within?: reado
 export function proposalFigures(limit: readonly XY[], volumes: readonly Volume[], settings: StudySettings): Figures {
   const siteArea = limit.length >= 3 ? polygonArea(limit) : 0;
   const footprints = volumes.map((volume) => volume.footprint);
-  const gfaByUse: Record<string, number> = {};
+  // Usages lus dans le fichier : une Map, jamais un membre d'Object (« constructor », « __proto__ »).
+  const byUse = new Map<string, number>();
   let gfa = 0, highestPoint = volumes.length > 0 ? -Infinity : NaN;
   for (const volume of volumes) {
     const area = polygonArea(volume.footprint);
     for (let floor = 0; floor < volume.floors; floor++) {
       const use = useOf(volume, floor);
-      gfaByUse[use] = (gfaByUse[use] ?? 0) + area;
+      byUse.set(use, (byUse.get(use) ?? 0) + area);
       gfa += area;
     }
     highestPoint = Math.max(highestPoint, volume.baseLevel + volume.floors * volume.floorHeight);
   }
-  const housing = settings.uses.filter((use) => use.housing).reduce((sum, use) => sum + (gfaByUse[use.id] ?? 0), 0);
+  const housing = settings.uses.filter((use) => use.housing).reduce((sum, use) => sum + (byUse.get(use.id) ?? 0), 0);
   const footprint = coveredArea(footprints);
   return {
     siteArea,
     footprint,
     coverage: siteArea > 0 ? footprint / siteArea : NaN,
     gfa,
-    gfaByUse,
+    gfaByUse: Object.fromEntries(byUse),
     plotRatio: siteArea > 0 ? gfa / siteArea : NaN,
     highestPoint,
     openGround: siteArea > 0 ? siteArea - coveredArea(footprints, limit) : NaN,
@@ -153,7 +155,8 @@ export function figureRows(study: Study, proposals: readonly Proposal[]): string
     [`Surface de plancher (${unit})`, ...area((f) => f.gfa)],
   ];
   for (const use of settings.uses) {
-    if (figures.some((f) => f.gfaByUse[use.id])) rows.push([`  dont ${use.name} (${unit})`, ...area((f) => f.gfaByUse[use.id] ?? 0)]);
+    const of = (f: Figures) => (Object.hasOwn(f.gfaByUse, use.id) ? f.gfaByUse[use.id] : 0);
+    if (figures.some(of)) rows.push([`  dont ${use.name} (${unit})`, ...area(of)]);
   }
   rows.push(
     ['COS (surface de plancher / terrain)', ...figures.map((f) => show(f.plotRatio, two))],
@@ -166,4 +169,4 @@ export function figureRows(study: Study, proposals: readonly Proposal[]): string
 }
 
 /** Texte à coller dans un tableur : tabulations entre les cellules, une ligne par rangée. */
-export const toTsv = (rows: readonly (readonly string[])[]): string => rows.map((row) => row.map((cell) => cell.replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+export const toTsv = (rows: readonly (readonly string[])[]): string => rows.map((row) => row.map((cell) => csvCell(cell.replace(/[\t\r\n]+/g, ' '), '\t')).join('\t')).join('\n');

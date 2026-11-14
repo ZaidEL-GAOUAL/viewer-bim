@@ -4,7 +4,7 @@
 
 import { DEPTH_HOST, DEPTH_OVERLAY, DEPTH_POLYGON_OFFSET, MATERIAL_STRIDE, type RawModel } from './buildModel.ts';
 import type { Model } from './Model.ts';
-import { solidFromParts, splitSolid, type CutPlane, type Solid, type SplitPart } from './splitMesh.ts';
+import { TOO_MANY_PARTS, solidFromParts, splitSolidSteps, type CutPlane, type Solid, type SplitPart } from './splitMesh.ts';
 
 /** Les pièces d'un élément découpé, dans l'ordre de leurs numéros (1 à n). */
 export interface ElementSplit {
@@ -45,14 +45,15 @@ export function elementSolid(model: Model, element: number): { solid: Solid; mat
 
 /**
  * Découpe des éléments, élément par élément, avec une pause (avancement de 0 à 1) chaque fois que `budget` triangles ont été
- * traités. `planesOf` : les plans de coupe d'un élément, dans le repère du viewer, ou la raison de leur refus (trop de
- * coupes). Un élément ouvert, une coupe partielle ou aucune coupe donnent aussi un refus motivé, sans pièce.
+ * traités, jusque dans un même élément (entre deux coupes). `planesOf` : les plans de coupe d'un élément, dans le repère du
+ * viewer, ou la raison de leur refus (trop de coupes). Un élément ouvert, une coupe partielle ou aucune coupe donnent aussi
+ * un refus motivé, sans pièce ; de même un élément qui porterait le total au-delà de `maxParts` pièces.
  */
 export function* splitJob(
   model: Model, elements: readonly number[], planesOf: (element: number) => CutPlane[] | string,
-  out: { splits: ElementSplit[]; refused: SplitRefusal[] }, budget = 40_000,
+  out: { splits: ElementSplit[]; refused: SplitRefusal[] }, budget = 40_000, maxParts = Infinity,
 ): Generator<number, void, unknown> {
-  let work = 0;
+  let work = 0, made = 0;
   for (let i = 0; i < elements.length; i++) {
     const element = elements[i];
     const planes = planesOf(element);
@@ -61,11 +62,28 @@ export function* splitJob(
       continue;
     }
     const { solid, materials } = elementSolid(model, element);
-    const result = planes.length === 0 ? { parts: [] } : splitSolid(solid, planes);
-    if (result.error) out.refused.push({ element, reason: result.error });
+    work += solid.triangles.length / 3;
+    let result: { parts: SplitPart[]; error?: string } = { parts: [] };
+    if (planes.length > 0) {
+      const steps = splitSolidSteps(solid, planes, maxParts - made);
+      for (let next = steps.next(); ; next = steps.next()) {
+        if (next.done) {
+          result = next.value;
+          break;
+        }
+        work += next.value;
+        if (work >= budget) {
+          work = 0;
+          yield i / elements.length;
+        }
+      }
+    }
+    if (result.error) out.refused.push({ element, reason: result.error === TOO_MANY_PARTS ? `plus de ${maxParts} pièces pour ce découpage` : result.error });
     else if (result.parts.length === 0) out.refused.push({ element, reason: 'aucune coupe ne traverse l’élément' });
-    else out.splits.push({ element, parts: result.parts, materials });
-    work += (solid.triangles.length / 3) * (planes.length + 1);
+    else {
+      made += result.parts.length;
+      out.splits.push({ element, parts: result.parts, materials });
+    }
     if (work >= budget) {
       work = 0;
       yield (i + 1) / elements.length;

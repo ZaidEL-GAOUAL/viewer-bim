@@ -157,3 +157,15 @@ test('a merge-mode import removes on null, keeps locked file values and counts a
   assert.equal(edits.modifiedCount, 1);
   assert.deepEqual(edits.diff(['a', 'b']).elements, { a: { properties: { 'Identifiant Revit': 101, 'Source de la géométrie': 'Forme Revit', Niveau: 'R+2', Lot: null } } });
 });
+
+test('a lock added after an edit (an IFC model added) keeps the edit in the count and in the modifications', () => {
+  const store = new PropertyStore(2); store.set(0, { Niveau: 'RDC' }); store.set(1, { Niveau: 'RDC' }); store.finalize();
+  const edits = new PropertyEdits(store, () => {});
+  edits.set([0, 1], 'Niveau', 'R+1');
+  store.readOnly = [...store.readOnly, 'Niveau'];
+  edits.stamp('Modèle', () => 'x.glb');
+  assert.equal(edits.modifiedCount, 2);
+  assert.equal(edits.isModified(0, 'Niveau'), true);
+  assert.deepEqual(edits.diff(['a', 'b']).elements, { a: { properties: { Niveau: 'R+1' } }, b: { properties: { Niveau: 'R+1' } } });
+  assert.equal(edits.set([0], 'Niveau', 'R+2'), false, 'still not writable');
+});

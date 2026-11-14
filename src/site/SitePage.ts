@@ -14,7 +14,7 @@ import { proposalGlb, proposalMetadata } from './exportGlb.ts';
 import { bar, centroid, rectangle, toScene, translate, volumeMesh } from './massing.ts';
 import { figureRows, polygonArea, toTsv } from './metrics.ts';
 import { SiteScene } from './SiteScene.ts';
-import { newId, newProposal, newStudy, parseStudy, safeColor, studyToJson, type Proposal, type Study, type Volume, type XY } from './study.ts';
+import { MAX_FLOORS, MAX_FLOOR_HEIGHT, MAX_OUTLINE_POINTS, MAX_PROPOSALS, MAX_VOLUMES, MIN_FLOOR_HEIGHT, newId, newProposal, newStudy, parseStudy, safeColor, studyToJson, type Proposal, type Study, type Volume, type XY } from './study.ts';
 import { daySunPath, defaultUtcOffset, localTime, presetDays, sunPosition, sunVector } from './sun.ts';
 
 type DrawMode = 'limit' | 'rectangle' | 'polygon' | 'bar';
@@ -479,8 +479,8 @@ export class SitePage {
       field('Nom', name),
       field('Usage', use),
       field('Rez-de-chaussée', ground),
-      field('Niveaux', numberInput(volume.floors, (value) => { volume.floors = value; this.edited(); }, { min: 1, max: 200, step: 1, integer: true })),
-      field('Hauteur d’étage (m)', numberInput(volume.floorHeight, (value) => { volume.floorHeight = value; this.edited(); }, { min: 1, max: 20, step: 0.1 })),
+      field('Niveaux', numberInput(volume.floors, (value) => { volume.floors = value; this.edited(); }, { min: 1, max: MAX_FLOORS, step: 1, integer: true })),
+      field('Hauteur d’étage (m)', numberInput(volume.floorHeight, (value) => { volume.floorHeight = value; this.edited(); }, { min: MIN_FLOOR_HEIGHT, max: MAX_FLOOR_HEIGHT, step: 0.1 })),
       field('Niveau bas (m)', numberInput(volume.baseLevel, (value) => { volume.baseLevel = value; this.edited(); }, { min: -500, max: 2000, step: 0.1 })),
       h('p', { class: 'site-note', text: 'Glissez le volume dans la vue pour le déplacer. Niveau bas : depuis l’altitude de l’origine.' }),
       h('div', { class: 'tool-row' },
@@ -490,7 +490,15 @@ export class SitePage {
     );
   }
 
+  /** Faux, et dit pourquoi, si la proposition a déjà ses `MAX_VOLUMES` volumes. */
+  private roomForVolume(): boolean {
+    if (this.proposal.volumes.length < MAX_VOLUMES) return true;
+    this.toast(`Au plus ${MAX_VOLUMES} volumes par proposition.`, true);
+    return false;
+  }
+
   private addVolume(footprint: XY[]): void {
+    if (!this.roomForVolume()) return;
     if (polygonArea(footprint) < 0.5) {
       this.toast('Volume trop petit : tracez plus grand.', true);
       return;
@@ -504,6 +512,7 @@ export class SitePage {
   }
 
   private duplicateVolume(volume: Volume): void {
+    if (!this.roomForVolume()) return;
     const copy: Volume = { ...structuredClone(volume), id: newId(), name: `${volume.name} (copie)`, footprint: translate(volume.footprint, 5, -5) };
     this.proposal.volumes.push(copy);
     this.selection = { kind: 'volume', id: copy.id };
@@ -560,6 +569,10 @@ export class SitePage {
   private onSketchPolygon(points: XY[]): void {
     const mode = this.mode;
     this.setMode(null);
+    if (points.length > MAX_OUTLINE_POINTS) {
+      this.toast(`Au plus ${MAX_OUTLINE_POINTS} points par contour.`, true);
+      return;
+    }
     if (mode === 'limit') {
       this.study.site.limit = points;
       this.dirty = true;
@@ -710,6 +723,10 @@ export class SitePage {
   }
 
   private addProposal(proposal: Proposal): void {
+    if (this.study.proposals.length >= MAX_PROPOSALS) {
+      this.toast(`Au plus ${MAX_PROPOSALS} propositions par étude.`, true);
+      return;
+    }
     this.study.proposals.push(proposal);
     this.proposalId = proposal.id;
     this.selection = null;

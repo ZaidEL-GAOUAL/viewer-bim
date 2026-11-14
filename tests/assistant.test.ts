@@ -9,6 +9,8 @@ import { PropertyStore, type PropValue } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
 import { parseScheduleDate } from '../src/data/schedule.ts';
 import { createViewerApi, registerWebMcp } from '../src/assistant/agentApi.ts';
+import type { App } from '../src/ui/App.ts';
+import { snapshotView } from '../src/ui/toolContext.ts';
 
 function sampleContext() {
   const store = new PropertyStore(6);
@@ -549,5 +551,39 @@ test('l’API des agents plafonne ses résultats comme le chat et accepte dryRun
   assert.ok(JSON.stringify(listed).length <= 8000);
   const preview = api.call('set_property', { filters: [], property: 'Lot', value: 'A', dryRun: true }).result as { dryRun: boolean; count: number };
   assert.deepEqual([preview.dryRun, preview.count, edits.canUndo], [true, 600, false]);
-  assert.match((api.call('select_elements', {}).result as { error: string }).error, /filters : argument obligatoire manquant/);
+  // Version 1 de window.viewerBim : filters absent vaut [] (tous) ; le chat, lui, doit le donner.
+  assert.equal((api.call('select_elements', {}).result as { count: number }).count, 600);
+  assert.match((runTool('select_elements', {}, context).result as { error: string }).error, /filters : argument obligatoire manquant/);
+});
+
+test('l’API des agents garde le comportement de la version 1 : filters facultatif, arguments en trop ignorés', () => {
+  const { context, shownAllCount } = sampleContext();
+  const api = createViewerApi(() => context);
+  assert.equal((api.call('set_visibility', { showAll: true }).result as { error?: string }).error, undefined);
+  assert.equal(shownAllCount(), 1);
+  assert.equal((api.call('find_elements', {}).result as { count: number }).count, 6);
+  assert.equal((api.call('count_by', { property: 'Niveau', foo: 1 }).result as { total: number }).total, 6);
+  assert.equal((api.call('find_elements', '{"filters":[{"property":"Niveau","value":"RDC"}],"extra":true}').result as { count: number }).count, 3);
+  assert.match((runTool('count_by', { property: 'Niveau', foo: 1 }, context).result as { error: string }).error, /argument inconnu/, 'the model path stays strict');
+});
+
+test('« Annuler » d’une action de l’assistant ne fait rien si les éléments ont été renumérotés depuis', () => {
+  const visible = [true, true, true];
+  const toasts: string[] = [];
+  const calls: string[] = [];
+  const app = {
+    model: { count: 3, state: { isVisible: (i: number) => visible[i] } },
+    revision: 1, selection: new Set([0]), isolated: false, appearanceRules: [], grouping: [], store: { paths: [] },
+    setVisible: () => calls.push('visible'), select: () => calls.push('select'), setAppearanceRules: () => calls.push('rules'),
+    groupBy: () => calls.push('group'), toggleIsolate: () => calls.push('isolate'), toast: (text: string) => toasts.push(text),
+  };
+  const restore = snapshotView(app as unknown as App);
+  visible[1] = false;
+  app.revision = 2;
+  restore();
+  assert.equal(calls.length, 0);
+  assert.equal(toasts.length, 1);
+  app.revision = 1;
+  snapshotView(app as unknown as App)();
+  assert.ok(calls.includes('select'), 'same numbering: restored');
 });

@@ -124,6 +124,11 @@ export class App {
   observations: ObservationBook = emptyBook();
   /** Des observations ont changé depuis le dernier .bcf exporté : leurs photos ne sont que dans la page. */
   observationsUnsaved = false;
+  /**
+   * Vues, zones, découpages, conflits ou observations ont changé depuis le dernier « JSON ↓ » ou « Modifications ↓ » (qui
+   * les contiennent) : ils ne sont que dans la page.
+   */
+  sessionUnsaved = false;
   /** Un clic dans la vue, avant l'outil : vrai s'il est pris (repère d'observation, outil « pin »). */
   viewClick: ((event: PointerEvent) => boolean) | null = null;
   /** Change à chaque renumérotation des éléments (pièces, maquette ajoutée ou retirée) : un résultat calculé avant est périmé. */
@@ -333,7 +338,7 @@ export class App {
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
     window.addEventListener('beforeunload', (event) => {
-      if (this.propertyEdits?.changed || this.observationsUnsaved) event.preventDefault();
+      if (this.propertyEdits?.changed || this.sessionUnsaved || this.observationsUnsaved) event.preventDefault();
     });
 
     // Format d'export : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
@@ -696,12 +701,13 @@ export class App {
   }
   setClashes(clashes: { tests: ClashTest[]; records: ClashRecord[] }): void {
     this.clashes = clashes;
+    this.sessionUnsaved = true;
     this.syncDownloads();
   }
   /** `changed` faux : rien de neuf à enregistrer (un .bcf vient d'être lu). */
   setObservations(book: ObservationBook, changed = true): void {
     this.observations = book;
-    if (changed) this.observationsUnsaved = true;
+    if (changed) this.observationsUnsaved = this.sessionUnsaved = true;
     this.syncDownloads();
     this.emit('observations');
   }
@@ -743,6 +749,7 @@ export class App {
 
   setZones(zones: Zone[]): void {
     this.zones = zones;
+    this.sessionUnsaved = true;
     this.syncDownloads();
     this.emit('zones');
   }
@@ -758,6 +765,7 @@ export class App {
     // `metadata` : celles des éléments nouveaux (une maquette ajoutée a les siennes, voir data/federation.ts).
     applyTailChange(change, model, this.store, this.propertyEdits, metadata);
     this.revision++;
+    this.sessionUnsaved = true;
     this.transient = null;
     const moved = (indices: Iterable<number>) => [...indices].flatMap((i) => (i < change.next.length && change.next[i] >= 0 ? [change.next[i]] : []));
     const selection = moved(this.selection), masked = moved(this.masked);
@@ -787,6 +795,7 @@ export class App {
 
   setUserViews(views: SavedView[]): void {
     this.userViews = views;
+    this.sessionUnsaved = true;
     this.syncDownloads();
     this.emit('userViews');
   }
@@ -1109,6 +1118,35 @@ export class App {
           this.metadata = metadata;
           notices.push({ text: 'Métadonnées chargées. Déposez maintenant le fichier .glb ou .gltf.', error: false });
         } else {
+          const model = this.model;
+          // Ses découpages d'abord, par le chemin de l'ouverture : ses modifications de pièces trouvent ensuite leurs pièces.
+          const definitions = splitsOf(null, [metadata]);
+          const splitNotes = splitRefusalsOf(null, [metadata]);
+          if (definitions.length > 0 && (!this.splits || this.mapOpen)) splitNotes.push('Découpages non repris : fermez la carte, puis déposez de nouveau ce JSON.');
+          else if (definitions.length > 0) {
+            try {
+              splitNotes.push(...await loadSplits(this.splits!, definitions, this.metadata, this.levels, (progress) => this.busy(`Découpage des éléments… ${Math.round(progress * 100)} %`), {
+                source: (i) => ({ props: this.store.propsOf(i), label: this.elementLabel(i) }),
+                onChange: (change) => this.changeParts(change),
+              }));
+            } catch (error) {
+              splitNotes.push(`Découpages non repris : ${error instanceof Error ? error.message : String(error)}`);
+            }
+            if (ticket !== this.loadTicket || this.model !== model) return;
+          }
+          for (const text of splitNotes) notices.push({ text, error: true });
+          // Ses zones (par nom) et ses conflits (ils remplacent ceux de la session, comme à l'ouverture).
+          if (metadata.zones?.length) {
+            this.setZones(zonesOf({ zones: this.zones }, [metadata]));
+            notices.push({ text: `${plural(metadata.zones.length, 'zone')} reprise${s(metadata.zones.length)}.`, error: false });
+          }
+          if (metadata.clashTests || metadata.clashes) {
+            this.setClashes({ tests: metadata.clashTests ?? [], records: metadata.clashes ?? [] });
+            notices.push({ text: `Conflits repris : ${plural(metadata.clashes?.length ?? 0, 'conflit')}.`, error: false });
+          }
+          // Ce qui ne se reprend qu'à l'ouverture du modèle est nommé.
+          const ignored = [metadata.georeference && 'géoréférence', metadata.phases && 'phases', metadata.levels?.length && 'niveaux', metadata.views?.some((view) => view.origin !== 'user') && 'vues du fichier'].filter((item): item is string => typeof item === 'string');
+          if (ignored.length > 0) notices.push({ text: `Non repris sur un modèle ouvert (rouvrez-le avec ce JSON) : ${ignored.join(', ')}.`, error: false });
           // Ses vues de l'utilisateur rejoignent « Mes vues » (une vue de même identifiant est remplacée).
           const views = userViewsOf(null, [metadata]);
           const ids = new Set(views.map((view) => view.id));
@@ -1124,7 +1162,7 @@ export class App {
           }
           if (countMatches(metadata, this.model.keys) === 0) {
             // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
-            if (views.length === 0 && !metadata.observations) notices.push({ text: NO_MATCH, error: true });
+            if (views.length === 0 && !metadata.observations && !definitions.length && !metadata.zones?.length && !metadata.clashTests && !metadata.clashes) notices.push({ text: NO_MATCH, error: true });
           } else {
             this.propertyEdits?.import(metadata, this.model.keys);
             const orphans = metadata.propertiesMode === 'replace' ? '' : orphanNotice(metadata, this.model.keys);
@@ -1351,10 +1389,12 @@ export class App {
         for (const { source, document } of documentsBySource(JSON.parse(text) as Record<string, unknown>, model)) download(new Blob([JSON.stringify(document)], { type: 'application/json' }), `${withoutExtension(source.name)}.${extension}`);
         this.toast(`${model.sources.length} fichiers téléchargés, un par maquette.`);
         this.propertyEdits?.markSaved();
+        this.sessionUnsaved = false;
         this.emit('history');
         return;
       }
       blob = new Blob([text], { type: 'application/json' });
+      this.sessionUnsaved = false;
     } else {
       this.busy('Écriture des métadonnées du modèle…');
       try {
@@ -1458,7 +1498,7 @@ export class App {
     this.refreshAppearance(); this.emit('metadata'); this.emit('history');
   }
   private confirmReplace(): boolean {
-    return (!this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?'))
+    return (!(this.propertyEdits?.changed || this.sessionUnsaved) || window.confirm('Des modifications (propriétés, vues, zones, découpages, conflits, observations) ne sont pas enregistrées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?'))
       && (!this.observationsUnsaved || window.confirm('Des observations n’ont pas été exportées en .bcf : leurs photos ne sont que dans cette page. Remplacer le modèle ?'));
   }
 
@@ -1565,6 +1605,7 @@ export class App {
     this.clashes = { tests: [], records: [] };
     this.observations = emptyBook();
     this.observationsUnsaved = false;
+    this.sessionUnsaved = false;
     this.transient = null;
     this.revision++;
     this.viewHidden = null;

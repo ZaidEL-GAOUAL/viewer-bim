@@ -2,7 +2,7 @@ import { combineMeasures, measureElement, type Dimensions, type ElementMeasure }
 import { formatArea, formatLength, formatVolume } from '../engine/Measure.ts';
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
-import { decimal, integer } from '../data/text.ts';
+import { csvCell, decimal, integer } from '../data/text.ts';
 
 /** Au-delà, seule l'emprise de la sélection est donnée : le calcul ferait attendre. */
 const MAX_ELEMENTS = 2000;
@@ -144,7 +144,7 @@ export class DimensionsCard {
     const lines = [header.join('\t')];
     for (const { index, measure } of measured) {
       const dims = combineMeasures([measure])!;
-      lines.push([this.app.elementLabel(index), this.app.model!.keys[index], n(dims.length), n(dims.width), n(dims.height), n(dims.area), n(dims.volume), dims.closed ? 'oui' : 'non'].join('\t'));
+      lines.push([csvCell(this.app.elementLabel(index), '\t'), csvCell(this.app.model!.keys[index], '\t'), n(dims.length), n(dims.width), n(dims.height), n(dims.area), n(dims.volume), dims.closed ? 'oui' : 'non'].join('\t'));
     }
     if (!single) lines.push(['Ensemble', '', n(total.length), n(total.width), n(total.height), n(total.area), n(total.volume), total.closed ? 'oui' : 'non'].join('\t'));
     return lines.join('\n');

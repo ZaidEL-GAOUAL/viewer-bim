@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PropertyStore } from '../src/data/metadata.ts';
-import { checkRequirements, failuresCsv, parseIds, parseRequirementList, type IdsMapping } from '../src/data/requirements.ts';
+import { checkRequirements, checkRequirementsJob, failuresCsv, parseIds, parseRequirementList, type IdsMapping } from '../src/data/requirements.ts';
 import ifc from '../src/data/presets/quantites-ifc.json' with { type: 'json' };
 
 const mapping = ifc as IdsMapping;
@@ -78,4 +78,31 @@ test('an IDS with entity and property facets parses to the expected rules; unsup
 test('malformed XML is refused, not half read', () => {
   assert.throws(() => parseIds('<ids:ids><ids:specifications></ids:ids>', mapping), /mal formé/);
   assert.throws(() => parseIds('<other/>', mapping), /pas un IDS/);
+});
+
+test('an IDS attribute named like an Object member is reported as unmapped, not followed', () => {
+  const xml = IDS.replace('<ids:simpleValue>Name</ids:simpleValue>', '<ids:simpleValue>constructor</ids:simpleValue>');
+  const { unsupported } = parseIds(xml, mapping);
+  assert.ok(unsupported.some((line) => line.includes('« constructor » sans propriété correspondante')), unsupported.join('\n'));
+});
+
+test('the CSV defuses formulas in text cells but keeps negative numbers as numbers', () => {
+  const rules = parseRequirementList('* -> Lot');
+  const failures = [{ rule: 0, element: 0, property: 'Lot', required: 'renseignée', actual: '-5', cardinality: 'required' as const }];
+  const line = failuresCsv(failures, rules, ['=cmd|calc'], () => '@nom').split('\r\n')[1];
+  assert.equal(line, "* -> Lot;'@nom;'=cmd|calc;Lot;renseignée;-5");
+});
+
+test('the check runs by slices on a large model, with the same failures', () => {
+  const big = new PropertyStore(3000);
+  for (let i = 0; i < 3000; i++) big.set(i, i % 3 ? { 'Classe IFC': 'IfcWall' } : { 'Classe IFC': 'IfcWall', Lot: 'GO' });
+  big.finalize();
+  const rules = parseRequirementList('Classe IFC = IfcWall -> Lot ; Niveau');
+  const job = checkRequirementsJob(big, rules, undefined, undefined, 500);
+  let pauses = 0;
+  let next = job.next();
+  for (; !next.done; next = job.next()) pauses++;
+  assert.ok(pauses > 5, `${pauses} pauses`);
+  assert.deepEqual(next.value, checkRequirements(big, rules));
+  assert.equal(next.value.length, 2000 + 3000);
 });

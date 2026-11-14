@@ -1,8 +1,9 @@
 import { coerceTo, ownValue, type PropValue } from '../data/metadata.ts';
-import { checkRequirements, failuresCsv, parseIds, parseRequirementList, type Failure, type IdsMapping, type RequirementRule } from '../data/requirements.ts';
+import { checkRequirementsJob, failuresCsv, parseIds, parseRequirementList, type Failure, type IdsMapping, type RequirementRule } from '../data/requirements.ts';
 import ifcPreset from '../data/presets/quantites-ifc.json' with { type: 'json' };
 import { integer, plural } from '../data/text.ts';
 import { addObservations, locate, observationFromFailures } from '../data/observations.ts';
+import { runSliced } from '../engine/sliced.ts';
 import type { App } from './App.ts';
 import { button, clear, download, h } from './dom.ts';
 import { elementRef, elementsPoint } from './elementRefs.ts';
@@ -29,6 +30,10 @@ export class RequirementsPanel {
   private ids: { name: string; xml: string } | null = null;
   private rules: RequirementRule[] = [];
   private failures: Failure[] = [];
+  /** `App.revision` de la vérification : les manquements désignent des éléments par leur numéro. */
+  private revision = -1;
+  /** La dernière vérification lancée : une plus ancienne qui finit après elle est ignorée. */
+  private run = 0;
 
   constructor(app: App) {
     this.app = app;
@@ -36,7 +41,7 @@ export class RequirementsPanel {
     file.addEventListener('change', () => {
       const chosen = file.files?.[0];
       file.value = '';
-      if (chosen) void chosen.text().then((xml) => { this.ids = { name: chosen.name, xml }; this.check(); });
+      if (chosen) void chosen.text().then((xml) => { this.ids = { name: chosen.name, xml }; void this.check(); });
     });
     this.el = h('section', { class: 'card tool-card', attrs: { hidden: '', 'aria-label': this.label } },
       h('div', { class: 'card-head' }, h('h2', { class: 'card-title', text: this.label }),
@@ -45,10 +50,17 @@ export class RequirementsPanel {
       this.list,
       h('div', { class: 'tool-row' }, button('Ouvrir un IDS…', () => file.click(), { title: 'Fichier IDS 1.0 (buildingSMART) : entité, attribut, propriété' }), this.idsName, file),
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Classe IFC (IDS)' }), this.classProperty),
-      h('div', { class: 'dimensions-actions' }, button('Vérifier', () => this.check(), { class: 'primary' })),
+      h('div', { class: 'dimensions-actions' }, button('Vérifier', () => void this.check(), { class: 'primary' })),
       this.results,
     );
     app.on('model', () => { this.failures = []; clear(this.results); });
+    // Pièces refaites, maquette ajoutée ou retirée : les numéros ont changé, « Remplir », les observations et le CSV viseraient d'autres éléments.
+    app.on('metadata', () => {
+      if (this.failures.length === 0 || this.revision === app.revision) return;
+      this.failures = [];
+      clear(this.results);
+      this.results.append(h('p', { class: 'hint', text: 'La maquette a changé : relancez la vérification.' }));
+    });
   }
 
   toggle(open = this.el.hidden): boolean {
@@ -56,9 +68,10 @@ export class RequirementsPanel {
     return open;
   }
 
-  private check(): void {
+  private async check(): Promise<void> {
     const { app } = this;
     const model = app.model;
+    const run = ++this.run;
     clear(this.results);
     if (!model) return;
     let unsupported: string[] = [];
@@ -80,7 +93,16 @@ export class RequirementsPanel {
     }
     // Les originaux remplacés par leurs pièces ne comptent pas : leurs pièces sont vérifiées à leur place.
     const elements = Array.from({ length: model.count }, (_, i) => i).filter((i) => !model.state.isReplaced(i));
-    this.failures = checkRequirements(app.store, this.rules, { keys: model.keys, label: (i) => app.elementLabel(i) }, elements);
+    const revision = app.revision;
+    const status = h('p', { class: 'hint', text: 'Vérification…' });
+    this.results.append(status);
+    // Par tranches : un grand modèle et beaucoup de règles ne figent pas l'onglet.
+    const failures = await runSliced(checkRequirementsJob(app.store, this.rules, { keys: model.keys, label: (i) => app.elementLabel(i) }, elements),
+      (progress) => (status.textContent = `Vérification… ${Math.round(progress * 100)} %`));
+    if (run !== this.run || model !== app.model || revision !== app.revision) return;
+    status.remove();
+    this.revision = revision;
+    this.failures = failures;
     const failing = new Set(this.failures.map((failure) => failure.element));
     this.results.append(h('p', { class: 'dimensions-title', text: this.failures.length === 0 ? 'Tout est conforme.' : `${plural(this.failures.length, 'manquement')} sur ${plural(failing.size, 'élément')}` }));
     if (unsupported.length > 0) {
@@ -155,7 +177,7 @@ export class RequirementsPanel {
         if (!value) return;
         try {
           const updates = elements.map((element): [number, string, PropValue] => [element, property, coerceTo(ownValue(app.store.propsOf(element), property), value)]);
-          if (app.editProperties(updates)) this.check();
+          if (app.editProperties(updates)) void this.check();
         } catch (error) {
           app.toast(error instanceof Error ? error.message : String(error), true);
         }

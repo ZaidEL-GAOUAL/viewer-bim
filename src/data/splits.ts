@@ -59,6 +59,8 @@ const strings = (value: unknown): value is string[] => Array.isArray(value) && v
 export const MAX_CUTS = 200;
 /** Pas le plus petit accepté pour `interval`, en mètres. */
 export const MIN_INTERVAL = 0.01;
+/** Pièces au plus par découpage (tous éléments compris), et donc par élément : au-delà, les mettre dans le modèle figerait l'onglet. */
+export const MAX_PARTS = 500;
 const TOO_MANY = `plus de ${MAX_CUTS} coupes`;
 const TOO_SMALL = 'pas de moins de 1 cm';
 
@@ -119,10 +121,39 @@ export function splitsOf(metadata: Metadata | null, overlays: readonly Metadata[
 }
 
 /**
- * Les plans de coupe d'un élément (repère du viewer) : `box` est sa boîte dans ce repère, `offset` le décalage du modèle.
- * `missing` : les niveaux nommés que le modèle n'a pas. `error` : plus de `MAX_CUTS` plans, refusés avant d'en calculer un.
+ * Les pièces que des plans verticaux ou horizontaux font au plus d'une boîte (repère du viewer) : (1 + plans verticaux qui la
+ * traversent + leurs croisements dedans) × (1 + plans horizontaux qui la traversent), 0 si aucun ne la traverse. Exact
+ * pour un élément en boîte ; un élément concave peut en donner plus, que `splitSolid` arrête.
  */
-export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max: number[] }, levels: readonly Level[], offset: readonly number[]): { planes: CutPlane[]; missing: string[]; error?: string } {
+export function estimatedParts(planes: readonly CutPlane[], box: { min: number[]; max: number[] }): number {
+  const { min, max } = box;
+  const value = (p: CutPlane, x: number, y: number, z: number) => p.normal[0] * x + p.normal[1] * y + p.normal[2] * z + p.constant;
+  const crosses = (p: CutPlane) => {
+    const signs = [0, 1].flatMap((i) => [0, 1].flatMap((j) => [0, 1].map((k) => Math.sign(value(p, i ? max[0] : min[0], j ? max[1] : min[1], k ? max[2] : min[2])))));
+    return signs.includes(1) && signs.includes(-1);
+  };
+  const across = planes.filter(crosses);
+  if (across.length === 0) return 0;
+  const vertical = across.filter((p) => p.normal[1] === 0), horizontal = across.length - vertical.length;
+  let crossings = 0;
+  for (let a = 0; a < vertical.length; a++) {
+    for (let b = a + 1; b < vertical.length; b++) {
+      const [p, q] = [vertical[a], vertical[b]];
+      const det = p.normal[0] * q.normal[2] - p.normal[2] * q.normal[0];
+      if (Math.abs(det) < 1e-12) continue;
+      const x = (p.normal[2] * q.constant - p.constant * q.normal[2]) / det, z = (p.constant * q.normal[0] - p.normal[0] * q.constant) / det;
+      if (x > min[0] && x < max[0] && z > min[2] && z < max[2]) crossings++;
+    }
+  }
+  return (1 + vertical.length + crossings) * (1 + horizontal);
+}
+
+/**
+ * Les plans de coupe d'un élément (repère du viewer) : `box` est sa boîte dans ce repère, `offset` le décalage du modèle.
+ * `missing` : les niveaux nommés que le modèle n'a pas. `error` : plus de `MAX_CUTS` plans, refusés avant d'en calculer un,
+ * ou plus de `MAX_PARTS` pièces à prévoir.
+ */
+export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max: number[] }, levels: readonly Level[], offset: readonly number[]): { planes: CutPlane[]; missing: string[]; error?: string; parts: number } {
   const missing: string[] = [];
   const planes: CutPlane[] = [];
   const references = definition.references;
@@ -134,7 +165,7 @@ export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max
       : references.interval ? (references.interval > 0 ? Math.floor(span / references.interval) : Infinity)
         : references.count ? references.count - 1 : 0;
   const total = (definition.lines?.length ?? 0) + (references?.levels?.length ?? 0) + axisCount;
-  if (!(total <= MAX_CUTS)) return { planes, missing, error: `${TOO_MANY} pour cet élément (au plus ${MAX_CUTS})` };
+  if (!(total <= MAX_CUTS)) return { planes, missing, error: `${TOO_MANY} pour cet élément (au plus ${MAX_CUTS})`, parts: 0 };
   for (const [a, b] of definition.lines ?? []) {
     const [ax, , az] = toViewerPoint(a, offset), [bx, , bz] = toViewerPoint(b, offset);
     planes.push(verticalPlane([ax, az], [bx, bz]));
@@ -153,7 +184,9 @@ export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max
     else if (references.count) for (let k = 1; k < references.count; k++) at.push(min + (k * (max - min)) / references.count);
     for (const value of at) planes.push({ normal, constant: -value });
   }
-  return { planes, missing };
+  const parts = estimatedParts(planes, box);
+  if (parts > MAX_PARTS) return { planes: [], missing, error: `plus de ${MAX_PARTS} pièces pour cet élément`, parts };
+  return { planes, missing, parts };
 }
 
 const QUANTITY_PRESETS = [groupPreset as QuantityPreset, ifcPreset as QuantityPreset];
@@ -233,7 +266,11 @@ export class SplitSet {
    */
   *compute(definition: SplitDefinition, levels: readonly Level[]): Generator<number, SplitOutcome, unknown> {
     const model = this.model;
-    const index = new Map(model.keys.map((key, i) => [key, i]));
+    const index = new Map<string, number>(), twice = new Set<string>();
+    model.keys.forEach((key, i) => {
+      if (index.has(key)) twice.add(key);
+      else index.set(key, i);
+    });
     // Pièces que le fichier contient déjà (un GLB exporté avec elles), et pièces de cette session.
     const baked = new Set<string>(), split = new Set<string>();
     model.keys.forEach((key, i) => {
@@ -244,7 +281,9 @@ export class SplitSet {
     for (const key of definition.elements) {
       const element = index.get(key);
       if (baked.has(key)) continue;
-      if (element === undefined) outcome.refused.push({ element: -1, reason: `élément d’origine « ${key} » introuvable dans ce modèle` });
+      // Deux éléments sous la même clé (nœuds glTF sans identifiant, de même nom) : leurs pièces ne seraient pas distinctes.
+      if (twice.has(key)) outcome.refused.push({ element: element!, reason: `identifiant en double « ${key} » : plusieurs éléments le portent` });
+      else if (element === undefined) outcome.refused.push({ element: -1, reason: `élément d’origine « ${key} » introuvable dans ce modèle` });
       else if (model.parents[element] >= 0) outcome.refused.push({ element, reason: 'c’est déjà une pièce : retirez le découpage de son original pour le refaire' });
       else if (split.has(key)) outcome.refused.push({ element, reason: 'déjà découpé : retirez d’abord son découpage' });
       else elements.push(element);
@@ -252,14 +291,18 @@ export class SplitSet {
     const offset = model.offset.toArray();
     const box = { min: [0, 0, 0], max: [0, 0, 0] };
     const missing = new Set<string>();
+    // Les pièces prévues de la définition : passé `MAX_PARTS`, les éléments suivants sont refusés sans calcul.
+    let estimated = 0;
     yield* splitJob(model, elements, (element) => {
+      if (estimated > MAX_PARTS) return `plus de ${MAX_PARTS} pièces pour ce découpage`;
       const at = element * 6;
       box.min = [model.boxes[at], model.boxes[at + 1], model.boxes[at + 2]];
       box.max = [model.boxes[at + 3], model.boxes[at + 4], model.boxes[at + 5]];
-      const { planes, missing: absent, error } = cutPlanes(definition, box, levels, offset);
+      const { planes, missing: absent, error, parts } = cutPlanes(definition, box, levels, offset);
       for (const name of absent) missing.add(name);
-      return error ?? planes;
-    }, outcome);
+      estimated += parts;
+      return error ?? (estimated > MAX_PARTS ? `plus de ${MAX_PARTS} pièces pour ce découpage` : planes);
+    }, outcome, undefined, MAX_PARTS);
     outcome.missingLevels = [...missing];
     return outcome;
   }
@@ -365,8 +408,18 @@ export class SplitSet {
     for (const parent of new Set(model.parents.slice(start))) model.state.setReplaced(parent, false);
     model.truncate(start, this.spans[from]?.chunk ?? model.chunks.length);
     this.spans.length = Math.min(this.spans.length, from);
-    // Une maquette ajoutée ou retirée (voir `reshape`) : les éléments du fichier changent entre les deux.
-    const { cut, inserted } = edit ? edit() : { cut: start, inserted: 0 };
+    // Une maquette ajoutée ou retirée (voir `reshape`) : les éléments du fichier changent entre les deux. Si elle échoue,
+    // ce qu'elle a commencé d'ajouter est retiré et les pièces sont remises comme avant, puis l'erreur suit son cours.
+    const chunkStart = model.chunks.length;
+    let failure: { error: unknown } | null = null;
+    let edited = { cut: start, inserted: 0 };
+    try {
+      if (edit) edited = edit();
+    } catch (error) {
+      model.truncate(start, chunkStart, true);
+      failure = { error };
+    }
+    const { cut, inserted } = edited;
     for (let d = from; d < this.definitions.length; d++) {
       this.spans.push({ element: model.count, chunk: model.chunks.length });
       const parts = this.partsOf(this.definitions[d], source);
@@ -392,6 +445,7 @@ export class SplitSet {
     // Une pièce qui reste garde sa visibilité ; une nouvelle est visible.
     for (let i = cut + inserted; i < model.count; i++) if (previous[i] >= 0) model.state.setVisible(i, visible[previous[i] - start]);
     model.state.commit();
+    if (failure) throw failure.error;
     return { next, previous };
   }
 }
@@ -406,15 +460,25 @@ export function describeOutcome(outcome: SplitOutcome, label: (element: number) 
 /**
  * À l'ouverture d'un modèle, avant ses propriétés : les pièces de chaque définition, posées dans `Model.extras` d'après les
  * propriétés d'ouverture de l'original (`buildStore` les lira comme celles de tout élément, puis les JSON de modifications
- * s'appliquent aux pièces comme aux autres). Rend ce qu'il faut dire à l'utilisateur.
+ * s'appliquent aux pièces comme aux autres). Rend ce qu'il faut dire à l'utilisateur. Sur un modèle déjà ouvert (un JSON
+ * déposé), `apply` donne ce que les pièces reprennent (`source`) et reçoit chaque changement de numéros (`onChange`) ; une
+ * définition déjà en place n'est pas refaite.
  */
-export async function loadSplits(set: SplitSet, definitions: readonly SplitDefinition[], metadata: Metadata | null, levels: readonly Level[], onProgress?: (progress: number) => void): Promise<string[]> {
+export async function loadSplits(
+  set: SplitSet, definitions: readonly SplitDefinition[], metadata: Metadata | null, levels: readonly Level[], onProgress?: (progress: number) => void,
+  apply?: { source: OriginalOf; onChange: (change: TailChange) => void },
+): Promise<string[]> {
   const model = set.model;
-  const source: OriginalOf = (i) => ({ props: openingProps(model.keys[i], model.extras[i], metadata), label: metadata?.elements.get(model.keys[i])?.label || model.names[i] });
+  const source: OriginalOf = apply?.source ?? ((i) => ({ props: openingProps(model.keys[i], model.extras[i], metadata), label: metadata?.elements.get(model.keys[i])?.label || model.names[i] }));
   const notes: string[] = [];
   for (const [d, definition] of definitions.entries()) {
+    if (set.definitions.some((item) => item.id === definition.id)) {
+      notes.push(`Découpage « ${definition.id} » déjà en place : non repris.`);
+      continue;
+    }
     const outcome = await runSliced(set.compute(definition, levels), (progress) => onProgress?.((d + progress) / definitions.length));
-    set.put(definition, outcome.splits, source);
+    const change = set.put(definition, outcome.splits, source);
+    apply?.onChange(change);
     notes.push(...describeOutcome(outcome, (i) => source(i).label));
   }
   return notes;

@@ -134,7 +134,8 @@ export function addSource(context: FederationContext, input: SourceInput): Added
   if (total > context.maxTriangles) {
     throw new FederationError(`« ${input.name} » n’est pas ajouté : ses ${millions(triangles)} de triangles, avec les ${millions(model.triangleCount)} déjà affichés, dépasseraient le budget de cet appareil (${millions(context.maxTriangles)}).`);
   }
-  if (model.sources.length === 0) model.sources.push(firstSource(model, splits, context.first));
+  const first = model.sources.length === 0;
+  if (first) model.sources.push(firstSource(model, splits, context.first));
   const id = `m${Math.max(...model.sources.map((source) => Number(source.id.slice(1)) || 0)) + 1}`;
   const keys = flatKeys(model.keys, collected.keys, id);
   // Deux maquettes de même nom (le même fichier ajouté deux fois) : la seconde devient « nom (2) », pour les distinguer.
@@ -142,7 +143,16 @@ export function addSource(context: FederationContext, input: SourceInput): Added
   for (let n = 2; model.sources.some((source) => source.name === name); n++) name = `${input.name} (${n})`;
   const before = model.box.clone();
   let record: ModelSourceInfo | null = null;
-  const change = splits.reshape(() => {
+  // Un échec en cours d'ajout (mémoire) : `reshape` a remis le modèle et ses pièces comme avant ; la session aussi.
+  const reshape = (edit: () => { cut: number; inserted: number }) => {
+    try {
+      return splits.reshape(edit, context.original);
+    } catch (error) {
+      if (first) model.sources.length = 0;
+      throw error;
+    }
+  };
+  const change = reshape(() => {
     const cut = model.count, chunkStart = model.chunks.length;
     new ModelBuilder(context.selectColor, model).bake(collected);
     for (let i = 0; i < keys.length; i++) model.keys[cut + i] = keys[i];
@@ -151,7 +161,7 @@ export function addSource(context: FederationContext, input: SourceInput): Added
       chunkStart, chunkCount: model.chunks.length - chunkStart, triangles, offset: collected.offset.toArray(),
     };
     return { cut, inserted: keys.length };
-  }, context.original);
+  });
   const source = record as ModelSourceInfo | null;
   if (!source) throw new Error('Maquette ajoutée incohérente.');
   model.sources.push(source);

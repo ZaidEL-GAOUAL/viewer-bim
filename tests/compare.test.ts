@@ -151,3 +151,10 @@ test('end to end on the bundled demo: demo-v2 (fixture) opened, demo.glb added a
   assert.deepEqual(names(result.renamedIds.map((pair) => pair.current)), ['Poteau 2-3']);
   assert.equal(result.unchanged.length, model.sources[0].count - 5);
 });
+
+test('the CSV defuses formulas in keys and names', () => {
+  const evil = side([{ key: '=1+1', label: '+cmd', props: {} }], 500);
+  const empty = side([], 900);
+  const csv = compareCsv(run(compareJob(evil, empty)), evil, empty);
+  assert.equal(csv.split('\r\n')[1], "ajouté;'=1+1;'+cmd;;");
+});

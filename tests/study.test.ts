@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { STUDY_VERSION, newStudy, parseStudy, studyToJson, useOf, type Study } from '../src/site/study.ts';
+import { MAX_FLOORS, MAX_FLOOR_HEIGHT, MAX_NEIGHBOURS, MAX_OUTLINE_POINTS, MAX_PROPOSALS, MAX_VOLUMES, STUDY_VERSION, newStudy, parseStudy, studyToJson, useOf, type Study } from '../src/site/study.ts';
 
 function sample(): Study {
   const study = newStudy();
@@ -74,4 +74,24 @@ test('une couleur d’usage n’est gardée que si elle est #RRGGBB', () => {
   assert.equal(read('red;background-image:url(https://example.invalid/x)'), '#9b7fd1');
   assert.equal(read('#12abEF'), '#12abEF');
   assert.equal(read(undefined), '#9b7fd1');
+});
+
+test('une étude hostile est bornée à la lecture : niveaux, hauteur d’étage, points, volumes, propositions, voisins, relief', () => {
+  const raw = JSON.parse(studyToJson(sample()));
+  Object.assign(raw.proposals[0].volumes[0], { floors: 1e12, floorHeight: 1e9 });
+  raw.proposals[0].volumes.push({ id: 'trop', footprint: Array.from({ length: MAX_OUTLINE_POINTS + 1 }, (_, i) => [Math.cos(i), Math.sin(i)]) });
+  raw.proposals.push(...Array.from({ length: MAX_PROPOSALS + 5 }, (_, i) => ({ id: `p${i}`, volumes: [] })));
+  raw.proposals[1].volumes = Array.from({ length: MAX_VOLUMES + 5 }, () => ({ footprint: [[0, 0], [1, 0], [1, 1]] }));
+  raw.context.buildings = Array.from({ length: MAX_NEIGHBOURS + 5 }, (_, i) => ({ id: `b${i}`, footprint: [[0, 0], [1, 0], [1, 1]], height: 3 }));
+  raw.context.terrain = { west: 0, south: 0, step: 1, columns: 1000, rows: 1000, heights: new Array(1e6).fill(0) };
+  const started = performance.now();
+  const study = parseStudy(raw);
+  const volumes = study.proposals[0].volumes;
+  assert.deepEqual([volumes[0].floors, volumes[0].floorHeight], [MAX_FLOORS, MAX_FLOOR_HEIGHT]);
+  assert.deepEqual(volumes.map((volume) => volume.id), ['v1'], 'a footprint with too many points is dropped');
+  assert.equal(study.proposals.length, MAX_PROPOSALS);
+  assert.equal(study.proposals[1].volumes.length, MAX_VOLUMES);
+  assert.equal(study.context.buildings.length, MAX_NEIGHBOURS);
+  assert.equal(study.context.terrain, null);
+  assert.ok(performance.now() - started < 3000);
 });

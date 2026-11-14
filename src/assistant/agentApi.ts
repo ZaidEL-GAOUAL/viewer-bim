@@ -2,7 +2,9 @@
 // (window.viewerBim) et déclarés à WebMCP quand le navigateur le propose. Aucun appel d'IA ici :
 // l'agent qui s'en sert apporte son propre modèle. Tout reste dans l'onglet.
 
+import { isRecord } from '../data/json.ts';
 import { capResult } from './protocol.ts';
+import { definitionOf } from './schema.ts';
 import { TOOL_DEFINITIONS, runTool, type ToolContext, type ToolOutcome } from './tools.ts';
 
 interface AgentTool {
@@ -35,6 +37,13 @@ export function createViewerApi(context: () => ToolContext | null): ViewerApi {
       let parsed: unknown = args;
       if (typeof args === 'string') {
         try { parsed = JSON.parse(args); } catch { return { result: { error: 'Arguments JSON illisibles.' }, note: 'Arguments illisibles' }; }
+      }
+      // Comme la version 1 de cette API : `filters` absent vaut [] (tous), un argument inconnu est ignoré. Le chat, lui, reste strict.
+      const properties = definitionOf(name)?.function.parameters.properties;
+      if (properties && isRecord(parsed)) {
+        const known: Record<string, unknown> = Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(properties, key)));
+        if (Object.hasOwn(properties, 'filters') && (known.filters === undefined || known.filters === null || known.filters === '')) known.filters = [];
+        parsed = known;
       }
       // Mêmes arguments validés et même plafond que pour le chat ; set_property et plan_dates acceptent dryRun.
       const outcome = runTool(name, parsed, current);

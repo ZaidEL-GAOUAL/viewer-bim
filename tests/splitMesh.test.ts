@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isClosed } from '../src/engine/meshMath.ts';
-import { solidFromParts, splitSolid, verticalPlane, type CutPlane, type Solid } from '../src/engine/splitMesh.ts';
+import { TOO_MANY_PARTS, solidFromParts, splitSolid, verticalPlane, type CutPlane, type Solid } from '../src/engine/splitMesh.ts';
 
 const close = (actual: number, expected: number, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
 
@@ -72,4 +72,10 @@ test('a two-line sketch gives three or four parts, numbered the same whatever th
   assert.deepEqual(three.parts.map((part) => +part.volume.toFixed(6)), [0.4, 0.8, 0.4]);
   const total = three.parts.reduce((sum, part) => sum + part.volume, 0);
   close(total, 4 * 2 * 0.2);
+});
+
+test('cutting stops as soon as the parts pass maxParts', () => {
+  const planes = [1, 2, 3].map(xPlane);
+  assert.deepEqual(splitSolid(box([0, 0, 0], [4, 1, 2]), planes, 3), { parts: [], error: TOO_MANY_PARTS });
+  assert.equal(splitSolid(box([0, 0, 0], [4, 1, 2]), planes, 4).parts.length, 4);
 });

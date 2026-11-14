@@ -13,7 +13,7 @@ import { formatValue, ownValue, type FlatProps } from './metadata.ts';
 import { yUpToZUp, zUpToYUp, type Vec3 } from './modelFrame.ts';
 import { categoryColor } from './palette.ts';
 import type { SavedPlane, SavedView, SavedViewCamera, SectionBoxSpec } from './savedViews.ts';
-import { fold } from './text.ts';
+import { csvCell, fold } from './text.ts';
 import { boxFaces } from '../engine/Sections.ts';
 
 /** Le repère posé sur un plan : la vue (son identifiant, à défaut son nom) et le point, repère du modèle, Z vers le haut. */
@@ -116,7 +116,7 @@ export function addComment(topic: Observation, text: string, author: string, now
 
 /** Les statuts vers lesquels `from` peut passer. */
 export function allowedStatuses(lists: ObservationLists, from: string): string[] {
-  const next = lists.statuses.includes(from) ? lists.transitions[from] : undefined;
+  const next = lists.statuses.includes(from) && Object.hasOwn(lists.transitions, from) ? lists.transitions[from] : undefined;
   return lists.statuses.filter((status) => status !== from && (!next || next.includes(status)));
 }
 
@@ -222,7 +222,8 @@ export function groupObservations(topics: readonly Observation[], key: GroupKey,
 
 const STATUS_COLORS: Readonly<Record<string, string>> = { Ouverte: '#dc2626', 'En cours': '#f59e0b', Résolue: '#2563eb', Contestée: '#9333ea', Clôturée: '#16a34a' };
 
-export const statusColor = (status: string, lists: ObservationLists): string => STATUS_COLORS[status] ?? categoryColor(Math.max(0, lists.statuses.indexOf(status)), status);
+// Un statut vient d'un fichier : jamais lu comme un membre d'Object (« constructor »…).
+export const statusColor = (status: string, lists: ObservationLists): string => (Object.hasOwn(STATUS_COLORS, status) ? STATUS_COLORS[status] : categoryColor(Math.max(0, lists.statuses.indexOf(status)), status));
 
 /** L'état passager « couleur par statut » : chaque élément prend la couleur de son observation la moins avancée. */
 export function statusLayer(topics: readonly Observation[], resolve: (ref: ElementRef) => number | undefined, lists: ObservationLists): Map<number, ElementAppearance> {
@@ -556,11 +557,10 @@ export function parseObservations(raw: unknown): ObservationBook | undefined {
 
 /** La liste en CSV (« ; », pour un tableur réglé en français) : une ligne par observation. */
 export function observationsCsv(topics: readonly Observation[]): string {
-  const cell = (value: string) => (/[;"\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
   const header = ['N°', 'Titre', 'Type', 'Statut', 'Entreprise', 'Lot', 'Phase', 'Priorité', 'Échéance', 'Niveau', 'Local', 'Zone', 'Créée le', 'Auteur', 'Description', 'Identifiant'];
   const rows = topics.map((topic) => [
-    String(topic.number), topic.title, topic.type, topic.status, topic.assignedTo ?? '', topic.labels.join(', '), topic.stage ?? '', topic.priority ?? '',
+    topic.number, topic.title, topic.type, topic.status, topic.assignedTo ?? '', topic.labels.join(', '), topic.stage ?? '', topic.priority ?? '',
     frenchDate(topic.dueDate), topic.location.level ?? '', topic.location.room ?? '', topic.location.zone ?? '', frenchDate(topic.creationDate), topic.creationAuthor, topic.description ?? '', topic.guid,
   ]);
-  return [header, ...rows].map((row) => row.map(cell).join(';')).join('\r\n');
+  return [header, ...rows].map((row) => row.map((cell) => csvCell(cell)).join(';')).join('\r\n');
 }

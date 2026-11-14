@@ -144,10 +144,13 @@ export class PropertyEdits {
     this.notify(path);
   }
 
-  /** True if the element's value of `path` differs from the file's. Locked properties are the file's: never modified. */
+  /**
+   * True if the element's value of `path` differs from the file's. The lock is not consulted: writes to a locked path are
+   * refused anyway, and a lock that arrives after an edit (an IFC model added) must not hide that edit.
+   */
   isModified(index: number, path: string): boolean {
     const base = this.baseline.get(index);
-    return base !== undefined && this.store.isEditable(path) && ownValue(base.props, path) !== ownValue(this.store.propsOf(index), path);
+    return base !== undefined && ownValue(base.props, path) !== ownValue(this.store.propsOf(index), path);
   }
   /** Elements whose properties or name differ from the file. */
   get modifiedCount(): number {
@@ -157,7 +160,7 @@ export class PropertyEdits {
     }
     return this.counted;
   }
-  /** The element's editable properties that differ from the file, at their current value (`null`: removed); null if none. */
+  /** The element's properties that differ from the file, at their current value (`null`: removed); null if none. */
   private differences(i: number): FlatProps | null {
     const base = this.baseline.get(i)?.props ?? {}, now = this.store.propsOf(i) ?? {};
     let out: FlatProps | null = null;

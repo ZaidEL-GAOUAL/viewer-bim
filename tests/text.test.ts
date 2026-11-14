@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { isRecord } from '../src/data/json.ts';
-import { fold, integer, megabytes, plural, s } from '../src/data/text.ts';
+import { csvCell, fold, integer, megabytes, plural, s } from '../src/data/text.ts';
 
 test('fold ignore accents, casse et espaces autour', () => {
   assert.equal(fold('  Été Béton '), 'ete beton');
@@ -31,4 +31,14 @@ test('isRecord : un objet, ni tableau ni null', () => {
   assert.equal(isRecord([]), false);
   assert.equal(isRecord(null), false);
   assert.equal(isRecord('x'), false);
+});
+
+test('csvCell : une formule de tableur devient du texte, un nombre reste un nombre', () => {
+  for (const text of ['=1+1', '+33 6', '-2+3', '@SUM(A1)', '\tx', '\rx']) assert.ok(csvCell(text).replace(/^"/, '').startsWith(`'${text[0]}`), JSON.stringify(text));
+  assert.equal(csvCell(-5), '-5');
+  assert.equal(csvCell('-5'), '-5');
+  assert.equal(csvCell('-1 234,5'), '-1 234,5');
+  assert.equal(csvCell('Mur ; "A"'), '"Mur ; ""A"""');
+  assert.equal(csvCell('a\tb', '\t'), '"a\tb"');
+  assert.equal(csvCell('Mur'), 'Mur');
 });

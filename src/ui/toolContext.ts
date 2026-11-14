@@ -43,7 +43,7 @@ export function toolContext(app: App): ToolContext {
  * regroupement) : la fonction rendue le rétablit, c'est l'action inverse du bouton « Annuler ».
  */
 export function snapshotView(app: App): () => void {
-  const model = app.model;
+  const model = app.model, revision = app.revision;
   if (!model) return () => {};
   const selection = [...app.selection];
   const visible = Array.from({ length: model.count }, (_, i) => model.state.isVisible(i));
@@ -52,6 +52,11 @@ export function snapshotView(app: App): () => void {
   const grouping = [...app.grouping];
   return () => {
     if (app.model !== model) return;
+    // Pièces refaites, maquette ajoutée ou retirée : les numéros gardés ne désignent plus les mêmes éléments.
+    if (app.revision !== revision) {
+      app.toast('Annulation impossible : les éléments ont changé depuis.', true);
+      return;
+    }
     // Un isolement posé par l'action se quitte d'abord : l'affichage d'avant revient, puis chaque élément est remis tel quel.
     if (app.isolated && !isolated) app.toggleIsolate();
     const show: number[] = [], hide: number[] = [];

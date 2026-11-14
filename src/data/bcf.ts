@@ -237,7 +237,7 @@ export async function writeBcf(topics: readonly BcfTopic[], extensions: BcfExten
 // ------------------------------------------------------------------ lecture
 
 const MIME: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', pdf: 'application/pdf' };
-const mimeOf = (name: string) => MIME[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] ?? '';
+const mimeOf = (name: string) => { const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase(); return Object.hasOwn(MIME, extension) ? MIME[extension] : ''; };
 const baseName = (path: string) => path.split(/[/\\]/).filter(Boolean).pop() ?? path;
 
 /** Un chemin relatif au dossier `folder`, ramené à la racine de l'archive. */

@@ -8,7 +8,7 @@
 
 import { fetchOsmBuildings, type OsmBuilding } from '../geo/osmBuildings.ts';
 import { GRID, TERRAIN_CREDIT, TILE_URL, decodeTerrarium } from '../geo/terrain.ts';
-import type { HeightSource, Neighbour, Study, StudyContext, TerrainGrid, XY } from './study.ts';
+import { MAX_NEIGHBOURS, MAX_OUTLINE_POINTS, type HeightSource, type Neighbour, type Study, type StudyContext, type TerrainGrid, type XY } from './study.ts';
 
 export interface GeoBox { south: number; west: number; north: number; east: number }
 type Origin = { latitude: number; longitude: number };
@@ -176,7 +176,10 @@ export async function loadContext(origin: Origin, radius: number, options: { pro
   chosen ??= { provider: base, buildings: (await collect(base, boxes, signal)) ?? [] };
 
   const seen = new Map<string, number>();
-  const buildings: Neighbour[] = chosen.buildings.map((b) => {
+  // Les mêmes bornes qu'à la lecture d'une étude : ce qui est gardé ici se relit tel quel.
+  const kept = chosen.buildings.filter((b) => b.outline.length <= MAX_OUTLINE_POINTS);
+  if (kept.length > MAX_NEIGHBOURS) notes.push(`Plus de ${MAX_NEIGHBOURS.toLocaleString('fr-FR')} bâtiments voisins : seuls les premiers sont gardés.`);
+  const buildings: Neighbour[] = kept.slice(0, MAX_NEIGHBOURS).map((b) => {
     const count = (seen.get(b.id) ?? 0) + 1;
     seen.set(b.id, count);
     return { id: count > 1 ? `${b.id}-${count}` : b.id, footprint: b.outline.map(([lon, lat]) => toEnu(origin, lon, lat)), height: b.height, heightSource: b.heightSource };

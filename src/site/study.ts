@@ -106,6 +106,19 @@ export const DEFAULT_USES: readonly Use[] = [
   { id: 'autre', name: 'Autre', color: '#9b7fd1', housing: false },
 ];
 
+/** Bornes d'une étude, à la lecture comme dans l'interface : au-delà, un fichier pourrait figer l'onglet. */
+export const MAX_FLOORS = 200;
+export const MIN_FLOOR_HEIGHT = 1;
+export const MAX_FLOOR_HEIGHT = 20;
+/** Points d'un contour (volume, voisin, limite du terrain). */
+export const MAX_OUTLINE_POINTS = 1000;
+/** Volumes par proposition. */
+export const MAX_VOLUMES = 500;
+export const MAX_PROPOSALS = 50;
+export const MAX_NEIGHBOURS = 20_000;
+/** Points de la grille du relief. */
+export const MAX_TERRAIN_CELLS = 250_000;
+
 export const newId = (): string => crypto.randomUUID();
 
 export function newProposal(name: string): Proposal {
@@ -130,15 +143,16 @@ export const useOf = (volume: Volume, floor: number): string => volume.floorUses
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const text = (value: unknown, fallback: string): string => (typeof value === 'string' && value.trim() ? value : fallback);
 const number = (value: unknown, fallback: number, min = -Infinity): number => (finite(value) && value >= min ? value : fallback);
+const clamped = (value: unknown, fallback: number, min: number, max: number): number => (finite(value) ? Math.min(max, Math.max(min, value)) : fallback);
 
 /** Un contour d'au moins trois points finis, ou null. */
 function polygon(value: unknown): XY[] | null {
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value) || value.length > MAX_OUTLINE_POINTS) return null;
   const points = value.filter((p): p is XY => Array.isArray(p) && p.length === 2 && finite(p[0]) && finite(p[1]));
   return points.length === value.length && points.length >= 3 ? points.map(([x, y]) => [x, y]) : null;
 }
 
-const records = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+const records = (value: unknown, max = Infinity): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord).slice(0, max) : []);
 
 function parseVolume(raw: Record<string, unknown>, uses: readonly Use[]): Volume | null {
   const footprint = polygon(raw.footprint);
@@ -149,11 +163,11 @@ function parseVolume(raw: Record<string, unknown>, uses: readonly Use[]): Volume
     name: text(raw.name, 'Volume'),
     footprint,
     baseLevel: number(raw.baseLevel, 0),
-    floors: Math.round(number(raw.floors, 1, 1)),
-    floorHeight: number(raw.floorHeight, 3, 0.1),
+    floors: Math.round(clamped(raw.floors, 1, 1, MAX_FLOORS)),
+    floorHeight: clamped(raw.floorHeight, 3, MIN_FLOOR_HEIGHT, MAX_FLOOR_HEIGHT),
     use: text(raw.use, uses[0]?.id ?? 'autre'),
   };
-  if (Array.isArray(raw.floorUses)) volume.floorUses = raw.floorUses.map((use) => (typeof use === 'string' ? use : ''));
+  if (Array.isArray(raw.floorUses)) volume.floorUses = raw.floorUses.slice(0, MAX_FLOORS).map((use) => (typeof use === 'string' ? use : ''));
   else delete volume.floorUses;
   return volume;
 }
@@ -162,7 +176,7 @@ function parseTerrain(raw: unknown): TerrainGrid | null {
   if (!isRecord(raw)) return null;
   const { west, south, step, columns, rows, heights } = raw;
   if (!finite(west) || !finite(south) || !finite(step) || step <= 0 || !Number.isInteger(columns) || !Number.isInteger(rows)) return null;
-  if ((columns as number) < 2 || (rows as number) < 2 || !Array.isArray(heights) || heights.length !== (columns as number) * (rows as number) || !heights.every(finite)) return null;
+  if ((columns as number) < 2 || (rows as number) < 2 || (columns as number) * (rows as number) > MAX_TERRAIN_CELLS || !Array.isArray(heights) || heights.length !== (columns as number) * (rows as number) || !heights.every(finite)) return null;
   return { ...raw, west, south, step, columns: columns as number, rows: rows as number, heights: [...heights] };
 }
 
@@ -204,7 +218,7 @@ export function parseStudy(raw: unknown): Study {
   const rawContext = isRecord(raw.context) ? raw.context : {};
   const context: StudyContext = {
     ...rawContext,
-    buildings: records(rawContext.buildings).flatMap((b): Neighbour[] => {
+    buildings: records(rawContext.buildings, MAX_NEIGHBOURS).flatMap((b): Neighbour[] => {
       const footprint = polygon(b.footprint);
       if (!footprint || !finite(b.height) || b.height <= 0) return [];
       const heightSource: HeightSource = b.heightSource === 'measured' || b.heightSource === 'tagged' ? b.heightSource : 'assumed';
@@ -219,11 +233,11 @@ export function parseStudy(raw: unknown): Study {
     fetchedAt: typeof rawContext.fetchedAt === 'string' ? rawContext.fetchedAt : null,
   };
 
-  const proposals = records(raw.proposals).map((p, i): Proposal => ({
+  const proposals = records(raw.proposals, MAX_PROPOSALS).map((p, i): Proposal => ({
     ...p,
     id: text(p.id, newId()),
     name: text(p.name, `Proposition ${i + 1}`),
-    volumes: records(p.volumes).flatMap((v) => parseVolume(v, settings.uses) ?? []),
+    volumes: records(p.volumes, MAX_VOLUMES).flatMap((v) => parseVolume(v, settings.uses) ?? []),
   }));
 
   return {

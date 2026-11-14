@@ -5,7 +5,7 @@ import { parseMetadata } from '../src/data/metadata.ts';
 import {
   addObservations, allowedStatuses, boxOfPlanes, changeStatus, defaultLists, emptyBook, filterObservations, fromBcfTopic, groupObservations,
   locate, mergeBooks, newObservation, observationFromClash, observationsCsv, observationsToJson, orphans, parseObservations, sortObservations,
-  statusLayer, toBcfTopic, viewOfViewpoint, viewpointOfView, type Observation, type ObservationBook,
+  statusColor, statusLayer, toBcfTopic, viewOfViewpoint, viewpointOfView, type Observation, type ObservationBook,
 } from '../src/data/observations.ts';
 import { modificationsFile } from '../src/data/sidecar.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
@@ -209,4 +209,24 @@ test('the CSV has one line per observation, semicolons, quoted when needed', () 
   const [header, line] = csv.split('\r\n');
   assert.match(header, /^N°;Titre;Type;Statut;Entreprise;Lot;Phase;Priorité;Échéance;Niveau;Local;Zone;Créée le;Auteur;Description;Identifiant$/);
   assert.match(line, /^3;Garde-corps manquant;Sécurité;En cours;Durand;Serrurerie;Visite;Critique;;R\+1;;;14\/11\/2026;Zaid;Trémie escalier;/);
+});
+
+test('a status read from a file named like an Object member is a plain status (colour, transitions)', () => {
+  const odd = { ...lists, statuses: [...lists.statuses, 'constructor', '__proto__', 'toString'] };
+  for (const status of ['constructor', '__proto__', 'toString']) {
+    assert.match(statusColor(status, odd), /^#[0-9a-f]{6}$/i, status);
+    assert.ok(allowedStatuses(odd, status).includes('Ouverte'), status);
+  }
+  const book = parseObservations({ lists: { statuses: ['Ouverte', 'constructor'], transitions: { constructor: ['Ouverte'] } }, topics: [] })!;
+  assert.deepEqual(allowedStatuses(book.lists, 'constructor'), ['Ouverte']);
+});
+
+test('the CSV defuses spreadsheet formulas in text, keeps numbers as numbers', () => {
+  const evil = make({ number: 4, title: '=HYPERLINK("http://x","clic")', assignedTo: '+33 6', description: '@SUM(A1)', creationAuthor: '-2+3' });
+  const line = observationsCsv([evil]).split('\r\n')[1];
+  assert.ok(line.startsWith('4;'), line);
+  assert.match(line, /;"'=HYPERLINK\(""http:\/\/x"",""clic""\)";/);
+  assert.match(line, /;'\+33 6;/);
+  assert.match(line, /;'-2\+3;/);
+  assert.match(line, /;'@SUM\(A1\);/);
 });

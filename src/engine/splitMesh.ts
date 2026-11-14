@@ -284,12 +284,25 @@ function compact(positions: number[], triangles: number[], materials: number[]):
   return { positions: out, triangles: renumbered, materials };
 }
 
+/** L'erreur de `splitSolid` quand les pièces dépassent `maxParts`. */
+export const TOO_MANY_PARTS = 'trop de pièces';
+
+/** `splitSolidSteps` jusqu'au bout, d'un seul tenant. */
+export function splitSolid(solid: Solid, planes: readonly CutPlane[], maxParts = Infinity): { parts: SplitPart[]; error?: string } {
+  const steps = splitSolidSteps(solid, planes, maxParts);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
 /**
  * Découpe un solide par des plans (dans l'ordre donné ; le résultat n'en dépend pas) et numérote les pièces de bas en haut,
  * puis du sud au nord, puis d'ouest en est (Y, −Z, X du centre de leur boîte, au millimètre). Le solide doit être fermé :
- * sinon `error` dit pourquoi. Un plan qui ne coupe rien ne compte pas ; sans aucune coupe, `parts` est vide.
+ * sinon `error` dit pourquoi. Un plan qui ne coupe rien ne compte pas ; sans aucune coupe, `parts` est vide. Au-delà de
+ * `maxParts` pièces, la découpe s'arrête (`TOO_MANY_PARTS`). Une pause après chaque pièce coupée : les triangles traités.
  */
-export function splitSolid(solid: Solid, planes: readonly CutPlane[]): { parts: SplitPart[]; error?: string } {
+export function* splitSolidSteps(solid: Solid, planes: readonly CutPlane[], maxParts = Infinity): Generator<number, { parts: SplitPart[]; error?: string }, unknown> {
   const problem = solidProblem(solid);
   if (problem) return { parts: [], error: problem };
   // Une enveloppe tournée vers l'intérieur est retournée d'abord : les bouchons supposent des normales vers l'extérieur.
@@ -313,6 +326,7 @@ export function splitSolid(solid: Solid, planes: readonly CutPlane[]): { parts: 
     const next: typeof pieces = [];
     for (const piece of pieces) {
       const result = splitByPlane(piece.solid, plane, tolerance);
+      yield piece.solid.triangles.length / 3;
       if (typeof result === 'string') {
         if (result !== 'miss') return { parts: [], error: result };
         const [nx, ny, nz] = plane.normal, q = piece.solid.positions;
@@ -325,6 +339,7 @@ export function splitSolid(solid: Solid, planes: readonly CutPlane[]): { parts: 
       }
     }
     pieces = next;
+    if (pieces.length > maxParts) return { parts: [], error: TOO_MANY_PARTS };
   }
   if (!cutAny) return { parts: [] };
   const centre = (s: Solid) => {

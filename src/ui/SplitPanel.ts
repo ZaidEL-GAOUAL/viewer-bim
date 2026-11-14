@@ -237,7 +237,13 @@ export class SplitPanel {
 
   private remove(id: string): void {
     const { app } = this;
-    if (!app.splits || this.blocked) return;
+    const model = app.model, edits = app.propertyEdits;
+    if (!app.splits || !model || this.blocked) return;
+    // Les modifications faites sur ses pièces disparaissent avec elles (voir PropertyEdits.reindex).
+    const originals = new Set(app.splits.definitions.find((definition) => definition.id === id)?.elements ?? []);
+    const parts = new Set(model.keys.filter((_, i) => model.parents[i] >= 0 && originals.has(model.keys[model.parents[i]])));
+    const modified = edits ? Object.keys(edits.diff(model.keys).elements).filter((key) => parts.has(key)).length : 0;
+    if (modified > 0 && !window.confirm(`${plural(modified, 'pièce modifiée', 'pièces modifiées')} dans ce découpage : ces modifications seront perdues (« Modifications ↓ » les enregistre d’abord). Retirer le découpage ?`)) return;
     const change = app.splits.remove(id, this.source());
     if (change) app.changeParts(change);
     this.report.textContent = 'Découpage retiré : les originaux sont de retour.';

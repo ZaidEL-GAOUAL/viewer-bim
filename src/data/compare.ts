@@ -13,6 +13,7 @@ import { formatValue, isReadOnly, ownValue, type FlatProps, type PropValue } fro
 import type { ElementAppearance } from './appearanceRules.ts';
 import type { MeshPart } from '../engine/meshMath.ts';
 import { MODEL_PROPERTY } from './federation.ts';
+import { csvCell } from './text.ts';
 
 /** Boîte en millimètres (repère du modèle) : minX, minY, minZ, maxX, maxY, maxZ ; volume en m³ et surface en m² arrondis. */
 export interface GeometrySignature {
@@ -256,8 +257,7 @@ function rows(result: CompareResult, current: CompareSide, reference: CompareSid
 }
 
 export function compareCsv(result: CompareResult, current: CompareSide, reference: CompareSide): string {
-  const cell = (value: string) => (/[;"\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
-  return [['Statut', 'Clé', 'Nom', 'Clé avant', 'Détail'], ...rows(result, current, reference)].map((row) => row.map(cell).join(';')).join('\r\n');
+  return [['Statut', 'Clé', 'Nom', 'Clé avant', 'Détail'], ...rows(result, current, reference)].map((row) => row.map((cell) => csvCell(cell)).join(';')).join('\r\n');
 }
 
 /** Le rapport en JSON : clés des éléments, et pour chaque modification ses propriétés et sa géométrie. */

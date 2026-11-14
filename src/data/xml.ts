@@ -11,40 +11,58 @@ export interface XmlNode {
 }
 
 const ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+// Les entités propres au document (DOCTYPE) ne sont jamais développées : une entité inconnue est une erreur.
 const decode = (text: string) => text.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (all, code: string) => {
   if (code[0] === '#') return String.fromCodePoint(code[1].toLowerCase() === 'x' ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10));
-  const entity = ENTITIES[code];
-  if (entity === undefined) throw new Error(`Entité XML inconnue : ${all}`);
-  return entity;
+  if (!Object.hasOwn(ENTITIES, code)) throw new Error(`Entité XML inconnue : ${all}`);
+  return ENTITIES[code];
 });
 const local = (name: string) => name.slice(name.indexOf(':') + 1);
 
+/** Caractères au plus d'un document, et éléments imbriqués au plus : au-delà, refusé avec un message. */
+export const MAX_XML_LENGTH = 50_000_000;
+export const MAX_XML_DEPTH = 256;
+
+/** Ce qui se saute jusqu'à sa fin, cherchée une seule fois (jamais de retour en arrière sur un début sans fin). */
+const SKIPPED: [opening: string, closing: string][] = [['<!--', '-->'], ['<![CDATA[', ']]>'], ['<?', '?>'], ['<!DOCTYPE', '>']];
+const TAG = /<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/y;
+
 /** Lit un document XML ; rend la racine `#document`, dont l'élément principal est le premier enfant. */
 export function parseXml(xml: string): XmlNode {
+  if (xml.length > MAX_XML_LENGTH) throw new Error(`XML trop grand (plus de ${MAX_XML_LENGTH / 1e6} millions de caractères).`);
   const root: XmlNode = { name: '#document', attributes: {}, children: [], text: '' };
   const stack: XmlNode[] = [root];
-  const tag = /<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>/g;
   let at = 0;
-  for (let match = tag.exec(xml); match; match = tag.exec(xml)) {
-    const between = xml.slice(at, match.index);
-    if (between.includes('<')) throw new Error('XML mal formé : balise illisible.');
-    stack[stack.length - 1].text += decode(between);
-    at = tag.lastIndex;
-    if (match[1] !== undefined) stack[stack.length - 1].text += match[1];
-    if (!match[3]) continue; // commentaire, déclaration
-    const name = local(match[3]);
-    if (match[2]) {
-      if (stack.length < 2 || stack[stack.length - 1].name !== name) throw new Error(`XML mal formé : </${match[3]}> ne ferme rien.`);
+  for (let open = xml.indexOf('<'); open >= 0; open = xml.indexOf('<', at)) {
+    const top = stack[stack.length - 1];
+    top.text += decode(xml.slice(at, open));
+    const skipped = SKIPPED.find(([opening]) => xml.startsWith(opening, open));
+    if (skipped) {
+      const [opening, closing] = skipped;
+      const end = xml.indexOf(closing, open + opening.length);
+      if (end < 0) throw new Error(`XML mal formé : ${opening} sans fin.`);
+      if (opening === '<![CDATA[') top.text += xml.slice(open + opening.length, end);
+      at = end + closing.length;
+      continue;
+    }
+    TAG.lastIndex = open;
+    const match = TAG.exec(xml);
+    if (!match) throw new Error('XML mal formé : balise illisible.');
+    at = TAG.lastIndex;
+    const name = local(match[2]);
+    if (match[1]) {
+      if (stack.length < 2 || top.name !== name) throw new Error(`XML mal formé : </${match[2]}> ne ferme rien.`);
       stack.pop();
       continue;
     }
     const attributes: Record<string, string> = {};
-    for (const attribute of match[4].matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attributes[local(attribute[1])] = decode(attribute[2] ?? attribute[3]);
+    for (const attribute of match[3].matchAll(/([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attributes[local(attribute[1])] = decode(attribute[2] ?? attribute[3]);
     const node: XmlNode = { name, attributes, children: [], text: '' };
-    stack[stack.length - 1].children.push(node);
-    if (!match[5]) stack.push(node);
+    top.children.push(node);
+    if (match[4]) continue;
+    if (stack.length > MAX_XML_DEPTH) throw new Error(`XML mal formé : plus de ${MAX_XML_DEPTH} niveaux d’imbrication.`);
+    stack.push(node);
   }
-  if (xml.slice(at).includes('<')) throw new Error('XML mal formé : balise illisible.');
   if (stack.length !== 1) throw new Error(`XML mal formé : <${stack[stack.length - 1].name}> n’est pas fermé.`);
   return root;
 }
