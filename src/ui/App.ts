@@ -14,6 +14,7 @@ import { ModelsPanel } from './ModelsPanel.ts';
 import { Sketch } from '../engine/sketch.ts';
 import { PanelMenu } from './PanelMenu.ts';
 import { QuantitiesPanel } from './QuantitiesPanel.ts';
+import { ExportActions } from './ExportActions.ts';
 import { RequirementsPanel } from './RequirementsPanel.ts';
 import { SplitPanel } from './SplitPanel.ts';
 import { ZonesPanel } from './ZonesPanel.ts';
@@ -310,10 +311,12 @@ export class App {
       }
     });
     // Téléchargements du modèle affiché (le titre du bouton GLB/USD est posé par `syncDownloads`).
+    const exports = new ExportActions(this);
     this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
       (this.modelDownload = button('GLB ↓', () => void this.download('model'))),
       (this.changesDownload = button('Modifications ↓', () => void this.download('changes'), { title: 'Télécharger seulement ce qui a été modifié (JSON) : rouvert avec le fichier d’origine, il rétablit les modifications' })),
       (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger toutes les propriétés (JSON), modifications comprises' })),
+      ...exports.buttons,
       this.quickLookLink,
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
@@ -444,7 +447,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, ...exports.cards, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -705,6 +708,11 @@ export class App {
   /** Les niveaux du modèle (section `levels`), du plus bas au plus haut. */
   get levels(): readonly Level[] {
     return this.metadata?.levels ?? NO_LEVELS;
+  }
+
+  /** Vrai pendant la lecture d'un fichier Revit : le modèle affiché est partiel. */
+  get reading(): boolean {
+    return this.revitReading !== null;
   }
 
   /** Vrai pendant le mode carte : le globe dessine sa propre copie de la maquette. */

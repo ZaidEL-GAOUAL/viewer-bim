@@ -98,6 +98,46 @@ export class CutDisplay {
     this.current = false;
   }
 
+  /**
+   * Résolu quand le dessin de la coupe est à jour (tout de suite si rien ne se coupe) : lance le calcul s'il ne l'est pas.
+   * Une capture ou un export attend ce moment pour avoir le remplissage de la coupe.
+   */
+  ready(): Promise<void> {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (this.current || !this.model || !this.sections.active || this.mapMode()) {
+          this.onProgress.delete(listener);
+          resolve();
+        }
+      };
+      // `notify(null)` précède `apply` : l'état est relu une fois le calcul fini.
+      const listener = (progress: number | null) => { if (progress === null) queueMicrotask(check); };
+      this.onProgress.add(listener);
+      this.idle();
+      check();
+    });
+  }
+
+  /**
+   * Le temps d'une tuile de capture : traits `scale` fois plus épais, calculés pour une cible de `width` × `height` pixels,
+   * et cachés si `lines` est faux. Renvoie le rétablissement.
+   */
+  captureStyle(scale: number, width: number, height: number, lines: boolean): () => void {
+    const saved = this.slots.flatMap((slot) => [slot.solid, slot.dashed]).map((line) => ({ line, width: line.material.linewidth, visible: line.visible }));
+    for (const { line, width: linewidth } of saved) {
+      line.material.linewidth = linewidth * scale;
+      line.material.resolution.set(width, height);
+      line.visible = line.visible && lines;
+    }
+    return () => {
+      for (const { line, width: linewidth, visible } of saved) {
+        line.material.linewidth = linewidth;
+        line.material.resolution.set(this.resolution.width, this.resolution.height);
+        line.visible = visible;
+      }
+    };
+  }
+
   /** Taille de la vue en pixels CSS : l'épaisseur des traits en dépend. */
   setResolution(width: number, height: number): void {
     this.resolution.width = width;

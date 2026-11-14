@@ -20,7 +20,9 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  type Camera,
   type IUniform,
+  type WebGLRenderTarget,
   type Plane,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -734,11 +736,19 @@ export class Viewer {
   }
 
   private draw(): void {
-    const { renderer, scene, camera, sections } = this;
+    const { renderer } = this;
     this.updateClipRange();
     renderer.info.reset();
     renderer.clear(true, true, true);
+    this.renderLayers(this.camera);
+    this.stats.calls = renderer.info.render.calls;
+    this.stats.triangles = renderer.info.render.triangles;
+    for (const callback of this.afterRender) callback();
+  }
 
+  /** Les passes d'une image (opaque, coupe, transparent, superpositions) vue par `camera`, dans la cible courante. */
+  private renderLayers(camera: Camera): void {
+    const { renderer, scene, sections } = this;
     if (!this.model || !sections.active) {
       renderer.clippingPlanes = NO_PLANES;
       renderer.render(scene, camera);
@@ -761,8 +771,43 @@ export class Viewer {
 
     renderer.clippingPlanes = NO_PLANES;
     renderer.render(this.overlay, camera);
-    this.stats.calls = renderer.info.render.calls;
-    this.stats.triangles = renderer.info.render.triangles;
-    for (const callback of this.afterRender) callback();
+  }
+
+  /**
+   * Dessine une image pour une capture (voir `capture.ts`) dans `target`, sur `tile.width` × `tile.height` pixels, et la lit
+   * dans `pixels` (RGBA, ligne du bas d'abord). Le tout d'un seul tenant : la boucle d'affichage ne peut rien dessiner entre
+   * deux, donc rien de ce qui est changé ici (cible, couleur de fond, sélection, traits de coupe) n'est visible à l'écran.
+   * Seuls le modèle et sa coupe sont dessinés : ni poignées, ni plans de coupe, ni mesures. `lineScale` épaissit les traits
+   * de coupe (ils se mesurent en pixels), `cutLines` faux les retire.
+   */
+  renderToPixels(camera: Camera, target: WebGLRenderTarget, tile: { width: number; height: number }, style: { cutLines: boolean; lineScale: number; background?: string }, pixels: Uint8Array): void {
+    const { renderer } = this;
+    const previous = renderer.getRenderTarget();
+    const hidden = this.overlay.children.filter((child) => child !== this.cut.group && child.visible);
+    for (const child of hidden) child.visible = false;
+    const restoreSelection = this.model?.state.hideSelection();
+    const restoreCut = this.cut.captureStyle(style.lineScale, tile.width, tile.height, style.cutLines);
+    try {
+      // La fenêtre de la cible se règle avant de la poser : c'est à la pose que le moteur la reprend.
+      target.viewport.set(0, 0, tile.width, tile.height);
+      renderer.setRenderTarget(target);
+      // Le fond en linéaire (la cible est sRGB) : la couleur de fond se règle une fois la cible posée.
+      renderer.setClearColor(style.background ?? this.background, 1);
+      renderer.clear(true, true, true);
+      this.renderLayers(camera);
+      renderer.readRenderTargetPixels(target, 0, 0, tile.width, tile.height, pixels);
+    } finally {
+      renderer.setRenderTarget(previous);
+      renderer.setClearColor(this.background, this.externalCamera ? 0 : 1);
+      restoreCut();
+      restoreSelection?.();
+      for (const child of hidden) child.visible = true;
+      this.invalidate();
+    }
+  }
+
+  /** Vrai pendant le glissement de la caméra vers une vue enregistrée. */
+  get animating(): boolean {
+    return this.tween !== null;
   }
 }

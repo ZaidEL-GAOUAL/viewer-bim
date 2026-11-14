@@ -251,6 +251,22 @@ export class ElementState {
     return (this.data[index * 4 + 3] & FLAG_SELECTED) !== 0;
   }
 
+  /**
+   * Retire la sélection de l'affichage le temps d'une capture : renvoie de quoi la rétablir. Rien n'est notifié (la coupe
+   * n'est pas recalculée) ; les textures sont renvoyées à la carte graphique au prochain dessin.
+   */
+  hideSelection(): () => void {
+    const selected: number[] = [];
+    for (let i = 0; i < this.count; i++) if (this.data[i * 4 + 3] & FLAG_SELECTED) selected.push(i);
+    if (selected.length === 0) return () => {};
+    for (const i of selected) this.setFlag(i, FLAG_SELECTED, false);
+    this.texture.needsUpdate = true;
+    return () => {
+      for (const i of selected) this.setFlag(i, FLAG_SELECTED, true);
+      this.texture.needsUpdate = true;
+    };
+  }
+
   /** Vrai si le maillage de l'élément n'est pas un solide fermé. */
   isOpen(index: number): boolean {
     return (this.data[index * 4 + 3] & FLAG_OPEN) !== 0;
