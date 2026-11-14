@@ -104,6 +104,22 @@ export class PropertyEdits {
     this.notify('*');
   }
   markSaved(): void { this.saved = this.cursor; }
+  /**
+   * The elements were renumbered (derived parts regenerated, see data/splits.ts): `next[old]` is the new index, −1 if the
+   * element is gone. History and baseline follow; a step left with nothing to do is dropped.
+   */
+  reindex(next: ArrayLike<number>): void {
+    const move = (entries: Map<number, Entry>) => new Map([...entries].flatMap(([i, entry]) => (i < next.length && next[i] >= 0 ? [[next[i], entry] as const] : [])));
+    const kept = (change: Change) => change.after.size > 0 || change.readOnly !== undefined;
+    const before = (position: number) => this.changes.slice(0, position).filter((change) => kept({ ...change, after: move(change.after) })).length;
+    if (this.saved >= 0) this.saved = before(this.saved);
+    this.cursor = before(this.cursor);
+    this.changes = this.changes.map((change) => ({ ...change, before: move(change.before), after: move(change.after) })).filter(kept);
+    const baseline = move(this.baseline);
+    this.baseline.clear();
+    for (const [i, entry] of baseline) this.baseline.set(i, entry);
+    this.counted = null;
+  }
 
   /** True if the element's value of `path` differs from the file's. Locked properties are the file's: never modified. */
   isModified(index: number, path: string): boolean {

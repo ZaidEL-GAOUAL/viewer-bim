@@ -125,9 +125,10 @@ de deux façons :
   il reste valable après un nouvel enregistrement du fichier dans Revit : les valeurs que
   l'utilisateur n'a pas touchées viennent fraîches du fichier. Les vues que l'utilisateur a
   enregistrées (§ 2 sexies, « Vues de l'utilisateur ») y sont aussi, dans `views` : ce sont des
-  modifications. Un tel fichier peut n'avoir que des vues (`"elements": {}`).
+  modifications. Un tel fichier peut n'avoir que des vues (`"elements": {}`). Les découpages en pièces (§ 2 nonies) et
+  les zones (§ 2 decies) y sont aussi, entiers, dans `splits` et `zones`.
 - **« JSON ↓ »** : toutes les propriétés, dans le format ci-dessus (propriétés du GLB, du JSON et
-  modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`).
+  modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`), pièces comprises, avec `splits` et `zones`.
 
 « Annuler les modifications » revient au fichier d'origine.
 
@@ -464,7 +465,10 @@ nature : un viewer qui ignore `source` lit le JSON de modifications comme un com
 montre une valeur vide. Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
 viewer qui les ignore ouvre un plan comme une vue parallèle de dessus. « JSON ↓ » les réécrit telles qu'elles ont été lues.
 Les champs des vues de l'utilisateur (`origin`, `id`, `sections`, `isolated`, `appearanceRules`, `grouping`) le sont aussi :
-un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa boîte, ses masquages, sa phase).
+un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa boîte, ses masquages, sa phase). Les sections
+`splits` et `zones` aussi : un viewer qui les ignore montre les éléments entiers, et les propriétés écrites sur des pièces
+(clés `<clé>~<n>`) ne trouvent pas leur élément, sans empêcher l'ouverture. Un JSON de modifications peut n'avoir que des
+découpages ou des zones (`"elements": {}`).
 
 ## 2 octies. Niveaux (`levels`)
 
@@ -485,6 +489,51 @@ hauteur saisie dans le même repère). Le convertisseur IFC fourni l'écrit depu
 placement (c'est elle qui place la géométrie), à défaut leur attribut `Elevation`, convertie en mètres. La lecture d'un
 `.rvt` ne l'écrit pas encore. « JSON ↓ » la réécrit telle qu'elle a été lue.
 
+## 2 nonies. Découpage en pièces (`splits`)
+
+Une liste optionnelle à la racine décrit comment des éléments sont coupés en pièces (comme les « pièces » de Revit) : le
+fichier garde la **définition** des coupes, jamais les maillages. Le viewer en tire les pièces à chaque ouverture.
+
+```json
+"splits": [
+  { "id": "c1", "elements": ["RMpIvF5jLado8i5KMrQscB"], "lines": [[[10, 0.2, -8], [10, 0.2, 8]], [[-2, 0.2, 6], [22, 0.2, 6]]] },
+  { "id": "c2", "elements": ["2O2Fr$t4X7Zf8NOew3FLOH"], "references": { "levels": ["R+1"] } },
+  { "id": "c3", "elements": ["0BTBFw6f90Nfh9rP1dl_3P"], "references": { "axis": "x", "count": 4 }, "merged": [["0BTBFw6f90Nfh9rP1dl_3P~1", "0BTBFw6f90Nfh9rP1dl_3P~2"]] }
+]
+```
+
+| Champ | Rôle |
+| --- | --- |
+| `id` | Identifiant stable du découpage ; deux fichiers qui portent le même le donnent une fois (le plus récent). |
+| `elements` | Clés (celles de `elements`) des éléments découpés. |
+| `lines` | Lignes dessinées en plan, deux points chacune, dans le repère du modèle (mètres, Y vers le haut, comme `sectionBox`) ; seuls x et z comptent. Chaque ligne porte un plan de coupe vertical et doit traverser l'élément de part en part : une coupe partielle est refusée. |
+| `references` | À la place de `lines`, une coupe automatique : `levels` (noms de la section `levels` : coupe horizontale à l'altitude du niveau), ou `axis` (`"x"` ou `"z"`, axes du repère du modèle) avec `positions` (coordonnées sur cet axe), `interval` (un pas en mètres depuis le bord de chaque élément) ou `count` (nombre de parts égales de chaque élément). |
+| `merged` | Facultatif : groupes de clés de pièces réunies ; chaque groupe devient la pièce du plus petit numéro. |
+
+**Pièces.** Une pièce est un élément de plus, ajouté au modèle : clé `<clé de l'original>~<n>`, numérotée de bas en haut, puis
+du sud au nord, puis d'ouest en est (centre de sa boîte, au millimètre) : les mêmes coupes redonnent les mêmes numéros, donc les
+propriétés et les dates écrites sur une pièce la retrouvent à la réouverture. Elle reprend les propriétés de l'original, plus
+`Pièce / Origine` (nom et clé de l'original), `Pièce / Numéro`, `Pièce / Séquence` (modifiable ; vaut d'abord le numéro, et sert
+à ordonner le planning), `Pièce / Maillage valide` (faux si la pièce n'est pas un solide fermé) et ses propres quantités
+(« Quantités calculées », et les quantités de base IFC que porte l'original, recalculées ; `Fiabilité` vaut `indicatif` si le
+maillage n'est pas valide). L'original n'est ni modifié ni retiré : il reste dans l'arbre, masqué tant qu'il a des pièces.
+Seuls les solides fermés se découpent ; un maillage ouvert ou non manifold est refusé, avec la raison.
+
+**Avec les fichiers.** « GLB ↓ » écrit les pièces à la place de leurs originaux (et le dit). Rouvert avec son JSON, ce GLB
+contient déjà les pièces : le découpage n'est pas refait. Un élément de `elements` que le modèle n'a pas est signalé.
+
+## 2 decies. Zones (`zones`)
+
+Une liste optionnelle à la racine donne des zones dessinées en plan ; un élément est rangé dans celle qui couvre la plus grande
+part de son emprise, écrite dans une propriété choisie à ce moment (« Zone » par défaut). Aucune géométrie n'est créée.
+
+```json
+"zones": [{ "name": "Zone A", "points": [[0, 0, 0], [20, 0, 0], [20, 0, -12], [0, 0, -12]] }]
+```
+
+`name` : nom de la zone (non vide) ; `points` : au moins trois sommets du polygone, dans le repère du modèle (mètres, Y vers le
+haut) ; seuls x et z comptent. Une zone de même nom dans deux fichiers est donnée une fois (la plus récente).
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
@@ -503,7 +552,7 @@ structure spatiale d'un IFC devient :
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
 (regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
-ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views` et `levels` sont déjà de celles-là.
+ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits` et `zones` sont déjà de celles-là.
 
 ## 5. Variante USD
 

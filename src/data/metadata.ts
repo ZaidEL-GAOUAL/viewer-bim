@@ -5,6 +5,8 @@ import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
 import { parsePhases, type Phases } from './phases.ts';
 import { parseViews, type SavedView } from './savedViews.ts';
 import { parseLevels, type Level } from './levels.ts';
+import { parseSplits, type SplitDefinition } from './splits.ts';
+import { parseZones, type Zone } from './zones.ts';
 import { numericValue, plainNumber } from './conditions.ts';
 import { isRecord } from './json.ts';
 import { decimal, fold } from './text.ts';
@@ -36,6 +38,10 @@ export interface Metadata {
   views?: SavedView[];
   /** Niveaux du modèle (voir data/levels.ts), si le fichier en donne. */
   levels?: Level[];
+  /** Découpages en pièces (voir data/splits.ts), si le fichier en donne. */
+  splits?: SplitDefinition[];
+  /** Zones dessinées (voir data/zones.ts), si le fichier en donne. */
+  zones?: Zone[];
 }
 
 /**
@@ -169,9 +175,11 @@ export function parseMetadata(json: unknown): Metadata {
     for (const [id, raw] of Object.entries(json)) if (id !== 'version') add(id, raw);
   }
 
-  // Un JSON de modifications qui n'apporte que des vues de l'utilisateur n'a aucun élément : il reste lisible.
+  // Un JSON de modifications qui n'apporte que des vues de l'utilisateur, des découpages ou des zones n'a aucun élément : il reste lisible.
   const views = parseViews(json.views);
-  if (elements.size === 0 && (json.elements === undefined || views.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
+  const splits = parseSplits(json.splits);
+  const zones = parseZones(json.zones);
+  if (elements.size === 0 && (json.elements === undefined || views.length + splits.length + zones.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
   const metadata: Metadata = { version, elements };
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
@@ -184,6 +192,8 @@ export function parseMetadata(json: unknown): Metadata {
   if (views.length > 0) metadata.views = views;
   const levels = parseLevels(json.levels);
   if (levels.length > 0) metadata.levels = levels;
+  if (splits.length > 0) metadata.splits = splits;
+  if (zones.length > 0) metadata.zones = zones;
   return metadata;
 }
 
@@ -236,7 +246,8 @@ export function compareValues(a: string, b: string): number {
 
 /** Propriétés de tous les éléments d'un modèle, indexées par numéro d'élément. */
 export class PropertyStore {
-  readonly count: number;
+  /** Nombre d'éléments ; ne change que par `reindex` (pièces dérivées du découpage). */
+  count: number;
   paths: string[] = [];
   matched = 0;
   /** Motifs des propriétés non modifiables. */
@@ -259,6 +270,25 @@ export class PropertyStore {
     this.props[index] = props;
     this.labels[index] = label;
     this.owned.delete(index);
+  }
+
+  /**
+   * Renumérote les éléments (pièces dérivées régénérées) : l'élément `i` reprend les propriétés qu'avait `from[i]`, ou aucune
+   * si −1. Le nombre d'éléments devient `from.length`. À compléter par `set`, puis `finalize`.
+   */
+  reindex(from: ArrayLike<number>): void {
+    const props = Array.from(from, (old) => (old >= 0 ? this.props[old] : undefined));
+    const labels = Array.from(from, (old) => (old >= 0 ? this.labels[old] : undefined));
+    const owned = new Set(this.owned);
+    this.owned.clear();
+    for (let i = 0; i < from.length; i++) if (from[i] >= 0 && owned.has(from[i])) this.owned.add(i);
+    this.props.length = this.labels.length = from.length;
+    for (let i = 0; i < from.length; i++) {
+      this.props[i] = props[i];
+      this.labels[i] = labels[i];
+    }
+    this.count = from.length;
+    this.finalize();
   }
 
   /** À appeler une fois toutes les propriétés enregistrées. */

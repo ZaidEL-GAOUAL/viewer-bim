@@ -828,8 +828,14 @@ export class ModelBuilder {
   /** Vrai dès la première cuisson : l'origine du modèle est alors fixée, même si ce morceau n'avait pas de géométrie. */
   private started = false;
 
-  constructor(selectColor: IUniform<Color>) {
+  /** `model` : un modèle déjà construit, que ce constructeur prolonge (les pièces dérivées du découpage, voir data/splits.ts). */
+  constructor(selectColor: IUniform<Color>, model?: Model) {
     this.selectColor = selectColor;
+    if (model) {
+      this.model = model;
+      this.started = true;
+      return;
+    }
     const state = new ElementState(0);
     const group = new Group();
     group.name = 'modèle';

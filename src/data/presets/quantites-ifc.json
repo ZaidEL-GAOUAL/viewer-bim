@@ -1,0 +1,23 @@
+{
+  "name": "Quantités de base IFC (Qto_…BaseQuantities)",
+  "reliability": "Quantités calculées / Fiabilité",
+  "classProperty": "Classe IFC",
+  "predefinedTypeProperty": "Type prédéfini",
+  "attributes": { "Name": "#nom", "Description": "Description", "ObjectType": "Type d'objet", "Tag": "Repère" },
+  "classes": {
+    "IfcWall": { "group": "Qto_WallBaseQuantities", "targets": { "Length": "length", "Width": "width", "Height": "height", "NetFootprintArea": "footprint", "NetSideArea": "sideArea", "NetVolume": "volume" } },
+    "IfcWallStandardCase": { "group": "Qto_WallBaseQuantities", "targets": { "Length": "length", "Width": "width", "Height": "height", "NetFootprintArea": "footprint", "NetSideArea": "sideArea", "NetVolume": "volume" } },
+    "IfcCurtainWall": { "group": "Qto_CurtainWallQuantities", "targets": { "Length": "length", "Width": "width", "Height": "height", "NetSideArea": "sideArea" } },
+    "IfcSlab": { "group": "Qto_SlabBaseQuantities", "targets": { "Length": "length", "Width": "height", "NetArea": "footprint", "NetVolume": "volume" } },
+    "IfcRoof": { "group": "Qto_RoofBaseQuantities", "targets": { "ProjectedArea": "footprint" } },
+    "IfcColumn": { "group": "Qto_ColumnBaseQuantities", "targets": { "Length": "height", "CrossSectionArea": "footprint", "NetSurfaceArea": "outerArea", "NetVolume": "volume" } },
+    "IfcBeam": { "group": "Qto_BeamBaseQuantities", "targets": { "Length": "length", "NetSurfaceArea": "outerArea", "NetVolume": "volume" } },
+    "IfcMember": { "group": "Qto_MemberBaseQuantities", "targets": { "Length": "length", "NetSurfaceArea": "outerArea", "NetVolume": "volume" } },
+    "IfcPlate": { "group": "Qto_PlateBaseQuantities", "targets": { "NetVolume": "volume" } },
+    "IfcFooting": { "group": "Qto_FootingBaseQuantities", "targets": { "Length": "length", "Width": "width", "Height": "height", "NetVolume": "volume" } },
+    "IfcDoor": { "group": "Qto_DoorBaseQuantities", "targets": { "Width": "length", "Height": "height", "Area": "sideArea" } },
+    "IfcWindow": { "group": "Qto_WindowBaseQuantities", "targets": { "Width": "length", "Height": "height", "Area": "sideArea" } },
+    "IfcRailing": { "group": "Qto_RailingBaseQuantities", "targets": { "Length": "length" } },
+    "IfcBuildingElementProxy": { "group": "Qto_BuildingElementProxyQuantities", "targets": { "NetSurfaceArea": "outerArea", "NetVolume": "volume" } }
+  }
+}

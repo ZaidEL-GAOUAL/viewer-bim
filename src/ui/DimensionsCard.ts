@@ -20,7 +20,8 @@ export class DimensionsCard {
   readonly el: HTMLElement;
   private readonly app: App;
   private readonly body: HTMLElement;
-  private readonly cache = new Map<number, ElementMeasure | null>();
+  /** Par élément, sous la clé de sa liste de plages : refaite quand des pièces dérivées sont régénérées (découpage). */
+  private cache = new WeakMap<object, ElementMeasure | null>();
   private table = '';
 
   constructor(app: App) {
@@ -34,7 +35,7 @@ export class DimensionsCard {
       this.body,
     );
     app.on('model', () => {
-      this.cache.clear();
+      this.cache = new WeakMap();
       this.render();
     });
     app.on('selection', () => this.render());
@@ -42,8 +43,10 @@ export class DimensionsCard {
   }
 
   private measure(index: number): ElementMeasure | null {
-    if (!this.cache.has(index)) this.cache.set(index, measureElement(this.app.model!.parts(index)));
-    return this.cache.get(index)!;
+    const model = this.app.model!;
+    const key = model.ranges[index];
+    if (!this.cache.has(key)) this.cache.set(key, measureElement(model.parts(index)));
+    return this.cache.get(key)!;
   }
 
   private render(): void {

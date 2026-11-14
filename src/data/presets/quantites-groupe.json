@@ -1,0 +1,13 @@
+{
+  "name": "Un groupe « Quantités calculées »",
+  "reliability": "Quantités calculées / Fiabilité",
+  "targets": {
+    "Quantités calculées / Longueur (m)": "length",
+    "Quantités calculées / Largeur (m)": "width",
+    "Quantités calculées / Hauteur (m)": "height",
+    "Quantités calculées / Emprise au sol nette (m²)": "footprint",
+    "Quantités calculées / Surface latérale nette (m²)": "sideArea",
+    "Quantités calculées / Surface extérieure nette (m²)": "outerArea",
+    "Quantités calculées / Volume net (m³)": "volume"
+  }
+}

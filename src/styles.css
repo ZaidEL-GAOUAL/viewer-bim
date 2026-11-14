@@ -1468,3 +1468,22 @@ button[aria-pressed='true'] {
 .section-field { width: 84px; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 .section-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .section-status[hidden], .section-handles select[hidden] { display: none; }
+
+/* Métrés : quantités manquantes, propriétés requises, découpage en pièces, zones (cartes ouvertes par le menu « Métrés »). */
+.tool-card { display: flex; flex-direction: column; gap: 6px; min-height: 0; max-height: 100%; overflow: auto; }
+.tool-field { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 6px; }
+.tool-field .field-label { margin: 0; }
+.tool-field input, .tool-row input, .tool-axis input, .tool-text { min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+.tool-text { height: auto; padding: 6px 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; resize: vertical; }
+.tool-row, .tool-axis { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tool-row input { flex: 1; }
+.tool-axis select { flex: 1 1 120px; min-width: 0; }
+.tool-axis input { width: 72px; }
+.tool-check { display: flex; align-items: center; gap: 6px; }
+.tool-checks { display: flex; flex-direction: column; gap: 2px; max-height: 140px; overflow: auto; }
+.quantity-mapping { display: flex; flex-direction: column; gap: 4px; }
+.requirement-rule { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.requirement-results details ul { margin: 4px 0 0; padding-left: 16px; }
+.sketch-shape { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.sketch-svg polyline { fill: none; }
+.tool-card .warning { color: var(--danger); }

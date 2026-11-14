@@ -40,7 +40,7 @@ interface Welded {
   extent: number;
 }
 
-function weld(parts: MeshPart[]): Welded {
+export function weld(parts: MeshPart[]): Welded {
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   let corners = 0;

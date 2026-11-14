@@ -2,7 +2,7 @@
 // écrit à part du fichier source, qui n'est jamais modifié. Voir docs/contrat-metadonnees.md, § 2 bis.
 
 import { fileKind } from '../engine/fileKinds.ts';
-import { IFC_READ_ONLY, PropertyStore, flattenProperties, mergeProperties, type Metadata } from './metadata.ts';
+import { IFC_READ_ONLY, PropertyStore, flattenProperties, mergeProperties, type FlatProps, type Metadata } from './metadata.ts';
 import type { PropertyEdits } from './PropertyEdits.ts';
 import { viewsToJson, type SavedView } from './savedViews.ts';
 import { integer, s } from './text.ts';
@@ -55,14 +55,18 @@ export function userViewsOf(metadata: Metadata | null, overlays: readonly Metada
   return [...byId.values(), ...loose];
 }
 
-/** Les propriétés d'ouverture : les `extras` de chaque élément complétés par le JSON, ou remplacés par un instantané. */
+/** Les propriétés d'ouverture d'un élément : ses `extras` complétés par le JSON, ou remplacés par un instantané. */
+export function openingProps(key: string, extras: Record<string, unknown> | undefined, metadata: Metadata | null): FlatProps | undefined {
+  const entry = metadata?.elements.get(key);
+  return entry && metadata?.propertiesMode === 'replace' ? entry.props : mergeProperties(extras ? flattenProperties(extras) : undefined, entry?.props);
+}
+
+/** Les propriétés d'ouverture de tous les éléments (voir `openingProps`). */
 export function buildStore(keys: readonly string[], extras: readonly (Record<string, unknown> | undefined)[], metadata: Metadata | null): PropertyStore {
   const store = new PropertyStore(keys.length);
   for (let i = 0; i < keys.length; i++) {
-    const entry = metadata?.elements.get(keys[i]);
-    const embedded = extras[i];
-    const props = entry && metadata?.propertiesMode === 'replace' ? entry.props : mergeProperties(embedded ? flattenProperties(embedded) : undefined, entry?.props);
-    if (props) store.set(i, props, entry?.label);
+    const props = openingProps(keys[i], extras[i], metadata);
+    if (props) store.set(i, props, metadata?.elements.get(keys[i])?.label);
   }
   store.finalize();
   // Le fichier dit ce qui est verrouillé ; à défaut, des métadonnées issues d'un IFC (par un convertisseur plus ancien) gardent
@@ -99,9 +103,11 @@ export function orphanNotice(overlay: Metadata, keys: readonly string[]): string
  * Le JSON « Modifications » : ce qui diffère du fichier source `sourceName`, en mode fusion, avec le fichier qu'il complète, et
  * les vues de l'utilisateur (`userViews`) : elles aussi sont des modifications.
  */
-export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string, userViews: readonly SavedView[] = []): Record<string, unknown> {
+export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string, userViews: readonly SavedView[] = [], sections: { splits?: unknown[]; zones?: unknown[] } = {}): Record<string, unknown> {
   const { version, elements } = edits.diff(keys);
   const kind = fileKind(sourceName);
   const source = kind && kind !== 'json' ? { name: sourceName, kind: kind === 'gltf' ? 'glb' : kind } : undefined;
-  return { version, ...(source ? { source } : {}), elements, ...(userViews.length > 0 ? { views: viewsToJson(userViews) } : {}) };
+  // Découpages et zones sont aussi des modifications : écrits en entier, comme les vues de l'utilisateur.
+  const extra = Object.fromEntries(Object.entries(sections).filter(([, list]) => list && list.length > 0));
+  return { version, ...(source ? { source } : {}), elements, ...(userViews.length > 0 ? { views: viewsToJson(userViews) } : {}), ...extra };
 }

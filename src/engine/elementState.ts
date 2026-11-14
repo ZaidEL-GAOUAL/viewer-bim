@@ -16,6 +16,11 @@ export const FLAG_OPEN = 8;
 /** Bits 4 à 6 : priorité d'affichage (0 à 7) quand deux éléments ont des faces confondues. */
 const PRIORITY_SHIFT = 4;
 const PRIORITY_MASK = 7;
+/**
+ * Élément remplacé par ses pièces (découpage, voir data/splits.ts) : jamais dessiné, touché ni coupé, quelle que soit sa
+ * visibilité, tant qu'il a des pièces. Il reste un élément (arbre, propriétés).
+ */
+export const FLAG_REPLACED = 128;
 const SCHEDULE_FADE_MS = 240;
 
 interface SchedulePresentationOptions {
@@ -135,6 +140,19 @@ export class ElementState {
     for (const texture of oldTextures) texture.dispose();
   }
 
+  /** Ramène l'état à `count` éléments (pièces dérivées retirées) : les éléments retirés perdent tout ce qui leur était imposé. */
+  truncate(count: number): void {
+    for (let i = count; i < this.count; i++) {
+      this.setOpacity(i, null);
+      this.data.fill(0, i * 4, i * 4 + 4);
+      this.scheduleData[i] = 0;
+      this.scheduleTexels[i * 2] = 0;
+      this.scheduleTexels[i * 2 + 1] = 255;
+      this.scheduleFades.delete(i);
+    }
+    this.count = Math.min(count, this.count);
+  }
+
   private setFlag(index: number, flag: number, on: boolean): void {
     const at = index * 4 + 3;
     this.data[at] = on ? this.data[at] | flag : this.data[at] & ~flag;
@@ -146,7 +164,15 @@ export class ElementState {
 
   /** La 4D et l'opacité restent indépendantes du masque sauvegardé par l'isolation. */
   isRendered(index: number): boolean {
-    return this.isVisible(index) && this.opacityData[index] !== 0 && this.scheduleData[index] !== 1 && this.scheduleOpacityOf(index) > 0;
+    return this.isVisible(index) && !this.isReplaced(index) && this.opacityData[index] !== 0 && this.scheduleData[index] !== 1 && this.scheduleOpacityOf(index) > 0;
+  }
+
+  isReplaced(index: number): boolean {
+    return (this.data[index * 4 + 3] & FLAG_REPLACED) !== 0;
+  }
+
+  setReplaced(index: number, replaced: boolean): void {
+    this.setFlag(index, FLAG_REPLACED, replaced);
   }
 
   /**
@@ -365,7 +391,7 @@ const HIDE = /* glsl */ `
 // Avance en profondeur propre à l'élément : départage les faces confondues sans scintillement.
 // Un pas vaut la plus petite différence que distingue un tampon de profondeur de 24 bits.
 gl_Position.z -= ( float( ( bimFlags >> ${PRIORITY_SHIFT} ) & ${PRIORITY_MASK} ) * 3.0 + float( bimIndex & 1 ) * 1.5 ) * 1.1920929e-7 * gl_Position.w;
-bool bimHidden = ( bimFlags & ${FLAG_VISIBLE} ) == 0 || vBimOpacity == 0.0 || bimSchedule == 1 || vBimFade == 0.0;
+bool bimHidden = ( bimFlags & ${FLAG_VISIBLE} ) == 0 || ( bimFlags & ${FLAG_REPLACED} ) != 0 || vBimOpacity == 0.0 || bimSchedule == 1 || vBimFade == 0.0;
 #ifdef BIM_SOLID_ONLY
 	bimHidden = bimHidden || ( bimFlags & ${FLAG_OPEN} ) != 0 || ( vBimOpacity >= 0.0 && vBimOpacity < 1.0 ) || vBimFade < 1.0;
 #endif

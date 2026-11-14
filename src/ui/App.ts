@@ -3,6 +3,14 @@ import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { PropertyStore, unflattenProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
 import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice, userViewsOf } from '../data/sidecar.ts';
 import { levelsToJson, type Level } from '../data/levels.ts';
+import { SplitSet, applyTailChange, loadSplits, splitsOf, splitsToJson, type TailChange } from '../data/splits.ts';
+import { zonesOf, zonesToJson, type Zone } from '../data/zones.ts';
+import { Sketch } from '../engine/sketch.ts';
+import { PanelMenu } from './PanelMenu.ts';
+import { QuantitiesPanel } from './QuantitiesPanel.ts';
+import { RequirementsPanel } from './RequirementsPanel.ts';
+import { SplitPanel } from './SplitPanel.ts';
+import { ZonesPanel } from './ZonesPanel.ts';
 import { applyUserView } from './userViews.ts';
 import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
 import { cameraPose, hiddenByView, hiddenInEveryView, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
@@ -47,12 +55,13 @@ import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view' | 'userViews';
+type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view' | 'userViews' | 'zones';
 type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
 /** « section » : le prochain clic sur une surface y pose un plan de coupe. */
-type Tool = 'select' | MeasureTool | 'section';
+/** « sketch » : les clics posent les points d'une esquisse (lignes de coupe, zones), voir engine/sketch.ts. */
+type Tool = 'select' | MeasureTool | 'section' | 'sketch';
 
 /** Fenêtre étroite : les panneaux latéraux s'ouvrent par-dessus la vue 3D (même seuil que styles.css). */
 const NARROW_LAYOUT = '(max-width: 960px)';
@@ -87,10 +96,17 @@ const nextFrame = () =>
     window.setTimeout(resolve, 120);
   });
 
+const NO_LEVELS: readonly Level[] = [];
+
 /** Chef d'orchestre : relie le moteur 3D, les données et les panneaux de l'interface. */
 export class App {
   readonly viewer: Viewer;
   readonly measure: Measure;
+  readonly sketch: Sketch;
+  /** Les découpages du modèle ouvert et leurs pièces (voir data/splits.ts). */
+  splits: SplitSet | null = null;
+  /** Les zones dessinées (section `zones`), exportées dans les deux JSON. */
+  zones: Zone[] = [];
   model: Model | null = null;
   store = new PropertyStore(0);
   metadata: Metadata | null = null;
@@ -187,6 +203,7 @@ export class App {
     const overlayRoot = h('div', { class: 'overlay-root' });
     this.viewer = new Viewer(canvasHost);
     this.measure = new Measure(this.viewer, overlayRoot);
+    this.sketch = new Sketch(this.viewer, overlayRoot, canvasHost);
     this.measure.onNotice = (message) => this.toast(message);
 
     // ------------------------------------------------------------ barre d'outils
@@ -219,7 +236,9 @@ export class App {
     // Sélection, puis le menu qui réunit les mesures (distance, surface, volume, cotes).
     const selectTool = iconButton('select', 'Sélection', () => this.setTool('select'), 'Sélection — cliquer un élément pour afficher ses propriétés');
     this.selectButton = selectTool;
-    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el);
+    const quantitiesPanel = new QuantitiesPanel(this), requirementsPanel = new RequirementsPanel(this), splitPanel = new SplitPanel(this), zonesPanel = new ZonesPanel(this);
+    const metres = new PanelMenu('Métrés', 'Quantités manquantes, propriétés requises, découpage en pièces, zones', [quantitiesPanel, requirementsPanel, splitPanel, zonesPanel]);
+    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el);
 
     const mapToggle = button('Carte', () => {
       void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
@@ -410,7 +429,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -656,7 +675,53 @@ export class App {
 
   /** Les niveaux du modèle (section `levels`), du plus bas au plus haut. */
   get levels(): readonly Level[] {
-    return this.metadata?.levels ?? [];
+    return this.metadata?.levels ?? NO_LEVELS;
+  }
+
+  /** Vrai pendant le mode carte : le globe dessine sa propre copie de la maquette. */
+  get mapOpen(): boolean {
+    return this.mapPanel.isOpen;
+  }
+
+  setZones(zones: Zone[]): void {
+    this.zones = zones;
+    this.syncDownloads();
+    this.emit('zones');
+  }
+
+  /**
+   * Le découpage a refait les pièces (fin de la liste des éléments, voir data/splits.ts) : propriétés, historique, sélection,
+   * masquages et isolement suivent les nouveaux numéros (`change`) ; les panneaux se mettent à jour comme après une
+   * modification de propriétés. Un découpage n'est pas une étape d'« Annuler » : « Retirer le découpage » est son inverse.
+   */
+  changeParts(change: TailChange): void {
+    const model = this.model;
+    if (!model) return;
+    applyTailChange(change, model, this.store, this.propertyEdits, this.metadata);
+    const moved = (indices: Iterable<number>) => [...indices].flatMap((i) => (i < change.next.length && change.next[i] >= 0 ? [change.next[i]] : []));
+    const selection = moved(this.selection), masked = moved(this.masked);
+    this.selection.clear();
+    this.masked.clear();
+    for (const i of selection) {
+      this.selection.add(i);
+      model.state.setSelected(i, true);
+    }
+    for (const i of masked) this.masked.add(i);
+    const remap = (mask: Uint8Array | null, fill = 0): Uint8Array | null => {
+      if (!mask) return null;
+      const out = new Uint8Array(model.count).fill(fill);
+      change.previous.forEach((old, i) => { if (old >= 0 && old < mask.length) out[i] = mask[old]; });
+      return out;
+    };
+    this.isolation = remap(this.isolation, 1);
+    this.viewHidden = remap(this.viewHidden);
+    this.openingHidden = remap(this.openingHidden);
+    this.layerHidden = remap(this.layerHidden);
+    this.keyIndex = null;
+    this.viewer.modelGrown();
+    this.afterPropertyEdit('*');
+    this.emit('selection');
+    this.emit('visibility');
   }
 
   setUserViews(views: SavedView[]): void {
@@ -803,9 +868,10 @@ export class App {
     this.tool = tool;
     this.measure.setTool(isPointMeasure(tool) ? tool : null);
     this.selectButton.setAttribute('aria-pressed', String(tool === 'select'));
-    this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section');
+    if (tool !== 'sketch') this.sketch.stop();
+    this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section' || tool === 'sketch');
     this.measureHint.hidden = tool === 'select';
-    this.measureHint.textContent = tool === 'section' ? SECTION_HINT : MEASURES.find((item) => item.id === tool)?.hint ?? '';
+    this.measureHint.textContent = tool === 'section' ? SECTION_HINT : tool === 'sketch' ? this.sketch.hint : MEASURES.find((item) => item.id === tool)?.hint ?? '';
     this.emit('tool');
   }
 
@@ -1183,6 +1249,8 @@ export class App {
     const views = [...this.savedViews, ...this.userViews];
     if (views.length > 0) out.views = viewsToJson(views);
     if (this.levels.length > 0) out.levels = levelsToJson(this.levels);
+    if (this.splits?.definitions.length) out.splits = splitsToJson(this.splits.definitions);
+    if (this.zones.length > 0) out.zones = zonesToJson(this.zones);
     return JSON.stringify(out);
   }
 
@@ -1208,7 +1276,8 @@ export class App {
       extension = 'json';
     } else if (kind === 'changes') {
       if (!this.propertyEdits) return;
-      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName, this.userViews))], { type: 'application/json' });
+      const sections = { splits: splitsToJson(this.splits?.definitions ?? []), zones: zonesToJson(this.zones) };
+      blob = new Blob([JSON.stringify(modificationsFile(this.propertyEdits, model.keys, conversion?.source ?? this.fileName, this.userViews, sections))], { type: 'application/json' });
       extension = 'modifications.json';
     } else {
       this.busy('Écriture des métadonnées du modèle…');
@@ -1219,9 +1288,12 @@ export class App {
         const labels = new Map(model.keys.flatMap((id, i) => { const label = this.store.labelOf(i); return label ? [[id, label] as const] : []; }));
         const metadata = this.exportMetadata();
         const source = this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
-        const glb = updateGlbMetadata(source ?? writeGlb(model), properties, this.store.readOnly, {
-          nodeKeys: source && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
+        // Avec des pièces, le fichier exporté est le modèle affiché : les pièces à la place de leurs originaux.
+        const parts = this.splits?.hasParts === true;
+        const glb = updateGlbMetadata(source && !parts ? source : writeGlb(model, undefined, { skip: (i) => model.state.isReplaced(i) }), properties, this.store.readOnly, {
+          nodeKeys: source && !parts && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
         });
+        if (parts) this.toast('Le fichier exporté contient les pièces à la place des éléments découpés.');
         if (this.format === 'usd' || kind === 'quicklook') {
           const usdz = await packageUsd(glb, metadata, (message) => this.busy(message));
           blob = new Blob([usdz], { type: 'model/vnd.usdz+zip' }); extension = 'usdz';
@@ -1283,7 +1355,7 @@ export class App {
     const modified = this.propertyEdits?.modifiedCount ?? 0;
     this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
     // Les vues de l'utilisateur sont aussi des modifications : elles s'enregistrent même sans propriété changée.
-    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0;
+    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0;
     this.downloads.hidden = this.model === null;
   }
 
@@ -1409,6 +1481,8 @@ export class App {
     this.phaseEvaluation = null;
     this.activeView = null;
     this.userViews = [];
+    this.splits = null;
+    this.zones = [];
     this.viewHidden = null;
     this.openingHidden = null;
     this.layerHidden = null;
@@ -1472,11 +1546,25 @@ export class App {
       }
     }
 
-    const previous = this.detachModel();
-    this.model = model;
-    this.originalNodeKeys = nodeKeys;
     // La base (le JSON complet qui correspond le mieux) et les JSON de modifications à appliquer par-dessus.
     const { metadata, overlays } = chooseMetadata(own, dropped, model.keys);
+    // Les pièces des découpages enregistrés d'abord : leurs propriétés se lisent ensuite comme celles de tout élément.
+    const splits = new SplitSet(model, this.viewer.selectColor);
+    const definitions = splitsOf(metadata, overlays);
+    let splitNotes: string[] = [];
+    if (definitions.length > 0) {
+      try {
+        splitNotes = await loadSplits(splits, definitions, metadata, metadata?.levels ?? [], (progress) => this.busy(`Découpage des éléments… ${Math.round(progress * 100)} %`));
+      } catch (error) {
+        splitNotes = [`Découpages non appliqués : ${error instanceof Error ? error.message : String(error)}`];
+      }
+      if (ticket !== this.loadTicket) return false;
+    }
+    const previous = this.detachModel();
+    this.model = model;
+    this.splits = splits;
+    this.zones = zonesOf(metadata, overlays);
+    this.originalNodeKeys = nodeKeys;
     this.metadata = metadata;
     this.userViews = userViewsOf(metadata, overlays);
     this.georeference = metadata?.georeference ?? null;
@@ -1498,7 +1586,7 @@ export class App {
     }
     this.emit('selection');
     this.emit('visibility');
-    this.reportMatching(orphans);
+    this.reportMatching([...orphans, ...splitNotes]);
     return true;
   }
 
@@ -1651,7 +1739,7 @@ export class App {
     });
     canvas.addEventListener('pointerleave', () => this.measure.leave());
     canvas.addEventListener('dblclick', (event) => {
-      if (!onCanvas(event) || isPointMeasure(this.tool) || this.viewer.handlesBusy) return;
+      if (!onCanvas(event) || isPointMeasure(this.tool) || this.tool === 'sketch' || this.viewer.handlesBusy) return;
       const hit = this.viewer.pick(event.clientX, event.clientY);
       if (hit) this.fitTo([hit.element]);
     });
@@ -1660,7 +1748,9 @@ export class App {
 
   private handleClick(event: PointerEvent): void {
     if (!this.model || this.viewer.handlesBusy) return;
-    if (this.tool === 'section') {
+    if (this.tool === 'sketch') {
+      this.sketch.click(event.clientX, event.clientY, event.shiftKey);
+    } else if (this.tool === 'section') {
       this.placeSection(event);
     } else if (!isPointMeasure(this.tool)) {
       // Sélection, et outil Cotes : un clic choisit l'élément, Ctrl/Cmd/Maj l'ajoute.

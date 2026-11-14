@@ -135,6 +135,11 @@ export class Model {
   readonly names: string[];
   /** `extras` du nœud glTF (hors identifiant), utilisés si aucun JSON n'est fourni. */
   readonly extras: (Record<string, unknown> | undefined)[];
+  /**
+   * Pour une pièce dérivée (découpage, voir data/splits.ts), le numéro de l'élément d'origine ; −1 pour un élément du
+   * fichier. Les pièces sont toujours à la fin de la liste : `truncate` les retire sans toucher aux éléments du fichier.
+   */
+  readonly parents: number[] = [];
   /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. Réalloué par `grow` : à relire, jamais à garder. */
   boxes: Float32Array;
   readonly ranges: ElementRange[][];
@@ -189,6 +194,7 @@ export class Model {
     if (part.boxes.length !== (this.keys.length + part.keys.length) * 6) throw new Error('Morceau incohérent : il manque des boîtes d’éléments.');
     // Pas de `push(...tableau)` : des dizaines de milliers d'éléments dépasseraient la pile d'appels.
     for (const key of part.keys) this.keys.push(key);
+    for (let i = 0; i < part.keys.length; i++) this.parents.push(-1);
     for (const name of part.names) this.names.push(name);
     for (const extra of part.extras) this.extras.push(extra);
     for (const chunk of part.chunks) {
@@ -202,6 +208,35 @@ export class Model {
     this.triangleCount += part.triangleCount;
     // Les doubles translucides, s'ils ont commencé, couvrent aussi les nouveaux lots.
     if (this.doubling) this.addAppearanceMeshes();
+  }
+
+  /**
+   * Retire les éléments à partir de `count` et les lots à partir de `chunkCount` : les pièces dérivées, toujours en fin de
+   * liste et dans leurs propres lots (`ModelBuilder` les cuit à part). Les éléments du fichier ne sont jamais retirés.
+   */
+  truncate(count: number, chunkCount: number): void {
+    if (this.parents.slice(count).includes(-1)) throw new Error('Seules les pièces dérivées peuvent être retirées du modèle.');
+    for (const range of this.ranges.slice(count).flat()) if (range.chunk < chunkCount) throw new Error('Pièces et lots du modèle ne correspondent pas.');
+    const removed = this.chunks.splice(chunkCount);
+    const geometries = new Set(removed.map((chunk) => chunk.mesh.geometry));
+    for (const chunk of removed) {
+      this.triangleCount -= chunk.index.length / 3;
+      chunk.mesh.removeFromParent();
+      chunk.mesh.geometry.dispose();
+    }
+    for (let i = this.appearanceMeshes.length - 1; i >= 0; i--) {
+      const mesh = this.appearanceMeshes[i];
+      if (!geometries.has(mesh.geometry)) continue;
+      mesh.removeFromParent();
+      (mesh.material as Material).dispose();
+      this.materials.splice(this.materials.indexOf(mesh.material as Material), 1);
+      this.appearanceMeshes.splice(i, 1);
+    }
+    this.doubled = Math.min(this.doubled, this.chunks.length);
+    this.keys.length = this.names.length = this.extras.length = this.parents.length = this.ranges.length = count;
+    this.boxes = this.boxes.slice(0, count * 6);
+    this.state.truncate(count);
+    this.count = count;
   }
 
   /**

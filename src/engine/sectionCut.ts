@@ -390,7 +390,19 @@ const signedArea = (loop: Float32Array): number => {
  * ne sont pas remplies.
  */
 export function fillTriangles(loops: readonly CutLoop[]): Float32Array {
-  const closed = loops.filter((loop) => loop.closed && loop.points.length >= 6).sort((a, b) => Math.abs(signedArea(b.points)) - Math.abs(signedArea(a.points)));
+  const points = loops.flatMap((loop) => Array.from(loop.points));
+  return Float32Array.from(fillFaces(loops).flatMap((k) => [points[2 * k], points[2 * k + 1]]));
+}
+
+/**
+ * Comme `fillTriangles`, en indices de points (trois par triangle) : le point `k` de la boucle `i` a l'indice
+ * `k + (nombre de points des boucles d'avant i)`. Sert au bouchage des pièces découpées (splitMesh), qui garde ses sommets.
+ */
+export function fillFaces(loops: readonly CutLoop[]): number[] {
+  let total = 0;
+  const offsets = loops.map((loop) => (total += loop.points.length / 2) - loop.points.length / 2);
+  const closed = loops.map((loop, at) => ({ points: loop.points, at })).filter((_, i) => loops[i].closed && loops[i].points.length >= 6)
+    .sort((a, b) => Math.abs(signedArea(b.points)) - Math.abs(signedArea(a.points)));
   // Profondeur d'imbrication et boucle englobante la plus proche (les plus grandes viennent d'abord).
   const depth = closed.map(() => 0), parent = closed.map(() => -1);
   closed.forEach((loop, i) => {
@@ -406,9 +418,12 @@ export function fillTriangles(loops: readonly CutLoop[]): Float32Array {
   closed.forEach((loop, i) => {
     if (depth[i] % 2 === 1) return;
     const contour = toVectors(loop.points);
-    const holes = closed.flatMap((hole, j) => (parent[j] === i && depth[j] % 2 === 1 ? [toVectors(hole.points)] : []));
-    const all = [...contour, ...holes.flat()];
-    for (const face of ShapeUtils.triangulateShape(contour, holes)) for (const k of face) out.push(all[k].x, all[k].y);
+    const rings = closed.filter((_, j) => parent[j] === i && depth[j] % 2 === 1);
+    const holes = rings.map((hole) => toVectors(hole.points));
+    const faces = ShapeUtils.triangulateShape(contour, holes);
+    // Les indices sont lus après la triangulation : elle retire un dernier point égal au premier.
+    const ids = [contour, ...holes].flatMap((ring, r) => ring.map((_, k) => offsets[r === 0 ? loop.at : rings[r - 1].at] + k));
+    for (const face of faces) for (const k of face) out.push(ids[k]);
   });
-  return Float32Array.from(out);
+  return out;
 }

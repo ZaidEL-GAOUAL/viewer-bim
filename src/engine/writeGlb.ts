@@ -17,6 +17,8 @@ interface Primitive {
 interface GlbExportOptions {
   /** Propriétés actuelles par identifiant stable, en remplacement des extras du fichier source. */
   properties?: ReadonlyMap<string, Record<string, unknown>> | Record<string, Record<string, unknown>>;
+  /** Éléments à ne pas écrire (les originaux remplacés par leurs pièces). */
+  skip?: (element: number) => boolean;
 }
 
 export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExportOptions = {}): ArrayBuffer {
@@ -46,6 +48,7 @@ export function writeGlb(model: Model, generator = 'viewer-bim', options: GlbExp
   const translation = [model.offset.x, model.offset.y, model.offset.z];
 
   for (let element = 0; element < model.count; element++) {
+    if (options.skip?.(element)) continue;
     const primitives: Primitive[] = [];
     for (const range of model.ranges[element]) {
       if (range.count === 0) continue;
