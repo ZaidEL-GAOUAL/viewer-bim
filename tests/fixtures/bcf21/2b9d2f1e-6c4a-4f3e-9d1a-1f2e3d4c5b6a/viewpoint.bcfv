@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualizationInfo Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="visinfo.xsd">
+  <Components>
+    <ViewSetupHints SpacesVisible="false" SpaceBoundariesVisible="false" OpeningsVisible="false"/>
+    <Selection>
+      <Component IfcGuid="2O2Fr$t4X7Zf8NOew3FLOH">
+        <OriginatingSystem>Revit</OriginatingSystem>
+        <AuthoringToolId>318215</AuthoringToolId>
+      </Component>
+      <Component>
+        <AuthoringToolId>318216</AuthoringToolId>
+      </Component>
+    </Selection>
+    <Visibility DefaultVisibility="true"/>
+  </Components>
+  <PerspectiveCamera>
+    <CameraViewPoint><X>10</X><Y>-5</Y><Z>1.6</Z></CameraViewPoint>
+    <CameraDirection><X>0</X><Y>1</Y><Z>0</Z></CameraDirection>
+    <CameraUpVector><X>0</X><Y>0</Y><Z>1</Z></CameraUpVector>
+    <FieldOfView>60</FieldOfView>
+  </PerspectiveCamera>
+  <ClippingPlanes>
+    <ClippingPlane>
+      <Location><X>0</X><Y>0</Y><Z>3</Z></Location>
+      <Direction><X>0</X><Y>0</Y><Z>1</Z></Direction>
+    </ClippingPlane>
+  </ClippingPlanes>
+</VisualizationInfo>

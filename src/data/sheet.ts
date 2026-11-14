@@ -168,3 +168,53 @@ export function titleBlockCells(sheet: Sheet): TitleBlockCells {
     bar, north,
   };
 }
+
+// ------------------------------------------------------------------ rapports (pages qui se suivent)
+
+/**
+ * Des blocs posés les uns sous les autres dans la zone `top`..`bottom` (mm) de pages successives, séparés de `gap` : un bloc
+ * qui ne tient plus passe en haut de la page suivante, et un bloc `keepWithNext` (un titre) part avec le suivant. Un bloc
+ * plus haut que la zone a une page à lui.
+ */
+export function flowLayout(blocks: readonly { height: number; keepWithNext?: boolean }[], area: { top: number; bottom: number }, gap = 0): { page: number; y: number }[] {
+  let page = 0, y = area.top;
+  return blocks.map((block, i) => {
+    const needed = block.height + (block.keepWithNext && blocks[i + 1] ? gap + blocks[i + 1].height : 0);
+    if (y > area.top && y + needed > area.bottom) {
+      page++;
+      y = area.top;
+    }
+    const at = { page, y };
+    y += block.height + gap;
+    return at;
+  });
+}
+
+/** Le texte coupé en lignes de `width` mm à `size` points (Helvetica : environ 0,5 em par lettre), au plus `maxLines`. */
+export function wrapText(text: string, width: number, size: number, maxLines = Infinity): string[] {
+  const room = Math.max(1, Math.floor(width / (size * 0.1764)));
+  const lines: string[] = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    let line = '';
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (candidate.length <= room) {
+        line = candidate;
+        continue;
+      }
+      if (line) lines.push(line);
+      let rest = word;
+      while (rest.length > room) {
+        lines.push(rest.slice(0, room));
+        rest = rest.slice(room);
+      }
+      line = rest;
+    }
+    if (line) lines.push(line);
+  }
+  if (lines.length <= maxLines) return lines;
+  const kept = lines.slice(0, maxLines);
+  const last = kept[maxLines - 1];
+  kept[maxLines - 1] = `${last.length + 3 > room ? last.slice(0, Math.max(0, room - 3)) : last}...`;
+  return kept;
+}

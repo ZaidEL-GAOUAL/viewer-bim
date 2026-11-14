@@ -6,11 +6,13 @@ import { levelsToJson, type Level } from '../data/levels.ts';
 import { SplitSet, applyTailChange, loadSplits, splitRefusalsOf, splitsOf, splitsToJson, type TailChange } from '../data/splits.ts';
 import { zonesOf, zonesToJson, type Zone } from '../data/zones.ts';
 import { clashesToJson, type ClashRecord, type ClashTest } from '../data/clashes.ts';
+import { emptyBook, mergeBooks, observationsToJson, type ObservationBook } from '../data/observations.ts';
 import { documentsBySource } from '../data/federation.ts';
 import type { ElementAppearance } from '../data/appearanceRules.ts';
 import { ClashPanel } from './ClashPanel.ts';
 import { ComparePanel } from './ComparePanel.ts';
 import { ModelsPanel } from './ModelsPanel.ts';
+import { ObservationsPanel } from './ObservationsPanel.ts';
 import { Sketch } from '../engine/sketch.ts';
 import { PanelMenu } from './PanelMenu.ts';
 import { QuantitiesPanel } from './QuantitiesPanel.ts';
@@ -62,17 +64,19 @@ import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
 
 /** Viewer state and local metadata events. */
-type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view' | 'userViews' | 'zones';
+type AppEvent = 'model' | 'selection' | 'visibility' | 'tool' | 'metadata' | 'history' | 'appearance' | 'grouping' | 'georeference' | 'phase' | 'view' | 'userViews' | 'zones' | 'observations' | 'map';
 type SelectionSource = 'view' | 'panel';
 /** Outils du menu « Mesures » : les mesures par clics, et les cotes de la sélection. */
 export type MeasureTool = MeasureKind | 'dimensions';
 /** « section » : le prochain clic sur une surface y pose un plan de coupe. */
 /** « sketch » : les clics posent les points d'une esquisse (lignes de coupe, zones), voir engine/sketch.ts. */
-type Tool = 'select' | MeasureTool | 'section' | 'sketch';
+/** « pin » : le prochain clic pose une observation (voir ObservationsPanel). */
+type Tool = 'select' | MeasureTool | 'section' | 'sketch' | 'pin';
 
 /** Fenêtre étroite : les panneaux latéraux s'ouvrent par-dessus la vue 3D (même seuil que styles.css). */
 const NARROW_LAYOUT = '(max-width: 960px)';
 const SECTION_HINT = 'Cliquez une surface : un plan de coupe s’y pose, orienté comme elle, et retire ce qui est devant. Échap annule.';
+const PIN_HINT = 'Cliquez sur la maquette, ou sur le plan ouvert : une observation s’y pose, avec la vue du moment. Échap annule.';
 /** Format des fichiers 3D produits par la conversion d'un IFC, et viewer associé. */
 type ModelFormat = 'glb' | 'usd';
 
@@ -116,6 +120,12 @@ export class App {
   zones: Zone[] = [];
   /** Le test de conflits et les conflits trouvés (sections `clashTests` et `clashes`), exportés dans les deux JSON. */
   clashes: { tests: ClashTest[]; records: ClashRecord[] } = { tests: [], records: [] };
+  /** Les observations du suivi de chantier (section `observations`, exportée dans les deux JSON ; photos en mémoire, et dans le .bcf). */
+  observations: ObservationBook = emptyBook();
+  /** Des observations ont changé depuis le dernier .bcf exporté : leurs photos ne sont que dans la page. */
+  observationsUnsaved = false;
+  /** Un clic dans la vue, avant l'outil : vrai s'il est pris (repère d'observation, outil « pin »). */
+  viewClick: ((event: PointerEvent) => boolean) | null = null;
   /** Change à chaque renumérotation des éléments (pièces, maquette ajoutée ou retirée) : un résultat calculé avant est périmé. */
   revision = 0;
   /** États passagers (comparaison) : couleur et opacité par élément, par-dessus les règles ; ni propriété ni export. */
@@ -253,7 +263,9 @@ export class App {
     const metres = new PanelMenu('Métrés', 'Quantités manquantes, propriétés requises, découpage en pièces, zones', [quantitiesPanel, requirementsPanel, splitPanel, zonesPanel]);
     const modelsPanel = new ModelsPanel(this), comparePanel = new ComparePanel(this), clashPanel = new ClashPanel(this);
     const checks = new PanelMenu('Contrôles', 'Plusieurs maquettes, comparaison de versions, conflits', [modelsPanel, comparePanel, clashPanel]);
-    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el);
+    const observationsPanel = new ObservationsPanel(this);
+    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport', [observationsPanel]);
+    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el, site.el);
 
     const mapToggle = button('Carte', () => {
       void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
@@ -321,7 +333,7 @@ export class App {
     );
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
     window.addEventListener('beforeunload', (event) => {
-      if (this.propertyEdits?.changed) event.preventDefault();
+      if (this.propertyEdits?.changed || this.observationsUnsaved) event.preventDefault();
     });
 
     // Format d'export : GLB (glTF) ou USD. Le viewer lit les deux ; un IFC est converti dans
@@ -432,6 +444,7 @@ export class App {
       if (this.mapPanel.isOpen && this.twoD) this.setTwoD(false);
       this.twoDButton.disabled = this.mapPanel.isOpen;
       mapToggle.setAttribute('aria-pressed', String(this.mapPanel.isOpen));
+      this.emit('map');
     };
 
     // Après la conversion d'un IFC ou la lecture d'un .rvt : rappel du résultat et téléchargement des deux fichiers.
@@ -448,7 +461,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, ...exports.cards, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, observationsPanel.el, ...exports.cards, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
@@ -685,6 +698,13 @@ export class App {
     this.clashes = clashes;
     this.syncDownloads();
   }
+  /** `changed` faux : rien de neuf à enregistrer (un .bcf vient d'être lu). */
+  setObservations(book: ObservationBook, changed = true): void {
+    this.observations = book;
+    if (changed) this.observationsUnsaved = true;
+    this.syncDownloads();
+    this.emit('observations');
+  }
   /** Le fichier ouvert tel que l'utilisateur l'a choisi (l'IFC, pas le GLB de sa conversion). */
   get sourceName(): string {
     return this.conversion?.source ?? this.fileName;
@@ -910,9 +930,9 @@ export class App {
     this.measure.setTool(isPointMeasure(tool) ? tool : null);
     this.selectButton.setAttribute('aria-pressed', String(tool === 'select'));
     if (tool !== 'sketch') this.sketch.stop();
-    this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section' || tool === 'sketch');
+    this.viewport.classList.toggle('measuring', isPointMeasure(tool) || tool === 'section' || tool === 'sketch' || tool === 'pin');
     this.measureHint.hidden = tool === 'select';
-    this.measureHint.textContent = tool === 'section' ? SECTION_HINT : tool === 'sketch' ? this.sketch.hint : MEASURES.find((item) => item.id === tool)?.hint ?? '';
+    this.measureHint.textContent = tool === 'section' ? SECTION_HINT : tool === 'sketch' ? this.sketch.hint : tool === 'pin' ? PIN_HINT : MEASURES.find((item) => item.id === tool)?.hint ?? '';
     this.emit('tool');
   }
 
@@ -1096,9 +1116,15 @@ export class App {
             this.setUserViews([...this.userViews.filter((view) => view.id === undefined || !ids.has(view.id)), ...views]);
             notices.push({ text: `${plural(views.length, 'vue')} ajoutée${s(views.length)} à « Mes vues ».`, error: false });
           }
+          // Ses observations rejoignent celles de la session (par GUID) ; leurs photos viennent du .bcf.
+          if (metadata.observations) {
+            const { book, added, updated } = mergeBooks(this.observations, metadata.observations);
+            this.setObservations(book);
+            notices.push({ text: `Observations : ${plural(added, 'ajoutée', 'ajoutées')}, ${plural(updated, 'mise à jour', 'mises à jour')}.`, error: false });
+          }
           if (countMatches(metadata, this.model.keys) === 0) {
             // Un JSON qui ne correspond à aucun élément ne remplace pas les métadonnées en place.
-            if (views.length === 0) notices.push({ text: NO_MATCH, error: true });
+            if (views.length === 0 && !metadata.observations) notices.push({ text: NO_MATCH, error: true });
           } else {
             this.propertyEdits?.import(metadata, this.model.keys);
             const orphans = metadata.propertiesMode === 'replace' ? '' : orphanNotice(metadata, this.model.keys);
@@ -1293,6 +1319,8 @@ export class App {
     if (this.splits?.definitions.length) out.splits = splitsToJson(this.splits.definitions);
     if (this.zones.length > 0) out.zones = zonesToJson(this.zones);
     Object.assign(out, clashesToJson(this.clashes.tests, this.clashes.records));
+    const observations = observationsToJson(this.observations);
+    if (observations) out.observations = observations;
     return JSON.stringify(out);
   }
 
@@ -1315,7 +1343,7 @@ export class App {
     let extension: string;
     if (kind === 'json' || kind === 'changes') {
       if (kind === 'changes' && !this.propertyEdits) return;
-      const sections = { splits: splitsToJson(this.splits?.definitions ?? []), zones: zonesToJson(this.zones), ...clashesToJson(this.clashes.tests, this.clashes.records) };
+      const sections = { splits: splitsToJson(this.splits?.definitions ?? []), zones: zonesToJson(this.zones), ...clashesToJson(this.clashes.tests, this.clashes.records), observations: observationsToJson(this.observations) };
       const text = kind === 'json' ? this.exportMetadata() : JSON.stringify(modificationsFile(this.propertyEdits!, model.keys, this.sourceName, this.userViews, sections));
       extension = kind === 'json' ? 'json' : 'modifications.json';
       if (model.sources.length > 1) {
@@ -1405,7 +1433,7 @@ export class App {
     const modified = this.propertyEdits?.modifiedCount ?? 0;
     this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
     // Les vues de l'utilisateur sont aussi des modifications : elles s'enregistrent même sans propriété changée.
-    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0 && this.clashes.records.length === 0;
+    this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0 && this.clashes.records.length === 0 && this.observations.topics.length === 0;
     this.downloads.hidden = this.model === null;
   }
 
@@ -1430,7 +1458,8 @@ export class App {
     this.refreshAppearance(); this.emit('metadata'); this.emit('history');
   }
   private confirmReplace(): boolean {
-    return !this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?');
+    return (!this.propertyEdits?.changed || window.confirm('Des propriétés ont été modifiées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?'))
+      && (!this.observationsUnsaved || window.confirm('Des observations n’ont pas été exportées en .bcf : leurs photos ne sont que dans cette page. Remplacer le modèle ?'));
   }
 
   async loadSample(name: string): Promise<void> {
@@ -1534,6 +1563,8 @@ export class App {
     this.splits = null;
     this.zones = [];
     this.clashes = { tests: [], records: [] };
+    this.observations = emptyBook();
+    this.observationsUnsaved = false;
     this.transient = null;
     this.revision++;
     this.viewHidden = null;
@@ -1619,6 +1650,7 @@ export class App {
     this.zones = zonesOf(metadata, overlays);
     const withClashes = [metadata, ...overlays].reverse().find((item) => item?.clashTests || item?.clashes);
     this.clashes = { tests: withClashes?.clashTests ?? [], records: withClashes?.clashes ?? [] };
+    this.observations = [metadata, ...overlays].reverse().find((item) => item?.observations)?.observations ?? emptyBook();
     this.originalNodeKeys = nodeKeys;
     this.metadata = metadata;
     this.userViews = userViewsOf(metadata, overlays);
@@ -1802,7 +1834,7 @@ export class App {
   }
 
   private handleClick(event: PointerEvent): void {
-    if (!this.model || this.viewer.handlesBusy) return;
+    if (!this.model || this.viewer.handlesBusy || this.viewClick?.(event)) return;
     if (this.tool === 'sketch') {
       this.sketch.click(event.clientX, event.clientY, event.shiftKey);
     } else if (this.tool === 'section') {

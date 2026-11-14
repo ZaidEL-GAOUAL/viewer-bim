@@ -71,7 +71,7 @@ dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/s
 | `context.fetchedAt` | non | Date de la lecture (ISO 8601) ; `null` : rien n'a été lu. |
 | `proposals[]` | non | Propositions (au moins une après lecture) : `id`, `name`, `volumes[]`. |
 | `volumes[]` | — | `id`, `name`, `footprint` (≥ 3 points ; un volume illisible est écarté), `baseLevel` (m, repère local ; 0), `floors` (entier ≥ 1 ; 1), `floorHeight` (m ; 3), `use` (identifiant d'usage ; le premier de la liste), `floorUses` (facultatif : usage par niveau depuis le rez-de-chaussée, une case vide reprend `use`). |
-| `settings.uses[]` | non | Liste d'usages modifiable : `id`, `name`, `color` (`#rrggbb`), `housing` (compte pour les logements). Par défaut : logement, bureaux, commerce, stationnement, autre. |
+| `settings.uses[]` | non | Liste d'usages modifiable : `id`, `name`, `color` (`#RRGGBB` ; toute autre valeur est remplacée par la couleur par défaut), `housing` (compte pour les logements). Par défaut : logement, bureaux, commerce, stationnement, autre. |
 | `settings.dwellingSize` | non | Surface moyenne d'un logement (m², 65 par défaut). |
 | `settings.efficiency` | non | Part de la surface de plancher habitable (0 à 1, 0,8 par défaut). |
 | `settings.units` | non | `m2` (défaut) ou `ft2` pour l'affichage des surfaces ; le fichier reste en mètres. |

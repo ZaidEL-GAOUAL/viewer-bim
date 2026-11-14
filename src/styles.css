@@ -1513,3 +1513,17 @@ button[aria-pressed='true'] {
 .print-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .print-frame { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.28); box-sizing: border-box; }
 .print-frame[hidden] { display: none; }
+
+/* Chantier : observations (carte ouverte par le menu « Chantier »). */
+.observations-card .tool-row select, .observations-card .tool-field select { flex: 1 1 110px; min-width: 0; height: 28px; }
+.observation-list { display: flex; flex-direction: column; max-height: 34vh; overflow: auto; border-top: 1px solid var(--border); }
+.observation-list .dimensions-row[aria-current='true'] { background: var(--panel-alt); }
+.observation-editor { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.observation-editor[hidden] { display: none; }
+.observation-editor > input { min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); font-weight: 600; }
+.observation-editor .tool-text { font-family: inherit; font-size: 12px; }
+.observation-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+.observation-photo { display: inline-flex; align-items: flex-start; gap: 2px; }
+.observation-image { width: 96px; height: 72px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; cursor: zoom-in; }
+.observation-comments { display: flex; flex-direction: column; gap: 4px; max-height: 160px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.observation-comments li { display: flex; flex-direction: column; overflow-wrap: anywhere; }

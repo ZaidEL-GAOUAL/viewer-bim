@@ -68,3 +68,10 @@ test('une étude neuve a une proposition, la liste d’usages par défaut et auc
   assert.deepEqual(study.context.buildings, []);
   assert.equal(study.context.terrain, null);
 });
+
+test('une couleur d’usage n’est gardée que si elle est #RRGGBB', () => {
+  const read = (color: unknown) => parseStudy({ ...JSON.parse(studyToJson(newStudy())), settings: { uses: [{ id: 'a', name: 'A', ...(color === undefined ? {} : { color }) }] } }).settings.uses[0].color;
+  assert.equal(read('red;background-image:url(https://example.invalid/x)'), '#9b7fd1');
+  assert.equal(read('#12abEF'), '#12abEF');
+  assert.equal(read(undefined), '#9b7fd1');
+});

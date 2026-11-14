@@ -1,13 +1,17 @@
 import { Box3 } from 'three';
 import { CLASH_STATUSES, STATUS_LABELS, conditionsText, mergeClashes, pairKey, parseConditions, type ClashRecord, type ClashSet, type ClashStatus, type ClashTest, type ElementRef } from '../data/clashes.ts';
 import { matchesCondition, valueAt, type RuleCondition } from '../data/conditions.ts';
-import { sourceIndexOf, sourceKey } from '../data/federation.ts';
+import { sourceIndexOf } from '../data/federation.ts';
+import { writeBcf } from '../data/bcf.ts';
+import { addObservations, observationFromClash, toBcfTopic } from '../data/observations.ts';
 import { toModelPoint } from '../data/modelFrame.ts';
 import { integer, plural } from '../data/text.ts';
 import { boxAround } from '../engine/Sections.ts';
 import { runSliced } from '../engine/sliced.ts';
 import type { App } from './App.ts';
-import { button, clear, h } from './dom.ts';
+import { button, clear, download, h } from './dom.ts';
+import { elementRef } from './elementRefs.ts';
+import { authorName } from './ObservationsPanel.ts';
 
 /** Conflits montrés par groupe ; les JSON les gardent tous. */
 const MAX_ROWS = 200;
@@ -159,9 +163,28 @@ export class ClashPanel {
   }
 
   private refOf(element: number): ElementRef {
-    const model = this.app.model!;
-    const source = model.sources[sourceIndexOf(model, element)];
-    return { key: sourceKey(model.keys[element], source), model: source?.name ?? this.app.sourceName };
+    return elementRef(this.app, element);
+  }
+
+  /** Les conflits non résolus et non ignorés deviennent des observations (une seule fois chacun), ou un fichier BCF (tous). */
+  private bridge(kind: 'observations' | 'bcf'): void {
+    const { app } = this;
+    const index = this.refIndex();
+    const label = (ref: ElementRef) => {
+      const element = index.get(`${ref.model ?? app.sourceName}\u0000${ref.key}`);
+      return element === undefined ? ref.key : app.elementLabel(element) || ref.key;
+    };
+    const author = authorName() || 'Viewer BIM', now = new Date();
+    if (kind === 'observations') {
+      const records = app.clashes.records.filter((record) => record.status === 'new' || record.status === 'active');
+      const { book, added } = addObservations(app.observations, records.map((record) => observationFromClash(record, label, author, now, app.observations.lists)));
+      app.setObservations(book);
+      app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : menu « Chantier », carte « Observations ».` : 'Ces conflits ont déjà leurs observations.');
+      return;
+    }
+    // Le statut et le commentaire du conflit sont ceux de son sujet BCF.
+    const topics = app.clashes.records.map((record) => toBcfTopic({ ...observationFromClash(record, label, author, now, app.observations.lists), status: STATUS_LABELS[record.status] }));
+    void writeBcf(topics).then((blob) => download(blob, 'conflits.bcf'), (error: unknown) => app.toast(`Export BCF impossible : ${error instanceof Error ? error.message : String(error)}`, true));
   }
 
   /** Numéro de chaque élément de la session par sa maquette et sa clé. */
@@ -283,7 +306,10 @@ export class ClashPanel {
       else groups.set(label, [{ record, x, y }]);
     }
     const counts = CLASH_STATUSES.map((status) => [status, records.filter((record) => record.status === status).length] as const).filter(([, n]) => n > 0);
-    this.results.append(h('p', { class: 'dimensions-title', text: counts.map(([status, n]) => `${STATUS_LABELS[status]} : ${integer.format(n)}`).join(' · ') }));
+    this.results.append(h('p', { class: 'dimensions-title', text: counts.map(([status, n]) => `${STATUS_LABELS[status]} : ${integer.format(n)}`).join(' · ') }),
+      h('div', { class: 'tool-row' },
+        button('Créer des observations', () => this.bridge('observations'), { title: 'Une observation par conflit nouveau ou actif, avec ses deux éléments et une vue qui le regarde (suivi de chantier)' }),
+        button('Exporter en BCF', () => this.bridge('bcf'), { title: 'Tous les conflits en BCF 3.0, pour les autres outils de coordination' })));
     if (elsewhere > 0) this.results.append(h('p', { class: 'hint', text: `${plural(elsewhere, 'conflit enregistré')} entre des maquettes qui ne sont pas toutes ouvertes : gardé${elsewhere > 1 ? 's' : ''} tel${elsewhere > 1 ? 's' : ''} quel${elsewhere > 1 ? 's' : ''}.` }));
     const order = (p: { record: ClashRecord }, q: { record: ClashRecord }) => (this.deepestFirst ? q.record.depth - p.record.depth : p.record.depth - q.record.depth);
     for (const [label, list] of [...groups].sort((p, q) => q[1].length - p[1].length)) {

@@ -166,6 +166,11 @@ function parseTerrain(raw: unknown): TerrainGrid | null {
   return { ...raw, west, south, step, columns: columns as number, rows: rows as number, heights: [...heights] };
 }
 
+/** Couleur « #RRGGBB » seulement ; tout le reste (CSS injecté, noms, rgb()…) est remplacé par `fallback`. */
+export function safeColor(value: unknown, fallback: string): string {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
 /** Lit une étude ; lève une erreur en français si ce n'est pas une étude lisible. */
 export function parseStudy(raw: unknown): Study {
   if (!isRecord(raw) || raw.format !== STUDY_FORMAT) throw new Error('Ce fichier n’est pas une étude de site.');
@@ -174,7 +179,7 @@ export function parseStudy(raw: unknown): Study {
 
   const rawSettings = isRecord(raw.settings) ? raw.settings : {};
   const uses = records(rawSettings.uses).flatMap((use): Use[] => (typeof use.id === 'string' && use.id
-    ? [{ ...use, id: use.id, name: text(use.name, use.id), color: text(use.color, '#9b7fd1'), housing: use.housing === true }]
+    ? [{ ...use, id: use.id, name: text(use.name, use.id), color: safeColor(use.color, '#9b7fd1'), housing: use.housing === true }]
     : []));
   const settings: StudySettings = {
     ...rawSettings,

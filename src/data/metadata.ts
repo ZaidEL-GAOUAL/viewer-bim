@@ -8,6 +8,7 @@ import { parseLevels, type Level } from './levels.ts';
 import { parseSplits, type SplitDefinition } from './splits.ts';
 import { parseZones, type Zone } from './zones.ts';
 import { parseClashes, parseClashTests, type ClashRecord, type ClashTest } from './clashes.ts';
+import { parseObservations, type ObservationBook } from './observations.ts';
 import { numericValue, plainNumber } from './conditions.ts';
 import { isRecord } from './json.ts';
 import { decimal, fold } from './text.ts';
@@ -48,6 +49,8 @@ export interface Metadata {
   /** Tests de conflits et conflits trouvés, statuts et commentaires compris (voir data/clashes.ts). */
   clashTests?: ClashTest[];
   clashes?: ClashRecord[];
+  /** Suivi de chantier : réglages, listes et observations, sans photos (voir data/observations.ts). */
+  observations?: ObservationBook;
 }
 
 /**
@@ -188,11 +191,13 @@ export function parseMetadata(json: unknown): Metadata {
   const zones = parseZones(json.zones);
   const clashTests = parseClashTests(json.clashTests);
   const clashes = parseClashes(json.clashes);
-  if (elements.size === 0 && (json.elements === undefined || views.length + splits.length + zones.length + splitRefusals.length + clashTests.length + clashes.length === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
+  const observations = parseObservations(json.observations);
+  if (elements.size === 0 && (json.elements === undefined || views.length + splits.length + zones.length + splitRefusals.length + clashTests.length + clashes.length + (observations ? 1 : 0) === 0)) throw new Error('Aucun élément trouvé dans le fichier de métadonnées.');
   const metadata: Metadata = { version, elements };
   if (splitRefusals.length > 0) metadata.splitRefusals = splitRefusals;
   if (clashTests.length > 0) metadata.clashTests = clashTests;
   if (clashes.length > 0) metadata.clashes = clashes;
+  if (observations) metadata.observations = observations;
   if (Array.isArray(json.readOnly)) metadata.readOnly = json.readOnly.filter((item): item is string => typeof item === 'string');
   if (json.propertiesMode === 'replace') metadata.propertiesMode = 'replace';
   if (json.elements !== undefined && isRecord(json.source) && typeof json.source.name === 'string') metadata.modifies = json.source.name;

@@ -2,8 +2,11 @@ import { coerceTo, ownValue, type PropValue } from '../data/metadata.ts';
 import { checkRequirements, failuresCsv, parseIds, parseRequirementList, type Failure, type IdsMapping, type RequirementRule } from '../data/requirements.ts';
 import ifcPreset from '../data/presets/quantites-ifc.json' with { type: 'json' };
 import { integer, plural } from '../data/text.ts';
+import { addObservations, locate, observationFromFailures } from '../data/observations.ts';
 import type { App } from './App.ts';
 import { button, clear, download, h } from './dom.ts';
+import { elementRef, elementsPoint } from './elementRefs.ts';
+import { authorName } from './ObservationsPanel.ts';
 
 /** Lignes montrées par règle ; le CSV les contient toutes. */
 const MAX_ROWS = 100;
@@ -105,11 +108,34 @@ export class RequirementsPanel {
       ));
     });
     if (this.failures.length > 0) {
-      this.results.append(h('div', { class: 'dimensions-actions' }, button('Exporter en CSV', () => {
-        const csv = failuresCsv(this.failures, this.rules, model.keys, (i) => app.elementLabel(i));
-        download(new Blob(['﻿', csv], { type: 'text/csv' }), 'proprietes-requises.csv');
-      })));
+      this.results.append(h('div', { class: 'dimensions-actions' },
+        button(`Créer des observations (${integer.format(failing.size)})`, () => this.observations(), { title: 'Une observation par élément en défaut, avec la liste de ce qui manque (suivi de chantier)' }),
+        button('Exporter en CSV', () => {
+          const csv = failuresCsv(this.failures, this.rules, model.keys, (i) => app.elementLabel(i));
+          download(new Blob(['﻿', csv], { type: 'text/csv' }), 'proprietes-requises.csv');
+        })));
     }
+  }
+
+  /** Une observation par élément en défaut (une seule fois par élément), avec ses manquements en description. */
+  private observations(): void {
+    const { app } = this;
+    const byElement = new Map<number, string[]>();
+    for (const failure of this.failures) {
+      const lines = byElement.get(failure.element) ?? [];
+      lines.push(`${failure.property} : requis ${failure.required}, en place ${failure.actual}`);
+      byElement.set(failure.element, lines);
+    }
+    if (byElement.size > 200 && !window.confirm(`Créer ${integer.format(byElement.size)} observations ?`)) return;
+    const author = authorName() || 'Viewer BIM', now = new Date();
+    const { lists, settings } = app.observations;
+    const list = [...byElement].map(([element, lines]) => ({
+      ...observationFromFailures(elementRef(app, element), app.elementLabel(element) || app.model!.keys[element], lines, elementsPoint(app, [element]), author, now, lists),
+      location: locate(app.store.propsOf(element), settings),
+    }));
+    const { book, added } = addObservations(app.observations, list);
+    app.setObservations(book);
+    app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : menu « Chantier », carte « Observations ».` : 'Ces éléments ont déjà leurs observations.');
   }
 
   /** Un champ par propriété requise : la valeur saisie est écrite sur les éléments en défaut, en une étape annulable. */

@@ -126,9 +126,11 @@ de deux façons :
   l'utilisateur n'a pas touchées viennent fraîches du fichier. Les vues que l'utilisateur a
   enregistrées (§ 2 sexies, « Vues de l'utilisateur ») y sont aussi, dans `views` : ce sont des
   modifications. Un tel fichier peut n'avoir que des vues (`"elements": {}`). Les découpages en pièces (§ 2 nonies) et
-  les zones (§ 2 decies) y sont aussi, entiers, dans `splits` et `zones`.
+  les zones (§ 2 decies) y sont aussi, entiers, dans `splits` et `zones`, comme les observations (§ 2 terdecies), dans
+  `observations`.
 - **« JSON ↓ »** : toutes les propriétés, dans le format ci-dessus (propriétés du GLB, du JSON et
-  modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`), pièces comprises, avec `splits` et `zones`.
+  modifications réunies, `readOnly` compris, `"propertiesMode": "replace"`), pièces comprises, avec `splits`, `zones` et
+  `observations`.
 
 « Annuler les modifications » revient au fichier d'origine.
 
@@ -469,7 +471,8 @@ un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa b
 `splits` et `zones` aussi : un viewer qui les ignore montre les éléments entiers, et les propriétés écrites sur des pièces
 (clés `<clé>~<n>`) ne trouvent pas leur élément, sans empêcher l'ouverture. Un JSON de modifications peut n'avoir que des
 découpages ou des zones (`"elements": {}`). Les sections `clashTests` et `clashes` aussi : un viewer qui les ignore ouvre le
-fichier sans conflits ; un JSON de modifications peut n'avoir qu'elles.
+fichier sans conflits ; un JSON de modifications peut n'avoir qu'elles. La section `observations` aussi : un viewer qui l'ignore
+ouvre le fichier sans observations ; un JSON de modifications peut n'avoir qu'elle.
 
 ## 2 octies. Niveaux (`levels`)
 
@@ -556,7 +559,8 @@ fichiers ; c'est un comportement du viewer :
   maquettes déjà ouvertes ne changent jamais de clés.
 - **Exports.** « JSON ↓ » et « Modifications ↓ » écrivent un fichier par maquette (`<nom>.json`, `<nom>.modifications.json`),
   chacun avec les clés de son fichier et sans `Modèle` : chaque JSON reste celui de son fichier. Les sections de la session
-  (`views`, `splits`, `zones`, `georeference`, `phases`, `levels`, `clashTests`, `clashes`) vont avec la première maquette.
+  (`views`, `splits`, `zones`, `georeference`, `phases`, `levels`, `clashTests`, `clashes`, `observations`) vont avec la
+  première maquette.
   « GLB ↓ » écrit la réunion des maquettes, sous les clés de la session, et le dit.
 - **Limites.** Toutes les maquettes partagent le budget de triangles de l'appareil : un ajout qui le dépasserait est refusé,
   avec les chiffres. Seule la dernière maquette ajoutée se retire. Le découpage en pièces ne porte que sur la première. En
@@ -606,6 +610,17 @@ conflit qui n'est plus trouvé devient `resolved`. Un conflit dont une maquette 
 ne connaît aucun nom de propriété : les ensembles, les exclusions et `sameValue` sont choisis par l'utilisateur. « JSON ↓ » et
 « Modifications ↓ » écrivent ces deux sections ; une section illisible, ou une entrée illisible, est ignorée.
 
+## 2 terdecies. Observations (`observations`)
+
+Un objet optionnel à la racine garde le suivi de chantier (carte « Observations », menu « Chantier ») : les réglages (les
+propriétés lues comme niveau, local et zone), les listes du projet (types, statuts et transitions permises, lots, priorités,
+phases, entreprises) et les observations elles-mêmes, **sans leurs photos ni leurs images**, qui voyagent dans le fichier
+`.bcf` exporté à côté. Elles y ajoutent ce que le BCF n'a pas : le repère posé sur un plan, le point 3D (repère d'origine,
+Z vers le haut), l'emplacement, les éléments par maquette et clé, le numéro. Le format, la correspondance avec le BCF et la
+fusion par GUID sont décrits dans `docs/contrat-observations.md`. « JSON ↓ » et « Modifications ↓ » écrivent la section ; un
+JSON déposé sur le modèle ouvert ajoute ses observations à celles de la session ; une section illisible est ignorée, une
+observation illisible écartée.
+
 ## 3. Groupes et sous-groupes
 
 L'arborescence n'est pas écrite dans le fichier. Elle est calculée dans le viewer à partir des
@@ -624,7 +639,7 @@ structure spatiale d'un IFC devient :
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
 (regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
-ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits`, `zones`, `clashTests` et `clashes` sont déjà de
+ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits`, `zones`, `clashTests`, `clashes` et `observations` sont déjà de
 celles-là.
 
 ## 5. Variante USD

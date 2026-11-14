@@ -7,7 +7,7 @@ import { ARRAY_BUFFER, FLOAT, GlbBuffer, encodeGlb } from '../engine/glbFile.ts'
 import { georeferenceToJson } from '../geo/georeference.ts';
 import { polygonArea } from './metrics.ts';
 import { volumeMesh } from './massing.ts';
-import { useOf, type Proposal, type Study, type Volume } from './study.ts';
+import { safeColor, useOf, type Proposal, type Study, type Volume } from './study.ts';
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
@@ -40,7 +40,7 @@ function properties(study: Study, proposal: Proposal, volume: Volume): Record<st
 
 export function proposalGlb(study: Study, proposal: Proposal): ArrayBuffer {
   const buffer = new GlbBuffer();
-  const colorOf = new Map(study.settings.uses.map((use) => [use.id, linearColor(use.color)]));
+  const colorOf = new Map(study.settings.uses.map((use) => [use.id, linearColor(safeColor(use.color, '#9b7fd1'))]));
   const meshes: Record<string, unknown>[] = [], nodes: Record<string, unknown>[] = [];
   for (const volume of proposal.volumes) {
     const { positions, normals, segments } = volumeMesh(volume);

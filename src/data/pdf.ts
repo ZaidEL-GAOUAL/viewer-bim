@@ -43,7 +43,7 @@ export interface PdfWriter {
   finish(): Blob;
 }
 
-const REPLACEMENTS: Record<string, string> = { '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '–': '-', '—': '-', ' ': ' ', ' ': ' ' };
+const REPLACEMENTS: Record<string, string> = { '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '–': '-', '—': '-', 'œ': 'oe', 'Œ': 'OE', '→': '->', ' ': ' ', ' ': ' ' };
 
 /** Le texte que l'Helvetica intégrée sait écrire (Latin-1) : guillemets, tirets et points de suspension typographiques ramenés à l'ASCII, le reste d'inconnu devient « ? ». */
 export function latin1(text: string): string {
@@ -70,8 +70,9 @@ export function makePdf(Constructor: JsPdfConstructor): PdfWriter {
         doc.setLineJoin('round');
       } else doc.addPage([Math.min(width, height), Math.max(width, height)], orientation);
     },
-    // Un alias propre à chaque image évite à jsPDF de calculer une empreinte de ses octets.
-    image: (data, format, x, y, width, height) => void current().addImage(data, format, x, y, width, height, `image${images++}`, 'NONE'),
+    // Un alias propre à chaque image évite à jsPDF de calculer une empreinte de ses octets. Un JPEG passe tel quel ; un PNG,
+    // décodé par jsPDF, est recompressé (sinon ses pixels entreraient bruts dans le PDF).
+    image: (data, format, x, y, width, height) => void current().addImage(data, format, x, y, width, height, `image${images++}`, format === 'PNG' ? 'FAST' : 'NONE'),
     setLine(width, dash = []) {
       current().setLineWidth(Math.max(width, MIN_LINE_MM));
       current().setLineDashPattern([...dash], 0);

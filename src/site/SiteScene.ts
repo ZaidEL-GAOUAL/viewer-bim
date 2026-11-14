@@ -31,7 +31,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { groundAt, neighbourBase } from './context.ts';
 import { addPrism, toScene, volumeMesh } from './massing.ts';
-import type { Proposal, Study, XY } from './study.ts';
+import { safeColor, type Proposal, type Study, type XY } from './study.ts';
 
 const NEIGHBOUR_COLOR = new Color('#d9d4cb');
 const SELECTED_COLOR = new Color('#1d8bff');
@@ -217,7 +217,7 @@ export class SiteScene {
         ((object as Mesh).material as MeshLambertMaterial | undefined)?.dispose();
       });
     }
-    const colorOf = new Map(study.settings.uses.map((use) => [use.id, new Color(use.color)]));
+    const colorOf = new Map(study.settings.uses.map((use) => [use.id, new Color(safeColor(use.color, '#9b7fd1'))]));
     for (const volume of proposal.volumes) {
       const { positions, normals, segments } = volumeMesh(volume);
       const colors = new Float32Array(positions.length);

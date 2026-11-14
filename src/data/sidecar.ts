@@ -103,11 +103,11 @@ export function orphanNotice(overlay: Metadata, keys: readonly string[]): string
  * Le JSON « Modifications » : ce qui diffère du fichier source `sourceName`, en mode fusion, avec le fichier qu'il complète, et
  * les vues de l'utilisateur (`userViews`) : elles aussi sont des modifications.
  */
-export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string, userViews: readonly SavedView[] = [], sections: Record<string, unknown[] | undefined> = {}): Record<string, unknown> {
+export function modificationsFile(edits: PropertyEdits, keys: readonly string[], sourceName: string, userViews: readonly SavedView[] = [], sections: Record<string, unknown[] | Record<string, unknown> | undefined> = {}): Record<string, unknown> {
   const { version, elements } = edits.diff(keys);
   const kind = fileKind(sourceName);
   const source = kind && kind !== 'json' ? { name: sourceName, kind: kind === 'gltf' ? 'glb' : kind } : undefined;
-  // Découpages, zones et conflits sont aussi des modifications : écrits en entier, comme les vues de l'utilisateur.
-  const extra = Object.fromEntries(Object.entries(sections).filter(([, list]) => list && list.length > 0));
+  // Découpages, zones, conflits et observations sont aussi des modifications : écrits en entier, comme les vues de l'utilisateur.
+  const extra = Object.fromEntries(Object.entries(sections).filter(([, section]) => (Array.isArray(section) ? section.length > 0 : section !== undefined)));
   return { version, ...(source ? { source } : {}), elements, ...(userViews.length > 0 ? { views: viewsToJson(userViews) } : {}), ...extra };
 }

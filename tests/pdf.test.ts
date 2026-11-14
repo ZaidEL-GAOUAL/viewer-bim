@@ -58,6 +58,7 @@ test('line widths never go under 0.13 mm', () => {
 test('text keeps accents and drops what WinAnsi cannot show', () => {
   assert.equal(latin1('Étage 1 — plan d’étage…'), 'Étage 1 - plan d\'étage...');
   assert.equal(latin1('日本'), '??');
+  assert.equal(latin1('Gros œuvre : Ouverte → En cours'), 'Gros oeuvre : Ouverte -> En cours');
 });
 
 test('finishing gives the PDF as a blob', () => {

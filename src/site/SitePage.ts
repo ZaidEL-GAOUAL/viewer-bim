@@ -14,7 +14,7 @@ import { proposalGlb, proposalMetadata } from './exportGlb.ts';
 import { bar, centroid, rectangle, toScene, translate, volumeMesh } from './massing.ts';
 import { figureRows, polygonArea, toTsv } from './metrics.ts';
 import { SiteScene } from './SiteScene.ts';
-import { newId, newProposal, newStudy, parseStudy, studyToJson, type Proposal, type Study, type Volume, type XY } from './study.ts';
+import { newId, newProposal, newStudy, parseStudy, safeColor, studyToJson, type Proposal, type Study, type Volume, type XY } from './study.ts';
 import { daySunPath, defaultUtcOffset, localTime, presetDays, sunPosition, sunVector } from './sun.ts';
 
 type DrawMode = 'limit' | 'rectangle' | 'polygon' | 'bar';
@@ -39,6 +39,13 @@ const SUN_STEP_MINUTES = 10;
 /** Points au plus par analyse : borne le nombre de rayons (≈ 6 000 × 432 pour la composante de ciel). */
 const MAX_POINTS = 6000;
 const SUN_GRADIENT = ['#253494', '#2c7fb8', '#41b6c4', '#a1dab4', '#ffffcc'];
+/** Pastille de couleur ; la couleur passe par `safeColor` puis par la propriété DOM, jamais par une chaîne de style. */
+function swatch(color: string): HTMLElement {
+  const el = h('span', { class: 'site-swatch' });
+  el.style.backgroundColor = safeColor(color, '#9b7fd1');
+  return el;
+}
+
 const VSC_BINS: { min: number; color: string; label: string }[] = [
   { min: 27, color: '#1a9850', label: '≥ 27 %' },
   { min: 15, color: '#fee08b', label: '15 à 27 %' },
@@ -419,7 +426,7 @@ export class SitePage {
         draw('polygon', 'Polygone', 'Cliquez les sommets, puis le premier pour fermer'),
         draw('bar', 'Barre', 'Deux clics : l’axe de la barre')),
       field('Largeur barre (m)', barWidth),
-      h('div', { class: 'site-uses' }, ...this.study.settings.uses.map((use) => h('span', { class: 'site-use' }, h('span', { class: 'site-swatch', attrs: { style: `background:${use.color}` } }), use.name))),
+      h('div', { class: 'site-uses' }, ...this.study.settings.uses.map((use) => h('span', { class: 'site-use' }, swatch(use.color), use.name))),
       this.volumeList,
       this.volumeForm,
     );
@@ -738,7 +745,7 @@ export class SitePage {
       const name = h('input', { attrs: { type: 'text', value: use.name, 'aria-label': 'Nom de l’usage' } });
       name.addEventListener('change', () => { use.name = name.value.trim() || use.name; this.dirty = true; this.refresh(); });
       const color = h('input', { attrs: { type: 'color', value: use.color, 'aria-label': `Couleur de ${use.name}` } });
-      color.addEventListener('change', () => { use.color = color.value; this.dirty = true; this.refresh(); });
+      color.addEventListener('change', () => { use.color = safeColor(color.value, use.color); this.dirty = true; this.refresh(); });
       const housing = h('input', { attrs: { type: 'checkbox', title: 'Compte pour les logements' } });
       housing.checked = use.housing;
       housing.addEventListener('change', () => { use.housing = housing.checked; this.dirty = true; this.renderFigures(); });

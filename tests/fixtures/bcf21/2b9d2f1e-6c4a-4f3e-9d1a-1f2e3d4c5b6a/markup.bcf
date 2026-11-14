@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Markup xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="markup.xsd">
+  <Header>
+    <File IfcProject="0M6o7Znnv7hxsbWgeu7oQq" isExternal="true">
+      <Filename>structure.ifc</Filename>
+      <Date>2026-10-01T08:00:00Z</Date>
+    </File>
+  </Header>
+  <Topic Guid="2b9d2f1e-6c4a-4f3e-9d1a-1f2e3d4c5b6a" TopicType="Error" TopicStatus="Open">
+    <ReferenceLink>https://exemple.fr/chantier/12</ReferenceLink>
+    <Title>Fissure sur voile &amp; reprise</Title>
+    <Priority>High</Priority>
+    <Index>12</Index>
+    <Labels>Gros œuvre</Labels>
+    <Labels>Structure</Labels>
+    <CreationDate>2026-10-02T09:15:00+02:00</CreationDate>
+    <CreationAuthor>marie@exemple.fr</CreationAuthor>
+    <ModifiedDate>2026-10-03T10:00:00Z</ModifiedDate>
+    <ModifiedAuthor>paul@exemple.fr</ModifiedAuthor>
+    <DueDate>2026-11-30T00:00:00Z</DueDate>
+    <AssignedTo>Entreprise Martin</AssignedTo>
+    <Stage>OPR</Stage>
+    <Description>Fissure de 2 mm au droit de l'ouverture.</Description>
+    <DocumentReference Guid="7c1e0b8a-3d2f-4a6b-8e9c-0a1b2c3d4e5f" isExternal="false">
+      <ReferencedDocument>../Documents/croquis.txt</ReferencedDocument>
+      <Description>Croquis du métreur</Description>
+    </DocumentReference>
+    <DocumentReference Guid="8d2f1c9b-4e3a-4b7c-9fad-1b2c3d4e5f60" isExternal="true">
+      <ReferencedDocument>https://exemple.fr/pv/opr.pdf</ReferencedDocument>
+    </DocumentReference>
+    <RelatedTopic Guid="0f1e2d3c-4b5a-4968-8776-655443322110"/>
+  </Topic>
+  <Comment Guid="a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d">
+    <Date>2026-10-02T09:20:00Z</Date>
+    <Author>marie@exemple.fr</Author>
+    <Comment>Vue depuis l'escalier.</Comment>
+    <Viewpoint Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9"/>
+  </Comment>
+  <Comment Guid="b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e">
+    <Date>2026-10-03T10:00:00Z</Date>
+    <Author>paul@exemple.fr</Author>
+    <Comment>Reprise prévue lundi.</Comment>
+  </Comment>
+  <Viewpoints Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9">
+    <Viewpoint>viewpoint.bcfv</Viewpoint>
+    <Snapshot>snapshot.png</Snapshot>
+    <Index>0</Index>
+  </Viewpoints>
+</Markup>

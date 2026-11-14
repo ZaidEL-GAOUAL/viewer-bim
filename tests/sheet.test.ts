@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clipSegment, frameOnScreen, frameRect, mmOf, nextPaperThatFits, northAngle, paperSize, parseScale, scaleBar, sheetOf, suggestScale, tilePlacement, titleBlockCells, worldSize, fits } from '../src/data/sheet.ts';
+import { clipSegment, frameOnScreen, frameRect, mmOf, nextPaperThatFits, northAngle, paperSize, parseScale, scaleBar, sheetOf, suggestScale, tilePlacement, titleBlockCells, worldSize, fits, flowLayout, wrapText } from '../src/data/sheet.ts';
 
 const close = (actual: number, expected: number, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
 
@@ -112,4 +112,21 @@ test('title block cells stay inside the block and do not overlap the north and s
   }
   assert.ok(cells.bar.x + cells.bar.width <= cells.north.x + 1e-9);
   assert.ok(cells.file.x + cells.file.width <= cells.bar.x + 1e-9);
+});
+
+test('report flow: blocks go down the page, the next page takes what does not fit, a heading stays with its block', () => {
+  const area = { top: 10, bottom: 100 };
+  assert.deepEqual(flowLayout([{ height: 40 }, { height: 40 }, { height: 40 }], area), [{ page: 0, y: 10 }, { page: 0, y: 50 }, { page: 1, y: 10 }]);
+  assert.deepEqual(flowLayout([{ height: 40 }, { height: 40 }, { height: 8, keepWithNext: true }, { height: 40 }], area), [{ page: 0, y: 10 }, { page: 0, y: 50 }, { page: 1, y: 10 }, { page: 1, y: 18 }]);
+  // A gap between blocks; a block taller than the page still gets a page of its own.
+  assert.deepEqual(flowLayout([{ height: 30 }, { height: 30 }, { height: 200 }], area, 5), [{ page: 0, y: 10 }, { page: 0, y: 45 }, { page: 1, y: 10 }]);
+});
+
+test('text wraps on words to the width (Helvetica estimate), long words are cut, extra lines end in an ellipsis', () => {
+  // 10 pt: about 1.764 mm per character, so 20 mm hold 11 characters.
+  assert.deepEqual(wrapText('un deux trois quatre', 20, 10), ['un deux', 'trois', 'quatre']);
+  assert.deepEqual(wrapText('ligne\nsuivante', 100, 10), ['ligne', 'suivante']);
+  assert.deepEqual(wrapText('anticonstitutionnellement', 20, 10), ['anticonstit', 'utionnellem', 'ent']);
+  assert.deepEqual(wrapText('un deux trois quatre', 20, 10, 2), ['un deux', 'trois...']);
+  assert.deepEqual(wrapText('', 20, 10), []);
 });
