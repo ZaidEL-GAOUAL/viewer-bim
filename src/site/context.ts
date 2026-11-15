@@ -1,5 +1,6 @@
-// Le contexte d'une étude : bâtiments voisins avec leur hauteur, et relief en grille, lus une seule fois (sur demande de
-// l'utilisateur) puis gardés dans l'étude, dans le repère local (est, nord en mètres depuis l'origine du site).
+// Le contexte d'une étude : bâtiments voisins avec leur hauteur, et relief en grille, lus une seule fois (dès que le lieu
+// est choisi, ou quand l'utilisateur change de rayon) puis gardés dans l'étude, dans le repère local (est, nord en mètres
+// depuis l'origine du site). Jamais relus à l'ouverture d'une étude.
 //
 // Les bâtiments viennent d'un `ContextProvider`. Les fournisseurs nationaux (hauteurs mesurées) sont essayés dans
 // l'ordre ; s'ils échouent ou ne couvrent pas le lieu, la base mondiale (OpenStreetMap par Overpass, geo/osmBuildings.ts)
@@ -156,10 +157,11 @@ export interface LoadedContext {
  * Lit le contexte autour de l'origine : bâtiments (fournisseurs dans l'ordre, puis la base mondiale) et relief. Une panne
  * de la base mondiale fait échouer le tout (rien n'est inventé) ; une panne du relief laisse un sol plat, et le dit.
  */
-export async function loadContext(origin: Origin, radius: number, options: { providers?: readonly ContextProvider[]; base?: ContextProvider; terrain?: TerrainSource | null; signal?: AbortSignal } = {}): Promise<LoadedContext> {
-  const { providers = [], base = osmProvider(), terrain = terrariumSource(), signal } = options;
+export async function loadContext(origin: Origin, radius: number, options: { providers?: readonly ContextProvider[]; base?: ContextProvider; terrain?: TerrainSource | null; signal?: AbortSignal; onProgress?: (message: string) => void } = {}): Promise<LoadedContext> {
+  const { providers = [], base = osmProvider(), terrain = terrariumSource(), signal, onProgress } = options;
   const boxes = geoBoxes(origin, radius);
   const notes: string[] = [];
+  onProgress?.('Lecture des bâtiments voisins (OpenStreetMap)…');
   let chosen: { provider: ContextProvider; buildings: ProviderBuilding[] } | null = null;
   for (const provider of providers) {
     try {
@@ -188,6 +190,7 @@ export async function loadContext(origin: Origin, radius: number, options: { pro
   const credits = [chosen.provider.credit];
   let grid: TerrainGrid | null = null, altitude: number | null = null;
   if (terrain) {
+    onProgress?.(`${buildings.length.toLocaleString('fr-FR')} bâtiments lus ; lecture du relief…`);
     try {
       ({ grid, altitude } = await loadTerrain(origin, radius, terrain, signal));
       credits.push(terrain.credit);
@@ -200,7 +203,7 @@ export async function loadContext(origin: Origin, radius: number, options: { pro
 }
 
 /** Hauteur du sol (m, repère local : 0 à l'altitude de l'origine) ; sol plat sans relief, bord prolongé hors de la grille. */
-export function groundAt(study: Study, east: number, north: number): number {
+export function groundAt(study: Pick<Study, 'site' | 'context'>, east: number, north: number): number {
   const grid = study.context.terrain;
   if (!grid) return 0;
   const u = Math.min(grid.columns - 1, Math.max(0, (east - grid.west) / grid.step));

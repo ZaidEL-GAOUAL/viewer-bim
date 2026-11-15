@@ -1,8 +1,15 @@
 # Contrat du fichier d'étude de site (version 1)
 
 Ce document décrit le fichier JSON qu'ouvre et qu'enregistre la page **Étude de site** (`site.html`). Une étude tient un
-site, son contexte (voisins et relief, lus une fois puis gardés) et des propositions faites de volumes. Rien n'est gardé
-dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/site/study.ts` (lecture, écriture).
+site, son contexte (voisins et relief, lus une fois puis gardés), des propositions faites de volumes et la position des
+maquettes posées sur le site. Code : `src/site/study.ts` (lecture, écriture).
+
+**Où l'étude est gardée.** Les comptes n'existent pas encore : chaque étude est gardée automatiquement dans le navigateur
+qui l'a faite (IndexedDB, base `etude-de-site`, `src/site/store.ts`) et listée sur l'écran d'accueil de la page ; rien
+n'est promis au-delà de ce navigateur et de cet appareil, et la page le dit. « Enregistrer » écrit ce fichier JSON, pour
+la garder ailleurs ou la partager ; ouvrir un fichier l'ajoute à la liste. Sans IndexedDB (navigation privée), la page
+travaille avec des fichiers seulement et dit que rien n'est gardé. La géométrie des maquettes posées n'est jamais dans le
+fichier : elle reste dans le navigateur (voir `models[]`).
 
 ## Repère
 
@@ -18,10 +25,14 @@ dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/s
 {
   "format": "etude-de-site",
   "version": 1,
+  "id": "0d6b…",
   "name": "Îlot des Tanneurs",
   "site": {
     "origin": { "latitude": 48.8566, "longitude": 2.3522, "altitude": 35 },
     "utcOffset": 1,
+    "timeZone": "Europe/Paris",
+    "place": "Place de l’Hôtel-de-Ville, Paris 4e, France",
+    "country": "fr",
     "limit": [[0, 0], [40, 0], [40, 25], [0, 25]]
   },
   "context": {
@@ -43,6 +54,10 @@ dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/s
       ]
     }
   ],
+  "models": [
+    { "id": "93a2…", "name": "revit-demo", "role": "context", "east": 12, "north": -4, "up": 0, "rotation": 30,
+      "georeferenced": false, "triangles": 1122 }
+  ],
   "settings": {
     "uses": [{ "id": "logement", "name": "Logement", "color": "#e9b44c", "housing": true }, "…"],
     "dwellingSize": 65,
@@ -58,9 +73,13 @@ dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/s
 | --- | --- | --- |
 | `format` | oui | Toujours `"etude-de-site"` : distingue une étude d'un JSON de métadonnées du viewer. |
 | `version` | oui | `1`. Une autre version est refusée (message en clair). |
-| `name` | non | Nom de l'étude. |
-| `site.origin` | oui | `latitude` (−90 à 90), `longitude` (−180 à 180), `altitude` (m, au-dessus de la mer ; 0 par défaut). |
-| `site.utcOffset` | non | Décalage horaire du site en heures (−12 à 14) pour le Soleil. Par défaut, déduit de la longitude (15° par heure) ; l'utilisateur le corrige selon l'heure légale. Aucun fuseau n'est lu dans le navigateur. |
+| `id` | non | Identifiant de l'étude dans la liste du navigateur ; un nouveau est donné s'il manque. Rouvrir le même fichier met à jour la même entrée. |
+| `name` | non | Nom de l'étude (par défaut, le nom court du lieu choisi). |
+| `site.origin` | oui | `latitude` (−90 à 90), `longitude` (−180 à 180), `altitude` (m, au-dessus de la mer ; 0 par défaut, puis lue dans le relief au chargement du voisinage). |
+| `site.timeZone` | non | Fuseau horaire IANA (« Asia/Colombo ») trouvé d'après le lieu : le pays donné par la recherche et, pour un pays à plusieurs fuseaux, la ville repère la plus proche (`src/site/timeZones.ts`). Quand il est là, le décalage du jour étudié (heure d'été comprise) vient de lui. Retiré quand l'utilisateur corrige l'heure à la main. |
+| `site.utcOffset` | non | Décalage horaire du site en heures (−12 à 14) pour le Soleil : celui du fuseau au moment du choix du lieu, sinon déduit de la longitude (15° par heure), ou corrigé par l'utilisateur. Il fait foi sans `timeZone`. Aucun fuseau n'est lu dans le navigateur de l'utilisateur. |
+| `site.place` | non | Nom complet du lieu, tel que la recherche (Nominatim) l'a donné. |
+| `site.country` | non | Code ISO du pays, en minuscules (« fr ») : fuseau, et parcelles du cadastre proposées en France. |
 | `site.limit` | non | Limite du terrain, au moins trois points ; vide tant qu'elle n'est pas dessinée. |
 | `context.buildings[]` | non | Voisins : `id`, `footprint` (≥ 3 points), `height` (m au-dessus du sol, > 0), `heightSource`, `edited`. |
 | `heightSource` | non | `measured` (fournisseur national), `tagged` (attributs OpenStreetMap `height` ou `building:levels` × 3 m), `assumed` (8 m par défaut). Autre valeur lue : `assumed`. |
@@ -75,6 +94,7 @@ dans le navigateur : le fichier est la seule mémoire de l'étude. Code : `src/s
 | `settings.dwellingSize` | non | Surface moyenne d'un logement (m², 65 par défaut). |
 | `settings.efficiency` | non | Part de la surface de plancher habitable (0 à 1, 0,8 par défaut). |
 | `settings.units` | non | `m2` (défaut) ou `ft2` pour l'affichage des surfaces ; le fichier reste en mètres. |
+| `models[]` | non | Maquettes posées sur le site (« Ajouter une maquette », ou envoyées par le viewer), 20 au plus : `id`, `name`, `role` (`context` : visible dans toutes les propositions ; `proposal` : compte comme la proposition `proposal`), `east`, `north`, `up` (m, repère local : où va le point (0, 0, 0) de la maquette, repère glTF recentré du viewer), `rotation` (°, sens trigonométrique vu du dessus), `georeferenced` (posée par sa géoréférence), `triangles`. Leur géométrie n'est pas dans le fichier : elle est gardée dans le navigateur sous le même `id` ; ailleurs, la page dit qu'elle est à rajouter. |
 
 Règles :
 
@@ -82,8 +102,12 @@ Règles :
   usage, un champ que cette version ne connaît pas est relu et réécrit tel quel.
 - **Lecture tolérante** : une valeur absente ou illisible prend sa valeur par défaut ; seuls le `format`, la `version` et
   l'origine (latitude, longitude) sont exigés.
-- **Le contexte n'est jamais relu à l'ouverture** : il n'est lu (Overpass, tuiles de relief) que sur demande explicite
-  (« Charger le voisinage ») et remplace alors le précédent.
+- **Le contexte est lu une fois et n'est jamais relu à l'ouverture** : il est lu (Overpass, tuiles de relief) tout seul
+  dès que le lieu est choisi, ou à l'ouverture d'une étude qui n'en a jamais eu (`fetchedAt` à `null`), pour le rayon par
+  défaut (300 m) ; ensuite seulement sur demande (« Recharger avec un autre rayon »), et il remplace alors le précédent.
+- Le fond de carte posé sur le sol (tuiles OpenStreetMap, ou IGN en France) est un décor : il n'est pas dans le fichier,
+  il n'est lu que pour l'écran (tuiles gardées le temps de la session) et les analyses ne s'en servent pas.
+- Une limite choisie au cadastre (France) ajoute son crédit à `context.credits`.
 - Les chiffres et les analyses ne sont pas enregistrés : ils se recalculent.
 
 ## Export vers le viewer

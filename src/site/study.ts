@@ -82,19 +82,51 @@ export interface StudySettings {
 
 export interface Site {
   origin: { latitude: number; longitude: number; altitude: number };
-  /** Décalage horaire du site (h) ; par défaut déduit de la longitude, à corriger par l'utilisateur. */
+  /** Décalage horaire du site (h) : celui du fuseau (`timeZone`) quand il est connu, sinon déduit de la longitude ou corrigé. */
   utcOffset: number;
+  /** Fuseau horaire (IANA, « Asia/Colombo ») trouvé d'après le lieu ; absent : `utcOffset` fait foi. */
+  timeZone?: string;
+  /** Nom complet du lieu, tel que la recherche l'a donné. */
+  place?: string;
+  /** Code ISO du pays, en minuscules (« fr »). */
+  country?: string;
   /** Limite du terrain ; vide tant qu'elle n'est pas dessinée. */
   limit: XY[];
+}
+
+export type ModelRole = 'context' | 'proposal';
+
+/**
+ * Une maquette posée sur le site (« Ajouter une maquette ») : sa géométrie reste dans ce navigateur (elle n'est pas dans
+ * le fichier) ; l'étude garde où elle est posée. Le point (0, 0, 0) de la maquette (repère glTF recentré du viewer) va en
+ * (`east`, `north`, `up`), tourné de `rotation` degrés dans le sens trigonométrique vu du dessus.
+ */
+export interface PlacedModel {
+  id: string;
+  name: string;
+  role: ModelRole;
+  /** La proposition qui la porte, quand elle compte comme proposition. */
+  proposal?: string;
+  east: number;
+  north: number;
+  up: number;
+  rotation: number;
+  /** Vrai si elle a été posée par sa géoréférence. */
+  georeferenced: boolean;
+  triangles: number;
 }
 
 export interface Study {
   format: typeof STUDY_FORMAT;
   version: typeof STUDY_VERSION;
+  /** Identifiant de l'étude dans ce navigateur (la liste des études gardées) ; repris du fichier quand il en a un. */
+  id: string;
   name: string;
   site: Site;
   context: StudyContext;
   proposals: Proposal[];
+  /** Maquettes posées sur le site. */
+  models: PlacedModel[];
   settings: StudySettings;
 }
 
@@ -116,6 +148,7 @@ export const MAX_OUTLINE_POINTS = 1000;
 export const MAX_VOLUMES = 500;
 export const MAX_PROPOSALS = 50;
 export const MAX_NEIGHBOURS = 20_000;
+export const MAX_MODELS = 20;
 /** Points de la grille du relief. */
 export const MAX_TERRAIN_CELLS = 250_000;
 
@@ -129,10 +162,12 @@ export function newStudy(): Study {
   return {
     format: STUDY_FORMAT,
     version: STUDY_VERSION,
+    id: newId(),
     name: 'Nouvelle étude',
     site: { origin: { latitude: 48.8566, longitude: 2.3522, altitude: 35 }, utcOffset: 0, limit: [] },
     context: { buildings: [], terrain: null, credits: [], radius: 0, fetchedAt: null },
     proposals: [newProposal('Proposition 1')],
+    models: [],
     settings: { uses: DEFAULT_USES.map((use) => ({ ...use })), dwellingSize: 65, efficiency: 0.8, units: 'm2' },
   };
 }
@@ -214,6 +249,7 @@ export function parseStudy(raw: unknown): Study {
     utcOffset: Math.max(-12, Math.min(14, number(rawSite.utcOffset, 0))),
     limit: polygon(rawSite.limit) ?? [],
   };
+  for (const key of ['timeZone', 'place', 'country'] as const) if (typeof rawSite[key] !== 'string' || !rawSite[key]) delete site[key];
 
   const rawContext = isRecord(raw.context) ? raw.context : {};
   const context: StudyContext = {
@@ -240,14 +276,32 @@ export function parseStudy(raw: unknown): Study {
     volumes: records(p.volumes, MAX_VOLUMES).flatMap((v) => parseVolume(v, settings.uses) ?? []),
   }));
 
+  const models = records(raw.models, MAX_MODELS).flatMap((m): PlacedModel[] => {
+    if (typeof m.id !== 'string' || !m.id) return [];
+    const out: PlacedModel = {
+      ...m,
+      id: m.id,
+      name: text(m.name, 'Maquette'),
+      role: m.role === 'proposal' ? 'proposal' : 'context',
+      east: number(m.east, 0), north: number(m.north, 0), up: number(m.up, 0), rotation: number(m.rotation, 0),
+      georeferenced: m.georeferenced === true,
+      triangles: number(m.triangles, 0, 0),
+    };
+    if (typeof m.proposal === 'string' && out.role === 'proposal') out.proposal = m.proposal;
+    else delete out.proposal;
+    return [out];
+  });
+
   return {
     ...raw,
     format: STUDY_FORMAT,
     version: STUDY_VERSION,
+    id: text(raw.id, newId()),
     name: text(raw.name, base.name),
     site,
     context,
     proposals: proposals.length > 0 ? proposals : base.proposals,
+    models,
     settings,
   };
 }
