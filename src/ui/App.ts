@@ -62,6 +62,7 @@ import { WalkPanel } from './WalkPanel.ts';
 import { MapPanel } from './MapPanel.ts';
 import { georeferenceToJson, type Georeference } from '../geo/georeference.ts';
 import { studyCard } from '../site/studyLink.ts';
+import { projectCard } from '../chantier/viewerLink.ts';
 import { TreePanel } from './TreePanel.ts';
 import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
@@ -276,7 +277,8 @@ export class App {
     const modelsPanel = new ModelsPanel(this), comparePanel = new ComparePanel(this), clashPanel = new ClashPanel(this);
     const checks = new PanelMenu('Contrôles', 'Plusieurs maquettes, comparaison de versions, conflits', [modelsPanel, comparePanel, clashPanel]);
     const observationsPanel = new ObservationsPanel(this);
-    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport ; étude du site de la maquette', [observationsPanel, studyCard(this)]);
+    const project = projectCard(this, () => { if (observationsPanel.el.hidden) observationsPanel.toggle(true); });
+    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport ; projet lié ; étude du site de la maquette', [observationsPanel, project, studyCard(this)]);
     const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el, site.el);
 
     const mapToggle = button('Carte', () => {
@@ -399,6 +401,7 @@ export class App {
       panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
       h('a', { text: 'Étude de site', title: 'Ouvrir l’étude de site : lieu, terrain, voisins, volumes, soleil (avant-projet)', attrs: { href: 'site.html' } }),
+      h('a', { text: 'Suivi de chantier', title: 'Ouvrir le suivi de chantier : projets, observations, photos, plans, sur téléphone ou ordinateur', attrs: { href: 'chantier.html' } }),
       h('div', { class: 'formats', title: 'Format des téléchargements (GLB ↓ ou USD ↓) et de la conversion d’un IFC, pas celui du fichier ouvert' },
         h('span', { class: 'bar-label', text: 'Export', attrs: { id: 'export-format-label' } }),
         formats,
@@ -474,7 +477,7 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, observationsPanel.el, ...exports.cards, this.conversionEl));
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, observationsPanel.el, project.el, ...exports.cards, this.conversionEl));
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);

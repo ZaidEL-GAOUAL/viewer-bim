@@ -31,7 +31,7 @@ Rien ne quitte la page sans un export choisi par l'utilisateur. Les photos ne vi
 | Image de la vue | `snapshot.png` du point de vue (au plus 1 500 px de côté), repère rouge sur le point ; absente en mode carte (le globe dessine sa propre copie : l'application le dit) |
 | Photos | `DocumentReferences` → `documents.xml` et `Documents/<guid>` (JPEG, réduites à 1 500 px de côté) |
 | Historique (changements de statut compris) et commentaires | `Comments/Comment` |
-| Repère sur un plan, point 3D | `viewer-bim.json` du dossier du sujet : `{ "point": [x, y, z], "pin": { "plan", "x", "y" } }` (fichier à nous, que la spécification BCF permet ; les autres outils l'ignorent) |
+| Repère sur un plan, point 3D | `viewer-bim.json` du dossier du sujet : `{ "point": [x, y, z], "pin": { "plan", "x", "y" }, "drawingPin": { "plan", "x", "y" } }` (fichier à nous, que la spécification BCF permet ; les autres outils l'ignorent) |
 | Emplacement, numéro, origine | aucun : section `observations` du JSON seulement |
 
 **Deux points de vue par sujet qui a un point.** Quand la vue de l'utilisateur ne regarde pas déjà le point (axe à moins de 8°), le sujet écrit **en premier** un point de vue visé (en perspective, de biais et d'en haut, cadré sur la boîte des éléments, jamais derrière un mur), puis la vue de l'utilisateur : les autres outils ouvrent le premier. Ses éléments, sa croix et (à la création) son image sont ceux du point de vue visé. Son GUID est dérivé de celui du sujet : un export répété ne l'empile pas.
@@ -104,6 +104,7 @@ Facultative, à la racine. Un fichier sans elle s'ouvre comme avant ; un viewer 
 | `number` | Numéro lisible, unique dans le projet (« N° 12 »). |
 | `elements` | `key` : la clé de l'élément dans le fichier de sa maquette (sans préfixe de session) ; `model` : le nom de ce fichier. Un élément sans `model` (lu d'un `.bcf`), ou d'une maquette ouverte sous un autre nom, est cherché par sa clé dans toutes les maquettes. |
 | `pin` | Le repère posé sur un plan : `plan`, l'identifiant de la vue (à défaut son nom) ; `x`, `y` en mètres, repère d'origine (Z vers le haut). |
+| `drawingPin` | Facultatif. Le repère posé sur un plan du suivi de chantier (`chantier.html` : un fichier image ou PDF du projet) : `plan`, l'identifiant de ce plan ; `x`, `y` en fractions de sa largeur et de sa hauteur (0 à 1, depuis le coin haut gauche). Le viewer le garde sans l'afficher. |
 | `point` | Le point désigné, repère d'origine, Z vers le haut : il garde l'observation à sa place si l'élément disparaît. |
 | `location` | Niveau, local et zone, lus sur l'élément à la création (et quand les réglages changent). |
 | `origin` | Ce qui a créé l'observation (`clash:…`, `requirement:…`) : la même source n'en crée pas deux. |

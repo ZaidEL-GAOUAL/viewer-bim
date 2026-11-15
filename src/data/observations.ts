@@ -14,10 +14,17 @@ import { yUpToZUp, zUpToYUp, type Vec3 } from './modelFrame.ts';
 import { categoryColor } from './palette.ts';
 import type { SavedPlane, SavedView, SavedViewCamera, SectionBoxSpec } from './savedViews.ts';
 import { csvCell, fold } from './text.ts';
-import { boxFaces } from '../engine/Sections.ts';
+import { boxFaces } from './sectionBox.ts';
 
 /** Le repère posé sur un plan : la vue (son identifiant, à défaut son nom) et le point, repère du modèle, Z vers le haut. */
 export interface PlanPin {
+  plan: string;
+  x: number;
+  y: number;
+}
+
+/** Le repère posé sur un plan du suivi de chantier (fichier PDF ou image du projet) : x, y en fractions de sa largeur et de sa hauteur, depuis le coin haut gauche. */
+export interface DrawingPin {
   plan: string;
   x: number;
   y: number;
@@ -35,6 +42,7 @@ export interface Observation extends BcfTopic {
   /** Les éléments, par maquette (nom de son fichier) et clé dans ce fichier. */
   elements: ElementRef[];
   pin?: PlanPin;
+  drawingPin?: DrawingPin;
   /** Le point désigné, repère du modèle, Z vers le haut : il retrouve l'observation si l'élément disparaît. */
   point?: Vec3;
   location: ObservationLocation;
@@ -358,7 +366,7 @@ function aimedGuid(guid: string): string {
  * le repère sur plan vont dans `viewer-bim.json`, à nous.
  */
 export function toBcfTopic(observation: Observation, context: BcfExportContext = {}): BcfTopic {
-  const { number: _number, elements, pin, point, location: _location, origin: _origin, ...topic } = observation;
+  const { number: _number, elements, pin, drawingPin, point, location: _location, origin: _origin, ...topic } = observation;
   void [_number, _location, _origin];
   const seen = new Set<string>();
   const components = elements.flatMap((ref) => {
@@ -367,7 +375,7 @@ export function toBcfTopic(observation: Observation, context: BcfExportContext =
     return seen.has(id) ? [] : (seen.add(id), [component]);
   });
   const withElements = (viewpoint: BcfViewpoint): BcfViewpoint => defined({ ...viewpoint, selection: components, coloring: components.length > 0 ? [{ color: HIGHLIGHT, components }] : undefined });
-  const viewerBim = pin || point ? defined({ point, pin }) : undefined;
+  const viewerBim = pin || point || drawingPin ? defined({ point, pin, drawingPin }) : undefined;
   const [first, ...rest] = topic.viewpoints;
   if (!point) return defined({ ...topic, viewerBim, viewpoints: first ? [withElements(first), ...rest] : components.length > 0 ? [withElements({ guid: newGuid(), clippingPlanes: [], selection: [] })] : [] });
   const lines = crossAt(point);
@@ -390,10 +398,9 @@ export function fromBcfTopic(topic: BcfTopic, number: number, options: { revit?:
   const keys = groups.find((group) => (options.resolves ? group.some(options.resolves) : true)) ?? groups[0] ?? [];
   const { viewerBim, ...rest } = topic;
   const extra = isRecord(viewerBim) ? viewerBim : {};
-  const pin = isRecord(extra.pin) && typeof extra.pin.plan === 'string' && finite(extra.pin.x) && finite(extra.pin.y) ? { plan: extra.pin.plan, x: extra.pin.x, y: extra.pin.y } : undefined;
   const point = vec3(extra.point) ?? crossCentre(topic.viewpoints.find((viewpoint) => viewpoint.lines)?.lines);
   return defined({
-    ...rest, number, elements: keys.map((key) => ({ key })), location: {}, point, pin,
+    ...rest, number, elements: keys.map((key) => ({ key })), location: {}, point, pin: planPin(extra.pin), drawingPin: planPin(extra.drawingPin),
     viewpoints: topic.viewpoints.map(({ coloring: _coloring, exceptions: _exceptions, lines: _lines, ...viewpoint }) => ({ ...viewpoint, selection: [] })),
   });
 }
@@ -576,6 +583,7 @@ export function mergeTopic(mine: Observation, theirs: Observation): Observation 
     documents: unionBy<BcfDocument>(base.documents, other.documents, (item, twin) => defined({ ...item, data: item.data ?? twin.data })),
     elements: [mine, theirs].find((topic) => topic.elements.some((ref) => ref.model !== undefined))?.elements ?? base.elements,
     pin: base.pin ?? other.pin,
+    drawingPin: base.drawingPin ?? other.drawingPin,
     point: base.point ?? other.point,
     location: { ...other.location, ...base.location },
     origin: base.origin ?? other.origin,
@@ -633,6 +641,7 @@ const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filt
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const vec3 = (value: unknown): Vec3 | undefined => (Array.isArray(value) && value.length === 3 && value.every(finite) ? [value[0], value[1], value[2]] : undefined);
 const records = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+const planPin = (value: unknown): PlanPin | undefined => (isRecord(value) && typeof value.plan === 'string' && finite(value.x) && finite(value.y) ? { plan: value.plan, x: value.x, y: value.y } : undefined);
 
 function parseViewpoint(raw: Record<string, unknown>): BcfViewpoint | null {
   if (typeof raw.guid !== 'string') return null;
@@ -651,7 +660,6 @@ function parseViewpoint(raw: Record<string, unknown>): BcfViewpoint | null {
 
 function parseTopic(raw: Record<string, unknown>, index: number): Observation | null {
   if (typeof raw.guid !== 'string' || typeof raw.title !== 'string' || typeof raw.creationDate !== 'string') return null;
-  const pin = isRecord(raw.pin) && typeof raw.pin.plan === 'string' && finite(raw.pin.x) && finite(raw.pin.y) ? { plan: raw.pin.plan, x: raw.pin.x, y: raw.pin.y } : undefined;
   const location = isRecord(raw.location) ? defined({ level: str(raw.location.level), room: str(raw.location.room), zone: str(raw.location.zone) }) : {};
   return defined({
     guid: raw.guid, type: str(raw.type) ?? '', status: str(raw.status) ?? '', title: raw.title, priority: str(raw.priority), labels: strings(raw.labels),
@@ -665,7 +673,7 @@ function parseTopic(raw: Record<string, unknown>, index: number): Observation | 
     viewpoints: records(raw.viewpoints).flatMap((viewpoint) => parseViewpoint(viewpoint) ?? []),
     number: finite(raw.number) && raw.number > 0 ? raw.number : index + 1,
     elements: records(raw.elements).flatMap((ref) => (typeof ref.key === 'string' && ref.key ? [defined({ key: ref.key, model: str(ref.model) })] : [])),
-    pin, point: vec3(raw.point), location, origin: str(raw.origin),
+    pin: planPin(raw.pin), drawingPin: planPin(raw.drawingPin), point: vec3(raw.point), location, origin: str(raw.origin),
   });
 }
 

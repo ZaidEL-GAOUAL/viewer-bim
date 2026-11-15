@@ -1,0 +1,71 @@
+/* Page « Suivi de chantier » : ce qui s'ajoute à la feuille du viewer (mêmes jetons). Une colonne, faite pour un téléphone ;
+   plus large sur un ordinateur. Pas de finition visuelle ici : la page sera reprise avec les autres (spec 18). */
+
+html, body { height: auto; min-height: 100%; overflow: auto; }
+body { font-size: 15px; }
+.ch-app { max-width: 760px; margin: 0 auto; padding: 0 12px calc(32px + env(safe-area-inset-bottom)); }
+
+.ch-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: calc(8px + env(safe-area-inset-top)) 0 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.ch-brand { font-weight: 700; color: var(--text); text-decoration: none; }
+.ch-other { color: var(--muted); font-size: 13px; }
+.ch-spacer { flex: 1; }
+.ch-avatar { display: inline-grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border-radius: 18px; background: var(--accent); color: var(--accent-text); font-weight: 700; text-decoration: none; }
+.ch-avatar.big { width: 48px; height: 48px; border-radius: 24px; font-size: 18px; }
+.ch-me { display: flex; align-items: center; gap: 10px; }
+
+.ch-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0; padding: 8px 10px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+.ch-status.warning { color: var(--text); border-left: 3px solid var(--danger); }
+.ch-refused { color: var(--danger); }
+.ch-demo { display: inline-flex; align-items: center; gap: 4px; }
+
+.ch-main h1 { margin: 12px 0 8px; font-size: 22px; }
+.ch-main h2 { margin: 20px 0 8px; font-size: 16px; }
+.ch-head { margin-bottom: 8px; }
+.ch-back { display: inline-block; margin-top: 8px; color: var(--accent); text-decoration: none; }
+.ch-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.ch-tab { padding: 8px 12px; color: var(--muted); text-decoration: none; border-bottom: 2px solid transparent; }
+.ch-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+.ch-main button, .ch-main select, .ch-main input, .ch-main textarea, .ch-button { min-height: 40px; font-size: 15px; }
+.ch-main input, .ch-main textarea { width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); font: inherit; }
+.ch-main input[type='checkbox'] { width: auto; min-height: 0; }
+.ch-main select { max-width: 100%; }
+.ch-button { display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); text-decoration: none; }
+.ch-button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+.ch-danger { color: var(--danger); }
+
+.ch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ch-row > input { flex: 1 1 180px; width: auto; }
+.ch-actions { margin: 10px 0; }
+.ch-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 8px 0; }
+.ch-check { display: inline-flex; align-items: center; gap: 6px; }
+.ch-form { display: flex; flex-direction: column; gap: 10px; max-width: 420px; }
+.ch-field { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.ch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0 10px; }
+.ch-hint { color: var(--muted); font-size: 13px; }
+.ch-note { padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.ch-note.warning { border-left-color: var(--danger); }
+.ch-error { color: var(--danger); }
+.ch-foot { margin-top: 24px; font-size: 13px; }
+
+.ch-card { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; margin: 6px 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); text-decoration: none; }
+a.ch-card:hover { border-color: var(--muted); }
+.ch-dot { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 5px; }
+.ch-plan-card a { display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none; }
+.ch-thumb { width: 72px; height: 54px; object-fit: contain; background: #fff; border: 1px solid var(--border); }
+
+.ch-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.ch-photo-box { position: relative; }
+.ch-photo { display: block; width: 120px; height: 90px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); }
+.ch-missing { display: grid; place-items: center; padding: 6px; color: var(--muted); font-size: 12px; text-align: center; }
+.ch-main .ch-remove { position: absolute; top: 2px; right: 2px; min-height: 28px; height: 28px; padding: 0 8px; }
+.ch-history { padding-left: 18px; }
+.ch-history li { margin: 4px 0; }
+
+.ch-plan { overflow: auto; max-height: 75vh; border: 1px solid var(--border); background: #fff; touch-action: pan-x pan-y pinch-zoom; }
+.ch-plan.placing { outline: 2px solid var(--accent); cursor: crosshair; }
+.ch-board { position: relative; min-width: 100%; }
+.ch-board img { display: block; width: 100%; height: auto; user-select: none; }
+.ch-pin { position: absolute; display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 13px; color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 1px 4px rgb(0 0 0 / 0.4); }
+
+.ch-toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: min(92vw, 640px); }

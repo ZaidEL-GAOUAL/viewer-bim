@@ -9,6 +9,8 @@ export const LICENCE_FILES = {
   'licences/cesium.txt': 'node_modules/cesium/LICENSE.md',
   'licences/three-mesh-bvh.txt': 'node_modules/three-mesh-bvh/LICENSE',
   'licences/jspdf.txt': 'node_modules/jspdf/LICENSE',
+  'licences/supabase-js.txt': 'node_modules/@supabase/supabase-js/LICENSE',
+  'licences/phoenix.txt': 'node_modules/@supabase/phoenix/LICENSE.md',
   // Servi en .txt : un .md part en téléchargement dans certains navigateurs au lieu de s'afficher.
   'licences/revit-demo.txt': 'public/samples/revit-demo.LICENSE.md',
 };

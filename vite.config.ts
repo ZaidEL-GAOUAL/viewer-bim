@@ -1,7 +1,7 @@
 import { cpSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { LICENCE_FILES } from './scripts/licence-files.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
@@ -61,9 +61,17 @@ function licenceFiles(): Plugin {
 // (GitHub Pages le sert sous /<nom-du-dépôt>/).
 // L'étude de site (site.html) est construite à part (`vite build --mode site`, après le viewer, dans le même dossier) :
 // les deux pages partagent le code source, pas de morceau commun, et le bundle du viewer ne bouge pas à cause d'elle.
-// En développement, le serveur sert les deux pages.
+// Le suivi de chantier (chantier.html) de même (`--mode chantier`) : le client Supabase n'entre que dans son bundle. Ce mode
+// ne lit pas .env.production de lui-même : l'adresse et la clé publique du serveur y sont reprises.
+// En développement, le serveur sert les trois pages.
+const supabaseEnv = () => {
+  const env = loadEnv('production', root, 'VITE_SUPABASE_');
+  return Object.fromEntries(['VITE_SUPABASE_URL', 'VITE_SUPABASE_KEY'].map((key) => [`import.meta.env.${key}`, JSON.stringify(env[key] ?? '')]));
+};
 export default defineConfig(({ mode }) => (mode === 'site'
   ? { base: './', publicDir: false, build: { emptyOutDir: false, chunkSizeWarningLimit: 6000, rolldownOptions: { input: resolve(root, 'site.html') } } }
+  : mode === 'chantier'
+  ? { base: './', publicDir: false, define: supabaseEnv(), build: { emptyOutDir: false, rolldownOptions: { input: resolve(root, 'chantier.html') } } }
   : {
     base: './',
     plugins: [cesiumAssets(), licenceFiles()],
