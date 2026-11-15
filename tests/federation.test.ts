@@ -214,6 +214,17 @@ test('a Revit file that does not fit is refused with the figures, before reading
   assert.equal(model.count, before, 'nothing changed');
 });
 
+test('a Revit file read with what is left of a study\'s budget fits it: its boxes do not count (bringModel)', async () => {
+  const { output, raw } = await revitDemo(200);
+  const { buildModel } = await import('../src/engine/buildModel.ts');
+  const { meshedTriangles } = await import('../src/engine/Model.ts');
+  const model = buildModel(raw, select);
+  assert.ok(output.report.sources.unknown > 0, 'some elements drawn as boxes');
+  assert.ok(model.triangleCount > 200, 'more triangles than the budget, boxes included');
+  assert.ok(meshedTriangles(model) <= 200, 'the meshed part fits the budget it was read with');
+  model.dispose();
+});
+
 test('elements the reader drew as their box are flagged on the model: indicative quantities, out of clashes, not compared, not split', async () => {
   const { model, store, edits, context } = await session();
   // Un tout petit budget : passé lui, le lecteur montre les éléments par leur boîte et le dit.

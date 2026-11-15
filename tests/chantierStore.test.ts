@@ -241,3 +241,85 @@ test('supprimer mon compte : projets dont je suis le seul membre et leurs fichie
   assert.equal((server.state.tables.topics.find((row) => row.id === kept.guid) as TopicRow).creation_author, 'Compte supprimé');
   assert.equal(server.state.users.some((user) => user.email === 'zaid@test.fr'), false);
 });
+
+test('un invité reçoit ce qui lui devient visible, même plus ancien que son curseur ; promu, il reçoit les observations d’avant', async () => {
+  const server = new MemoryBackend();
+  const admin = await signedIn(server, 'alice@test.fr', 'Alice');
+  const project = await admin.createProject('Tilleuls');
+  await admin.addMember(project.id, 'gaston@durand.fr', 'guest', 'Durand');
+  const later = await observe(admin, project.id, { title: 'Pour Martin, puis Durand', assignedTo: 'Martin' });
+  await update(admin, project.id, later.guid, (topic) => addComment(topic, 'Vu avec Martin', 'Alice', now()));
+  await observe(admin, project.id, { title: 'Pour Martin', assignedTo: 'Martin' });
+  await admin.sync();
+  // Ce qui suit est écrit un jour plus tard : les lignes d'avant sont bien plus anciennes que la marge des curseurs.
+  server.state.clock = Date.now() + 86_400_000;
+  const durand = await observe(admin, project.id, { title: 'Pour Durand', assignedTo: 'Durand' });
+  await update(admin, project.id, durand.guid, (topic) => addComment(topic, 'Vu avec Durand', 'Alice', now()));
+  await admin.sync();
+  const guest = await signedIn(server, 'gaston@durand.fr', 'Gaston');
+  const titles = async () => (await guest.book(project.id)).topics.map((topic) => topic.title).sort();
+  assert.deepEqual(await titles(), ['Pour Durand']);
+
+  // Attribuée à son entreprise après coup : l'observation arrive avec son commentaire, plus ancien que le curseur.
+  await update(admin, project.id, later.guid, (topic) => touched(topic, { assignedTo: 'Durand' }, 'Alice', now()));
+  await admin.sync();
+  await guest.sync();
+  const moved = (await guest.book(project.id)).topics.find((topic) => topic.guid === later.guid);
+  assert.deepEqual(moved?.comments.map((comment) => comment.text), ['Vu avec Martin']);
+
+  // Promu éditeur : il voit tout le projet, y compris ce qui n'a pas changé depuis.
+  await admin.updateMember({ ...(await admin.members(project.id)).find((row) => row.email === 'gaston@durand.fr')!, role: 'editor' });
+  await admin.sync();
+  await guest.sync();
+  assert.equal(await guest.role(project.id), 'editor');
+  assert.deepEqual(await titles(), ['Pour Durand', 'Pour Martin', 'Pour Martin, puis Durand']);
+});
+
+test('une observation supprimée ne revient pas quand le viewer lié renvoie sa copie', async () => {
+  const server = new MemoryBackend();
+  const store = await signedIn(server, 'zaid@test.fr');
+  const project = await store.createProject('Tilleuls');
+  const draft = await observe(store, project.id, { title: 'Fissure' });
+  await store.sync();
+  const viewerCopy = (await store.book(project.id)).topics[0];
+  await store.deleteObservation(project.id, draft.guid, 'Zaid');
+  await store.saveObservation(project.id, viewerCopy);
+  await store.sync();
+  assert.deepEqual(await store.book(project.id), { ...(await store.book(project.id)), topics: [] });
+  assert.ok(server.state.tables.topics[0].deleted_at, 'still deleted on the server');
+});
+
+test('le même .bcf importé dans deux projets : chacun a ses observations, commentaires et photos ; réimporter ne double rien', async () => {
+  const server = new MemoryBackend();
+  const store = await signedIn(server, 'zaid@test.fr');
+  const a = await store.createProject('A'), b = await store.createProject('B');
+  const lists = listsOf(a);
+  const topic = addComment(newObservation({ title: 'Garde-corps', documents: [{ guid: crypto.randomUUID(), filename: 'gc.jpg', data: photo('gc') }] }, 'Zaid', now(), lists, 1), 'À fixer', 'Zaid', now());
+  const bcf = await writeBcf([toBcfTopic(topic)], extensionsOf({ settings: {}, lists, topics: [topic] }));
+  await store.importFile(a.id, new File([bcf], 'obs.bcf'));
+  const second = await store.importFile(b.id, new File([bcf], 'obs.bcf'));
+  assert.equal(second.added, 1);
+  assert.equal((await store.importFile(b.id, new File([bcf], 'obs.bcf'))).added, 0, 'the same ids again: updated, not doubled');
+  const books = await Promise.all([a, b].map((project) => store.book(project.id)));
+  for (const book of books) {
+    assert.equal(book.topics.length, 1);
+    assert.deepEqual(book.topics[0].comments.map((comment) => comment.text), ['À fixer']);
+    assert.equal(await book.topics[0].documents[0].data!.text(), 'photo gc');
+  }
+  assert.notEqual(books[0].topics[0].guid, books[1].topics[0].guid);
+  await store.sync();
+  assert.deepEqual(await store.pending(), { waiting: 0, refused: [] });
+  assert.deepEqual(['topics', 'comments', 'photos'].map((table) => server.state.tables[table as 'topics'].length), [2, 2, 2]);
+});
+
+test('un appareil partagé : le nom et l’entreprise du compte précédent ne passent pas au suivant', async () => {
+  const server = new MemoryBackend();
+  await server.signUp('bob@test.fr', PASSWORD, 'Bob');
+  const store = await ChantierStore.open(memoryKv(), server.connect());
+  await store.signUp('alice@test.fr', PASSWORD, 'Alice', 'Durand');
+  assert.deepEqual(await store.profile(), { name: 'Alice', company: 'Durand' });
+  await store.signOut();
+  await store.signIn('bob@test.fr', PASSWORD);
+  assert.deepEqual(await store.profile(), { name: 'Bob', company: '' });
+  assert.equal(server.state.tables.profiles.find((row) => row.display_name === 'Bob')?.company, '');
+});

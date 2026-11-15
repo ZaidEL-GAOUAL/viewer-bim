@@ -56,6 +56,17 @@ test('une entrée modifiée pendant son envoi reste en file (la création devien
   assert.equal(after[0].fields.status, 'Résolue');
 });
 
+test('deux onglets envoient la même entrée, modifiée entre-temps : la modification reste en file jusqu’à son propre envoi', () => {
+  const queue = enqueue([], { table: 'topics', id: 't1', op: 'update', fields: { title: 'A' } });
+  const readByA = queue[0], readByB = queue[0];
+  const edited = enqueue(queue, { table: 'topics', id: 't1', op: 'update', fields: { title: 'B' } });
+  const afterA = complete(edited, readByA);
+  assert.equal(afterA.length, 1, 'changed while A was sending');
+  const afterB = complete(afterA, readByB);
+  assert.deepEqual(afterB.map((entry) => entry.fields.title), ['B'], 'B finishing with what it read before the edit does not drop the edit');
+  assert.deepEqual(complete(afterB, afterB[0]), [], 'sent itself, it leaves the queue');
+});
+
 test('réseau coupé : l’envoi s’arrête et tout reste ; refus : marqué, la suite part ; « Réessayer » le relance', () => {
   let queue = enqueue(enqueue([], { table: 'topics', id: 't1', op: 'update', fields: { title: 'A' } }), { table: 'topics', id: 't2', op: 'update', fields: { title: 'B' } });
   const offline = fail(queue, queue[0], new BackendError('offline', 'Pas de réseau.'));

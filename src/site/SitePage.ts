@@ -380,10 +380,14 @@ export class SitePage {
       return;
     }
     await this.persist();
-    await this.load(study);
+    // Le fichier d'une étude déjà gardée ici n'écrase pas cette version (peut-être plus récente) : il s'ouvre en copie.
+    const opened = await this.store.fromFile(study);
+    await this.load(opened);
     // Un fichier ouvert rejoint la liste des études gardées.
     if (this.store.available) await this.persist();
-    this.toast(`Étude « ${study.name} » ouverte${this.store.available ? ' et gardée dans ce navigateur' : ''}.`);
+    this.toast(opened !== study
+      ? `Ce navigateur garde déjà l’étude « ${study.name} », laissée telle quelle : le fichier est ouvert à part, en « ${opened.name} ».`
+      : `Étude « ${study.name} » ouverte${this.store.available ? ' et gardée dans ce navigateur' : ''}.`);
   }
 
   private async openStored(id: string): Promise<void> {

@@ -5,7 +5,7 @@
 // travaille avec des fichiers. Le stockage est derrière une petite interface (`Backend`) que les tests remplacent.
 
 import type { ModelSnapshot } from './placedModel.ts';
-import { parseStudy, type Study } from './study.ts';
+import { newId, parseStudy, type Study } from './study.ts';
 
 export type StoreName = 'studies' | 'models' | 'handoff';
 const STORES: readonly StoreName[] = ['studies', 'models', 'handoff'];
@@ -124,6 +124,23 @@ export class StudyStore {
     const study = parseStudy(record.study);
     study.id = id;
     return study;
+  }
+
+  /**
+   * L'étude d'un fichier telle qu'elle s'ouvre ici. Si ce navigateur garde déjà une étude sous son identifiant (peut-être plus
+   * récente que le fichier), le fichier devient une copie à part : nouvel identifiant pour elle et pour ses maquettes (leur
+   * géométrie gardée ici est copiée), nom « (copie du fichier) ». La version gardée reste intacte.
+   */
+  async fromFile(study: Study): Promise<Study> {
+    if (!this.backend || !(await this.backend.get('studies', study.id).catch(() => undefined))) return study;
+    const copy: Study = { ...study, id: newId(), name: `${study.name} (copie du fichier)`, models: [] };
+    for (const placed of study.models) {
+      const id = newId();
+      const snapshot = await this.model(placed.id);
+      if (snapshot) await this.saveModel(copy.id, { ...snapshot, id });
+      copy.models.push({ ...placed, id });
+    }
+    return copy;
   }
 
   /** Retire l'étude et les maquettes posées sur son site. */

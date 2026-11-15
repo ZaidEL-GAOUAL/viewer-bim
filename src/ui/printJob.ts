@@ -99,15 +99,19 @@ export interface VisibleModel {
 
 /** Au plus tant de centres pour trouver les bornes de la maquette (`mainSpan`). */
 const SPAN_SAMPLE = 65_536;
+/** Moins d'éléments affichés : aucun n'est écarté comme égaré (`mainSpan`). */
+const STRAY_MIN = 100;
 
 /**
  * Les bornes, sur un axe, des centres qui forment la maquette : du premier au troisième quartile, on s'étend vers chaque bout
  * tant que l'écart au centre suivant ne dépasse pas deux fois l'étendue déjà gardée, ou qu'il reste au-delà plus d'une poignée
- * d'éléments (1 %). Un élément égaré loin de tout (un objet oublié à un kilomètre) reste dehors. `centres` est trié sur place.
+ * d'éléments (1 %). Un élément égaré loin de tout (un objet oublié à un kilomètre) reste dehors. Sous `STRAY_MIN` éléments,
+ * aucun n'est égaré : les quartiles de cinq centres ne disent pas où est la maquette. `centres` est trié sur place.
  */
 function mainSpan(centres: Float32Array): [number, number] {
   centres.sort();
   const n = centres.length, stray = Math.max(1, Math.floor(n / 100));
+  if (n < STRAY_MIN) return [centres[0], centres[n - 1]];
   let lo = Math.floor((n - 1) / 4), hi = Math.ceil((3 * (n - 1)) / 4);
   while (hi < n - 1 && (centres[hi + 1] - centres[hi] <= 2 * (centres[hi] - centres[lo]) || n - 1 - hi > stray)) hi++;
   while (lo > 0 && (centres[lo] - centres[lo - 1] <= 2 * (centres[hi] - centres[lo]) || lo > stray)) lo--;
@@ -388,7 +392,8 @@ export async function printToPdf(app: App, settings: PrintSettings, pages: reado
       }
       return { blob: pdf.finish(), empty };
     } finally {
-      if (snapshot) app.openView(snapshot, { activeView: active });
+      // Sans glissement : une impression lancée aussitôt prendrait la caméra en route pour « la vue d'avant ».
+      if (snapshot) app.openView(snapshot, { animate: false, activeView: active });
     }
   });
 }

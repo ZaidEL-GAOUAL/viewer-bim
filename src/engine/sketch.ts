@@ -64,6 +64,13 @@ export function resolvePoint(raw: Vector3, candidates: readonly SnapCandidate[],
 }
 
 /**
+ * La boîte que traverse une coupe droite enregistrée : toute la maquette, élargie de sa diagonale de chaque côté. Une
+ * révision qui élargit l'élément découpé (même au-delà de la sélection d'alors) est encore coupée de part en part ; la coupe
+ * reste deux points.
+ */
+export const straightReach = (model: Box3): Box3 => model.clone().expandByScalar(model.getSize(new Vector3()).length());
+
+/**
  * La ligne par `a` et `b` (en plan), prolongée jusqu'aux bords de `box` et un peu au-delà (5 % de sa diagonale en plan,
  * 0,5 m au moins), jamais plus courte que [a, b]. Une ligne qui ne passe pas dans la boîte est rendue telle quelle.
  */
@@ -130,7 +137,7 @@ export class Sketch {
   shapes: { points: Vector3[]; label: string }[] = [];
   /** L'aimant (case « Aimanter ») ; Alt tenu s'en passe. */
   snap = true;
-  /** Les coupes droites traversent toute cette boîte (les éléments choisis) ; null : une ligne s'arrête à ses deux points. */
+  /** Les coupes droites traversent toute cette boîte (`straightReach` de la maquette) ; null : une ligne s'arrête à ses deux points. */
   bounds: Box3 | null = null;
   /** Éléments dont les arêtes aimantent aussi hors de celui que le curseur survole (les éléments choisis). */
   elements: readonly number[] = [];

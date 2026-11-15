@@ -98,3 +98,27 @@ test('une base qui refuse de s’ouvrir rend un magasin indisponible ; un espace
   assert.equal(await full.save(study('Pleine')), false);
   assert.equal(await full.saveModel('x', snapshot('m')), false);
 });
+
+test('le fichier d’une étude déjà gardée ici s’ouvre en copie : la version gardée (plus récente) n’est pas écrasée', async () => {
+  const store = new StudyStore(memoryBackend());
+  const kept = study('Îlot A');
+  kept.models.push({ id: 'm1', name: 'Maquette', role: 'context', east: 0, north: 0, up: 0, rotation: 0, georeferenced: false, triangles: 1 });
+  await store.save(kept);
+  await store.saveModel(kept.id, snapshot('m1'));
+  const file = structuredClone(kept);
+  kept.name = 'Îlot A, version plus récente';
+  await store.save(kept);
+
+  const opened = await store.fromFile(file);
+  assert.notEqual(opened.id, kept.id);
+  assert.equal(opened.name, 'Îlot A (copie du fichier)');
+  assert.notEqual(opened.models[0].id, 'm1', 'its models are its own');
+  assert.equal((await store.model(opened.models[0].id))?.id, opened.models[0].id, 'with the geometry kept here');
+  await store.save(opened);
+  assert.equal((await store.open(kept.id))?.name, 'Îlot A, version plus récente');
+  await store.remove(opened.id);
+  assert.equal((await store.model('m1'))?.id, 'm1', 'removing the copy keeps the original’s geometry');
+
+  const unknown = study('Îlot C');
+  assert.equal(await store.fromFile(unknown), unknown, 'a study not kept here opens as it is');
+});

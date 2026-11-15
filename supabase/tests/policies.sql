@@ -58,29 +58,37 @@ reset role;
 -- ------------------------------------------------------------------ alice crée A, bob crée B
 
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated"}', true), set_config('role', 'authenticated', true);
+-- Chaque création comme l'application l'envoie (supabase.ts : `upsert(…, { onConflict: 'id', ignoreDuplicates: true })`) :
+-- `on conflict (id) do nothing` relit la ligne nouvelle avec la politique de lecture, avant les déclencheurs `after` (dont
+-- `add_creator`, qui fait du créateur l'administrateur du projet). Une politique de lecture qui ne montre pas la ligne à son
+-- auteur à ce moment-là refuse la création (42501).
+insert into public.organisations (id, name)
+values ('60000000-0000-4000-8000-0000000000a1', 'Autre organisation d''Alice') on conflict (id) do nothing;
 insert into public.projects (id, organisation_id, name)
-values ('10000000-0000-4000-8000-00000000000a', (select id from public.organisations where created_by = auth.uid()), 'Projet A');
-insert into public.memberships (project_id, email, role, company) values
-  ('10000000-0000-4000-8000-00000000000a', 'gaston@test.local', 'guest', 'Durand'),
-  ('10000000-0000-4000-8000-00000000000a', 'gerard@test.local', 'guest', 'Martin'),
-  ('10000000-0000-4000-8000-00000000000a', 'ursula@test.local', 'guest', 'Durand'),
-  ('10000000-0000-4000-8000-00000000000a', 'eve@test.local', 'editor', '');
+values ('10000000-0000-4000-8000-00000000000a', (select id from public.organisations where created_by = auth.uid() and name = 'Personnel'), 'Projet A') on conflict (id) do nothing;
+insert into public.memberships (id, project_id, email, role, company) values
+  ('70000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', 'gaston@test.local', 'guest', 'Durand'),
+  ('70000000-0000-4000-8000-0000000000a2', '10000000-0000-4000-8000-00000000000a', 'gerard@test.local', 'guest', 'Martin'),
+  ('70000000-0000-4000-8000-0000000000a3', '10000000-0000-4000-8000-00000000000a', 'ursula@test.local', 'guest', 'Durand'),
+  ('70000000-0000-4000-8000-0000000000a4', '10000000-0000-4000-8000-00000000000a', 'eve@test.local', 'editor', '') on conflict (id) do nothing;
 insert into public.topics (id, project_id, number, title, status, assigned_to) values
   ('20000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', 1, 'Joint à reprendre', 'Ouverte', 'Durand'),
   ('20000000-0000-4000-8000-0000000000a2', '10000000-0000-4000-8000-00000000000a', 2, 'Plinthe', 'Ouverte', 'Martin'),
   ('20000000-0000-4000-8000-0000000000a3', '10000000-0000-4000-8000-00000000000a', 3, 'Pour Gaston', 'Ouverte', 'Gaston@Test.local'),
-  ('20000000-0000-4000-8000-0000000000a4', '10000000-0000-4000-8000-00000000000a', 4, 'Sans entreprise', 'Ouverte', null);
+  ('20000000-0000-4000-8000-0000000000a4', '10000000-0000-4000-8000-00000000000a', 4, 'Sans entreprise', 'Ouverte', null) on conflict (id) do nothing;
 -- `created_by` forgé : la base pose l'appelant.
 insert into public.comments (id, project_id, topic_id, author, text, created_by) values
   ('30000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a1', 'Alice', 'Vu sur place', '00000000-0000-4000-8000-00000000000b'),
-  ('30000000-0000-4000-8000-0000000000a2', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a2', 'Alice', 'Martin prévenu', null);
+  ('30000000-0000-4000-8000-0000000000a2', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a2', 'Alice', 'Martin prévenu', null) on conflict (id) do nothing;
+insert into public.viewpoints (id, project_id, topic_id, position, data) values
+  ('80000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a1', 0, '{}') on conflict (id) do nothing;
 insert into public.photos (id, project_id, topic_id, filename, path, mime, size, sha256) values
   ('40000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a1', 'joint.jpg',
    '10000000-0000-4000-8000-00000000000a/20000000-0000-4000-8000-0000000000a1/' || repeat('a', 64) || '.jpg', 'image/jpeg', 1000, repeat('a', 64)),
   ('40000000-0000-4000-8000-0000000000a2', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a2', 'plinthe.jpg',
-   '10000000-0000-4000-8000-00000000000a/20000000-0000-4000-8000-0000000000a2/' || repeat('b', 64) || '.jpg', 'image/jpeg', 1000, repeat('b', 64));
+   '10000000-0000-4000-8000-00000000000a/20000000-0000-4000-8000-0000000000a2/' || repeat('b', 64) || '.jpg', 'image/jpeg', 1000, repeat('b', 64)) on conflict (id) do nothing;
 insert into public.plans (id, project_id, name, path, mime, size, sha256, width, height) values
-  ('50000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', 'RDC', '10000000-0000-4000-8000-00000000000a/plans/' || repeat('c', 64) || '.png', 'image/png', 1000, repeat('c', 64), 800, 600);
+  ('50000000-0000-4000-8000-0000000000a1', '10000000-0000-4000-8000-00000000000a', 'RDC', '10000000-0000-4000-8000-00000000000a/plans/' || repeat('c', 64) || '.png', 'image/png', 1000, repeat('c', 64), 800, 600) on conflict (id) do nothing;
 insert into storage.objects (bucket_id, name) values
   ('photos', '10000000-0000-4000-8000-00000000000a/20000000-0000-4000-8000-0000000000a1/' || repeat('a', 64) || '.jpg'),
   ('photos', '10000000-0000-4000-8000-00000000000a/20000000-0000-4000-8000-0000000000a2/' || repeat('b', 64) || '.jpg'),
@@ -89,6 +97,13 @@ do $$
 declare n integer;
 begin
   if private.project_role('10000000-0000-4000-8000-00000000000a') <> 'admin' then raise exception 'ÉCHEC : le créateur est administrateur'; end if;
+  if (select count(*) from public.organisations where id = '60000000-0000-4000-8000-0000000000a1') <> 1 then raise exception 'ÉCHEC : organisation créée en on conflict refusée'; end if;
+  if (select count(*) from public.projects where id = '10000000-0000-4000-8000-00000000000a') <> 1 then raise exception 'ÉCHEC : projet créé en on conflict refusé'; end if;
+  if (select count(*) from public.memberships where project_id = '10000000-0000-4000-8000-00000000000a') <> 5 then raise exception 'ÉCHEC : adhésions créées en on conflict refusées'; end if;
+  if (select count(*) from public.viewpoints where id = '80000000-0000-4000-8000-0000000000a1') <> 1 then raise exception 'ÉCHEC : point de vue créé en on conflict refusé'; end if;
+  -- Le même projet renvoyé (réseau coupé après l'envoi) : sans effet, sans erreur.
+  insert into public.projects (id, organisation_id, name)
+  values ('10000000-0000-4000-8000-00000000000a', (select id from public.organisations where created_by = auth.uid() and name = 'Personnel'), 'Projet A') on conflict (id) do nothing;
   if (select created_by from public.comments where id = '30000000-0000-4000-8000-0000000000a1') <> auth.uid() then raise exception 'ÉCHEC : created_by forgé accepté'; end if;
   -- Le même envoi deux fois : une seule ligne ; un numéro déjà pris devient le suivant.
   insert into public.topics (id, project_id, number, title) values ('20000000-0000-4000-8000-0000000000a5', '10000000-0000-4000-8000-00000000000a', 1, 'Doublon') on conflict (id) do nothing;
@@ -107,9 +122,9 @@ reset role;
 
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000b","role":"authenticated"}', true), set_config('role', 'authenticated', true);
 insert into public.projects (id, organisation_id, name)
-values ('10000000-0000-4000-8000-00000000000b', (select id from public.organisations where created_by = auth.uid()), 'Projet B');
+values ('10000000-0000-4000-8000-00000000000b', (select id from public.organisations where created_by = auth.uid()), 'Projet B') on conflict (id) do nothing;
 insert into public.topics (id, project_id, title, assigned_to) values
-  ('20000000-0000-4000-8000-0000000000b1', '10000000-0000-4000-8000-00000000000b', 'Chez B', 'Durand');
+  ('20000000-0000-4000-8000-0000000000b1', '10000000-0000-4000-8000-00000000000b', 'Chez B', 'Durand') on conflict (id) do nothing;
 
 -- ------------------------------------------------------------------ bob (membre de B) ne voit ni n'écrit rien de A
 
@@ -334,9 +349,14 @@ reset role;
 
 -- ------------------------------------------------------------------ supprimer mon compte
 
--- gerard (invité) : son adhésion part, son nom est retiré, le compte disparaît.
+-- gerard (invité) : son adhésion part, son nom et son e-mail sont retirés des observations, le compte disparaît.
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated"}', true), set_config('role', 'authenticated', true);
+insert into public.topics (id, project_id, title, assigned_to) values
+  ('20000000-0000-4000-8000-0000000000a6', '10000000-0000-4000-8000-00000000000a', 'Pour Gérard', 'Gerard@Test.local') on conflict (id) do nothing;
+reset role;
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000d","role":"authenticated"}', true), set_config('role', 'authenticated', true);
-insert into public.comments (id, project_id, topic_id, author, text) values ('30000000-0000-4000-8000-0000000000d1', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a2', 'Gérard', 'Fait');
+insert into public.comments (id, project_id, topic_id, author, text) values ('30000000-0000-4000-8000-0000000000d1', '10000000-0000-4000-8000-00000000000a', '20000000-0000-4000-8000-0000000000a2', 'Gérard', 'Fait') on conflict (id) do nothing;
+update public.topics set status = 'Résolue', modified_author = 'Gérard' where id = '20000000-0000-4000-8000-0000000000a2';
 select public.delete_my_account();
 reset role;
 -- bob : seul membre de B, le projet part avec lui.
@@ -349,6 +369,10 @@ do $$ begin
   if exists (select 1 from public.profiles where id in ('00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000d')) then raise exception 'ÉCHEC : profil non supprimé'; end if;
   if exists (select 1 from public.memberships where email = 'gerard@test.local') then raise exception 'ÉCHEC : adhésion non retirée'; end if;
   if (select author from public.comments where id = '30000000-0000-4000-8000-0000000000d1') <> 'Compte supprimé' then raise exception 'ÉCHEC : nom gardé dans un commentaire'; end if;
+  if (select modified_author from public.topics where id = '20000000-0000-4000-8000-0000000000a2') <> 'Compte supprimé' then raise exception 'ÉCHEC : nom gardé dans « modifiée par »'; end if;
+  if (select assigned_to from public.topics where id = '20000000-0000-4000-8000-0000000000a6') <> 'Compte supprimé' then raise exception 'ÉCHEC : e-mail gardé dans « attribuée à »'; end if;
+  if (select assigned_to from public.topics where id = '20000000-0000-4000-8000-0000000000a1') <> 'Durand' then raise exception 'ÉCHEC : une attribution à une entreprise est changée'; end if;
+  if exists (select 1 from public.events where actor_name in ('Gérard', 'Bob')) then raise exception 'ÉCHEC : nom gardé dans l''historique'; end if;
   if exists (select 1 from public.projects where id = '10000000-0000-4000-8000-00000000000b') then raise exception 'ÉCHEC : projet du seul membre gardé'; end if;
   if not exists (select 1 from public.projects where id = '10000000-0000-4000-8000-00000000000a') then raise exception 'ÉCHEC : projet partagé supprimé'; end if;
   raise notice 'policies.sql : tout est vérifié';

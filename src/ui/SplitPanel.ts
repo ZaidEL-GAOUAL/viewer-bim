@@ -7,6 +7,7 @@ import { integer, plural } from '../data/text.ts';
 import { holdView } from '../engine/capture.ts';
 import { formatVolume } from '../engine/Measure.ts';
 import { boxOnlyReason, type Model } from '../engine/Model.ts';
+import { straightReach } from '../engine/sketch.ts';
 import { runSliced } from '../engine/sliced.ts';
 import { solidFromParts, solidProblem } from '../engine/splitMesh.ts';
 import { STANDARD_VIEWS } from '../engine/views.ts';
@@ -39,7 +40,8 @@ export async function holdDrawingView(app: App, elements: readonly number[], opt
   return () => {
     if (drawingOwner === options.leave) drawingOwner = null;
     return holdView(async () => {
-      if (before && app.model === model) app.openView(before.view, { activeView: before.active });
+      // Sans glissement : le dessin suivant peut commencer aussitôt et prendrait la caméra en route pour « la vue d'avant ».
+      if (before && app.model === model) app.openView(before.view, { animate: false, activeView: before.active });
     });
   };
 }
@@ -465,7 +467,7 @@ export class SplitPanel {
     const sketch = app.sketch;
     const box = model.boxOf(this.chosen, new Box3());
     sketch.start(this.freeTrace.checked ? 'free' : 'lines', box.max.y);
-    sketch.bounds = box;
+    sketch.bounds = straightReach(model.box);
     sketch.elements = this.chosen;
     sketch.snap = this.snap.checked;
     sketch.keyboard = true;

@@ -39,6 +39,8 @@ export interface ShellGroup {
   /** Contenu toujours présent dans le groupe (arborescence, assistant, liste d'exports). */
   content?: HTMLElement[];
   tools?: ShellTool[];
+  /** Sections sous la liste et sous l'outil ouvert, qui restent quand un outil s'ouvre (les réglages du mode carte). */
+  footer?: HTMLElement[];
 }
 
 interface Page { group: ShellGroup; el: HTMLElement; list: HTMLElement | null; rows: HTMLButtonElement[]; railButton: HTMLButtonElement }
@@ -79,6 +81,11 @@ export class Shell {
           row.addEventListener('click', () => {
             tool.open();
             this.refresh();
+            // La carte ouverte remplace la liste : le clavier passe à son retour.
+            if (tool.el && !tool.el.hidden) {
+              this.syncPage();
+              this.back.focus();
+            }
           });
           rows.push(row);
           list.append(row);
@@ -91,6 +98,7 @@ export class Shell {
           new MutationObserver(() => this.onCard(group, tool)).observe(tool.el, { attributes: true, attributeFilter: ['hidden'] });
         }
       }
+      for (const section of group.footer ?? []) el.append(section);
       body.append(el);
       this.pages.set(group.id, { group, el, list, rows, railButton });
     }
@@ -149,6 +157,9 @@ export class Shell {
       this.open(group.id);
     }
     this.syncPage();
+    // Refermée de l'intérieur (son bouton, Échap) alors que le clavier y était : il revient à la ligne de l'outil.
+    const active = document.activeElement;
+    if (tool.el?.hidden && (!active || active === document.body || tool.el.contains(active))) this.focusRow(group.id, tool);
   }
 
   private close(tool: ShellTool): void {
@@ -161,6 +172,14 @@ export class Shell {
     const tool = page && this.openTool(page);
     if (tool) this.close(tool);
     this.syncPage();
+    if (tool) this.focusRow(this.current, tool);
+  }
+
+  /** Le clavier sur la ligne de cet outil, si sa liste est affichée. */
+  private focusRow(id: string, tool: ShellTool): void {
+    const page = this.pages.get(id);
+    if (!page || id !== this.current || page.list?.hidden) return;
+    page.rows[page.group.tools?.indexOf(tool) ?? -1]?.focus();
   }
 }
 

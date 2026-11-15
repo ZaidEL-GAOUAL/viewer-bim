@@ -168,6 +168,12 @@ const EXTENSIONS: Readonly<Record<string, string>> = { 'image/png': 'png', 'imag
 /** Le chemin d'un fichier dans le stockage : `<projet>/<observation ou « plans »>/<sha256>.<ext>` (nommé par son contenu). */
 export const filePath = (projectId: string, folder: string, sha256: string, mime: string): string => `${projectId}/${folder}/${sha256}.${EXTENSIONS[mime] ?? 'jpg'}`;
 
+/** Un identifiant tiré d'un projet et d'un autre identifiant (SHA-256 mis en forme d'UUID) : le même à chaque fois. */
+export async function derivedId(projectId: string, guid: string): Promise<string> {
+  const hex = await sha256(new Blob([`${projectId}/${guid}`]));
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${((parseInt(hex[16], 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 /** L'empreinte SHA-256 d'un contenu, en hexadécimal. */
 export async function sha256(blob: Blob): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', await blob.arrayBuffer());

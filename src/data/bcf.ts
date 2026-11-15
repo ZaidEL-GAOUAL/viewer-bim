@@ -116,6 +116,10 @@ export interface BcfTopic {
 
 /** Le fichier à nous, dans le dossier d'un sujet (la spécification permet des fichiers en plus ; les autres outils l'ignorent). */
 export const VIEWER_FILE = 'viewer-bim.json';
+/** Le nôtre tient en quelques centaines d'octets (point, repères) : au-delà, il n'est pas lu. */
+const VIEWER_FILE_MAX = 64 * 1024;
+/** Traits lus par point de vue. */
+const MAX_LINES = 1000;
 
 /** Les listes de valeurs du projet (extensions.xml). */
 export interface BcfExtensions {
@@ -319,7 +323,8 @@ function readViewpointFile(xml: string, guid: string): Omit<BcfViewpoint, 'snaps
   // Les composants d'une couleur ou d'une exception : posés directement ou dans `Components` (les deux se rencontrent).
   const coloring = children(child(components, 'Coloring'), 'Color').map((color) => ({ color: color.attributes.Color?.trim() ?? '', components: componentsOf(color) })).filter((item) => item.components.length > 0);
   const exceptions = componentsOf(child(child(components, 'Visibility'), 'Exceptions'));
-  const lines = children(child(info, 'Lines'), 'Line').flatMap((line) => {
+  // Au plus `MAX_LINES` traits : seule la croix d'un point sert, des milliers d'annotations ne sont pas gardées.
+  const lines = children(child(info, 'Lines'), 'Line').slice(0, MAX_LINES).flatMap((line) => {
     const start = vector(child(line, 'StartPoint')), end = vector(child(line, 'EndPoint'));
     return start && end ? [{ start, end }] : [];
   });
@@ -417,7 +422,9 @@ export async function readBcf(file: Blob, inflate?: Inflate): Promise<BcfRead> {
         viewpoints.push(defined({ ...viewpoint, snapshot: snapshot ? await blob(`${folder}/${snapshot}`) : undefined }));
       }
       let viewerBim: unknown;
-      if (entries.has(`${folder}/${VIEWER_FILE}`)) {
+      const viewerEntry = entries.get(`${folder}/${VIEWER_FILE}`);
+      if (viewerEntry && viewerEntry.size > VIEWER_FILE_MAX) notes.push(`${folder}/${VIEWER_FILE} trop gros (plus de ${VIEWER_FILE_MAX / 1024} Ko), ignoré.`);
+      else if (viewerEntry) {
         try { viewerBim = JSON.parse(await read(`${folder}/${VIEWER_FILE}`)); } catch { notes.push(`${folder}/${VIEWER_FILE} illisible, ignoré.`); }
       }
       topics.push(defined({

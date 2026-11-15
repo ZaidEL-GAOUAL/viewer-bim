@@ -1553,6 +1553,11 @@ button[aria-pressed='true'] {
 .dock .card { flex: none; max-height: none; padding: 12px 14px 16px; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
 .dock .card > .card-head > .card-title, .dock .card > .card-head > .close-button { display: none; }
 .dock .card > .card-head:not(:has(> :not(.card-title):not(.close-button))) { display: none; }
+/* Les réglages du mode carte : une section du groupe « Vues », sous la liste ou l'outil ouvert ; titre et croix (quitter la carte) restent. */
+.dock .dock-page > .card.map-card { border-top: 1px solid var(--border); }
+.dock .dock-page > .card.map-card > .card-head { display: flex; }
+.dock .dock-page > .card.map-card > .card-head > .card-title { display: block; }
+.dock .dock-page > .card.map-card > .card-head > .close-button { display: inline-block; }
 .dock .tool-checks { max-height: 220px; }
 
 /* À droite : le compte rendu d'ouverture (conversion IFC, lecture Revit) au-dessus des propriétés. */

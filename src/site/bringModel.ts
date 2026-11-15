@@ -5,6 +5,7 @@
 import { Color } from 'three';
 import { integer } from '../data/text.ts';
 import { buildModel, gltfSource } from '../engine/buildModel.ts';
+import { meshedTriangles } from '../engine/Model.ts';
 import { isIfcFile, isJsonFile, isModelFile, isRevitFile, isUsdFile, withoutExtension } from '../engine/fileKinds.ts';
 import { loadModelFiles, type InputFile } from '../engine/loadModel.ts';
 import { parseGeoreference, type Georeference } from '../geo/georeference.ts';
@@ -62,8 +63,10 @@ export async function readModelFiles(files: readonly File[], onStatus: (message:
     model = buildModel(gltfSource((await loadModelFiles(main, inputs.filter((input) => input !== main))).gltf), selectColor);
   }
   try {
-    if (model.triangleCount > budget) {
-      throw new Error(`« ${name} » compte ${triangleText(model.triangleCount)} ; cette page en tient encore ${triangleText(budget)} (selon la mémoire de l’appareil). Allégez la maquette (un seul bâtiment, sans liens) ou retirez une maquette déjà posée.`);
+    // Les boîtes des éléments que le lecteur Revit n'a pas maillés (pour tenir ce budget) ne comptent pas.
+    const counted = meshedTriangles(model);
+    if (counted > budget) {
+      throw new Error(`« ${name} » compte ${triangleText(counted)} ; cette page en tient encore ${triangleText(budget)} (selon la mémoire de l’appareil). Allégez la maquette (un seul bâtiment, sans liens) ou retirez une maquette déjà posée.`);
     }
     return snapshotOf(model, withoutExtension(name), georeference);
   } finally {

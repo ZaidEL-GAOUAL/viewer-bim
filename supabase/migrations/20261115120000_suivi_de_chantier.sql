@@ -11,7 +11,14 @@
 -- - `events` (historique) est écrit par un déclencheur, jamais par un client : ni insertion, ni modification, ni suppression.
 -- - Le stockage `photos` suit les mêmes règles par le chemin : `<project_id>/<topic_id>/<fichier>` ou `<project_id>/plans/<fichier>`.
 -- - Les identifiants sont des UUID créés sur l'appareil ; `created_at`, `updated_at` et `created_by` sont posés par la base.
+-- - L'application envoie chaque création en `insert … on conflict (id) do nothing` (le même envoi deux fois = une ligne) :
+--   PostgreSQL relit alors la ligne nouvelle avec la politique de lecture, avant les déclencheurs `after`. Chaque politique de
+--   lecture doit donc montrer à son auteur la ligne qu'il crée (voir `private.creating_project`).
 -- Rejouable : `if not exists`, `create or replace`, politiques et déclencheurs supprimés avant d'être recréés.
+--
+-- Précondition (réglages Auth du projet Supabase) : « Confirm email » doit rester ACTIVÉ. L'adhésion à un projet se reconnaît à
+-- l'e-mail confirmé (`private.my_email`) ; sans confirmation, n'importe qui pourrait s'inscrire avec l'adresse d'un invité et
+-- prendre son invitation.
 
 -- ------------------------------------------------------------------ fonctions d'aide (schéma non exposé par l'API)
 
@@ -226,6 +233,16 @@ as $$
   select exists (select 1 from public.topics t where t.id = p_topic and private.sees_topic(t.project_id, t.assigned_to))
 $$;
 
+-- Vrai pendant la création d'un projet par qui a créé son organisation, avant que son adhésion d'administrateur soit écrite
+-- (le déclencheur `add_creator` vient après la relecture de `on conflict … do nothing`). Un projet qui a déjà des membres ne
+-- l'est plus : son créateur retiré du projet ne le voit plus.
+create or replace function private.creating_project(p_project uuid, p_organisation uuid) returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.organisations o where o.id = p_organisation and o.created_by = auth.uid())
+    and not exists (select 1 from public.memberships m where m.project_id = p_project)
+$$;
+
 -- Le stockage : `<project_id>/plans/<fichier>` (lu par tout membre, écrit par administrateur et éditeur) ou
 -- `<project_id>/<topic_id>/<fichier>` (lu et écrit par qui voit l'observation). Tout autre chemin est refusé.
 create or replace function private.can_use_object(p_name text, p_write boolean) returns boolean
@@ -256,7 +273,9 @@ revoke all on function private.project_role(uuid) from public, anon;
 revoke all on function private.sees_topic(uuid, text) from public, anon;
 revoke all on function private.sees_topic_id(uuid) from public, anon;
 revoke all on function private.can_use_object(text, boolean) from public, anon;
+revoke all on function private.creating_project(uuid, uuid) from public, anon;
 grant execute on function private.my_email() to authenticated;
+grant execute on function private.creating_project(uuid, uuid) to authenticated;
 grant execute on function private.project_role(uuid) to authenticated;
 grant execute on function private.sees_topic(uuid, text) to authenticated;
 grant execute on function private.sees_topic_id(uuid) to authenticated;
@@ -441,7 +460,8 @@ create policy "organisation : renommer la sienne" on public.organisations for up
   using (created_by = (select auth.uid())) with check (created_by = (select auth.uid()));
 
 drop policy if exists "projet : membre" on public.projects;
-create policy "projet : membre" on public.projects for select to authenticated using (private.project_role(id) is not null);
+create policy "projet : membre" on public.projects for select to authenticated
+  using (private.project_role(id) is not null or private.creating_project(id, organisation_id));
 drop policy if exists "projet : créer dans mon organisation" on public.projects;
 create policy "projet : créer dans mon organisation" on public.projects for insert to authenticated
   with check (exists (select 1 from public.organisations o where o.id = projects.organisation_id and o.created_by = (select auth.uid())));
@@ -524,7 +544,8 @@ create policy "photos : supprimer (équipe)" on storage.objects for delete to au
 
 -- Les projets dont l'appelant est le seul membre sont supprimés (avec observations, photos, plans, historique : leurs fichiers
 -- sont retirés du stockage par l'application avant l'appel) ; ailleurs son adhésion est retirée et son nom remplacé par
--- « Compte supprimé » dans ses observations, commentaires et l'historique ; puis le compte (et son profil) est supprimé.
+-- « Compte supprimé » dans ses observations (auteur, dernier à les modifier : les noms que l'historique a notés pour lui sur
+-- chacune), commentaires et l'historique, et son e-mail dans « attribuée à » ; puis le compte (et son profil) est supprimé.
 -- Refusé s'il est le seul administrateur d'un projet qui a d'autres membres.
 -- Security definer : supprime dans auth.users et anonymise des lignes que l'appelant ne peut pas modifier.
 create or replace function public.delete_my_account() returns void
@@ -550,6 +571,11 @@ begin
     and not exists (select 1 from public.memberships o where o.project_id = p.id and o.email <> v_email);
   delete from public.memberships where email = v_email;
   update public.topics set creation_author = 'Compte supprimé' where created_by = v_uid;
+  -- Avant l'historique, qui dit sous quels noms il a modifié chaque observation.
+  update public.topics t set modified_author = 'Compte supprimé'
+  where t.modified_author in (select e.actor_name from public.events e where e.topic_id = t.id and e.actor = v_uid and e.actor_name <> '');
+  -- Son e-mail confirmé seulement : une adresse non confirmée ne prouve pas qu'elle est à lui.
+  update public.topics set assigned_to = 'Compte supprimé' where v_email is not null and lower(assigned_to) = v_email;
   update public.comments set author = 'Compte supprimé' where created_by = v_uid;
   update public.events set actor_name = 'Compte supprimé' where actor = v_uid;
   delete from auth.users where id = v_uid;
@@ -557,3 +583,14 @@ end
 $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- ------------------------------------------------------------------ comptes créés avant cette migration
+
+-- Un compte inscrit avant que `on_auth_user_created` existe n'a ni profil ni organisation : ils sont créés ici, comme à
+-- l'inscription. Rejouable : rien n'est créé deux fois.
+insert into public.profiles (id, display_name)
+select u.id, left(coalesce(u.raw_user_meta_data ->> 'display_name', ''), 120) from auth.users u
+on conflict (id) do nothing;
+insert into public.organisations (id, name, created_by)
+select gen_random_uuid(), 'Personnel', u.id from auth.users u
+where not exists (select 1 from public.organisations o where o.created_by = u.id);

@@ -72,6 +72,12 @@ created in the viewer into a project.
 - **Security is in the policies, not in the page**: every table denies by default; test as an anonymous
   caller, as a member of another project, as a guest. The publishable key is public; the service key never
   enters the repository or the browser.
+- **"Confirm email" must stay ON** in the project's Auth settings: membership is matched on the caller's
+  confirmed e-mail; with confirmation off, anyone can sign up with an invited person's address and take the
+  invitation. The migration states it as a precondition.
+- The app sends every creation as `insert … on conflict (id) do nothing`: PostgreSQL then checks the new row
+  against the table's read policy, before `after` triggers run. Every read policy must show its author the
+  row being created (the project's creator has no membership yet: `private.creating_project`).
 - Supabase Free pauses an idle project after a week and limits storage to 1 GB: photos are reduced to
   1,500 px before upload (already done), the page handles "service en pause" as "hors ligne".
 - Sync conflicts: two people editing the same observation offline. Field groups (status, assignment,

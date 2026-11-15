@@ -336,11 +336,16 @@ export function crossAt(point: Vec3): BcfLine[] {
   });
 }
 
-/** Le centre de la boîte de ces traits (le centre d'une croix), au millimètre ; rien sans trait. */
+/**
+ * Le point d'une croix (`crossAt`), au millimètre : trois traits courts (1 m au plus) qui se croisent en leur milieu. Rien
+ * pour d'autres traits : les annotations d'un autre outil (« redlines ») ne déplacent pas le repère.
+ */
 export function crossCentre(lines: readonly BcfLine[] | undefined): Vec3 | undefined {
-  if (!lines || lines.length === 0) return undefined;
-  const points = lines.flatMap((line) => [line.start, line.end]);
-  return [0, 1, 2].map((axis) => Math.round(((Math.min(...points.map((p) => p[axis])) + Math.max(...points.map((p) => p[axis]))) / 2) * 1000) / 1000 + 0) as Vec3;
+  if (lines?.length !== 3) return undefined;
+  const middles = lines.map((line) => [0, 1, 2].map((axis) => (line.start[axis] + line.end[axis]) / 2));
+  const short = lines.every((line) => Math.hypot(line.end[0] - line.start[0], line.end[1] - line.start[1], line.end[2] - line.start[2]) <= 1);
+  const crossing = middles.every((middle) => Math.hypot(middle[0] - middles[0][0], middle[1] - middles[0][1], middle[2] - middles[0][2]) <= 0.001);
+  return short && crossing ? middles[0].map((value) => Math.round(value * 1000) / 1000 + 0) as Vec3 : undefined;
 }
 
 /** Vrai si la vue regarde déjà ce point : à moins de 8° de son axe (perspective), ou à moins d'un dixième de sa hauteur (parallèle). */
@@ -398,7 +403,7 @@ export function fromBcfTopic(topic: BcfTopic, number: number, options: { revit?:
   const keys = groups.find((group) => (options.resolves ? group.some(options.resolves) : true)) ?? groups[0] ?? [];
   const { viewerBim, ...rest } = topic;
   const extra = isRecord(viewerBim) ? viewerBim : {};
-  const point = vec3(extra.point) ?? crossCentre(topic.viewpoints.find((viewpoint) => viewpoint.lines)?.lines);
+  const point = vec3(extra.point) ?? topic.viewpoints.reduce<Vec3 | undefined>((found, viewpoint) => found ?? crossCentre(viewpoint.lines), undefined);
   return defined({
     ...rest, number, elements: keys.map((key) => ({ key })), location: {}, point, pin: planPin(extra.pin), drawingPin: planPin(extra.drawingPin),
     viewpoints: topic.viewpoints.map(({ coloring: _coloring, exceptions: _exceptions, lines: _lines, ...viewpoint }) => ({ ...viewpoint, selection: [] })),

@@ -170,6 +170,14 @@ test('same box, volume and area with another triangle count: « même forme, mai
   assert.match(compareCsv(result, side([{ key: 'mur' }]), side([{ key: 'mur' }], 100)), /même forme, maillage différent;mur;mur;mur;même forme, maillage différent \(12 → 14 triangles\)/);
 });
 
+test('a 50 × 50 cm opening in a 300 m² slab (−0.08 % volume, same box, more triangles) is a change under the strict setting', () => {
+  const slab: GeometrySignature = { box: [0, 0, 0, 20000, 200, 15000], triangles: 12, volume: 60, area: 601.4 };
+  const opened: GeometrySignature = { ...slab, triangles: 28, volume: 59.95, area: 601.3 };
+  assert.equal(geometryStatus(opened, slab, STRICT_TOLERANCE), 'changed');
+  assert.equal(geometryStatus(opened, slab, LOOSE_TOLERANCE), 'remeshed', 'between two engines the percentage still applies');
+  assert.equal(geometryStatus({ ...slab, triangles: 28 }, slab, STRICT_TOLERANCE), 'remeshed', 'equal volume and area at four digits: only the mesh differs');
+});
+
 test('a 5 mm move is a move under both tolerances; +1 % volume is a change under the strict one', () => {
   const moved = (tolerance: typeof STRICT_TOLERANCE) => run(compareJob(side([{ key: 'p', at: 0.005 }]), side([{ key: 'p' }], 100), { tolerance })).modified.moved.length;
   assert.equal(moved(STRICT_TOLERANCE), 1);

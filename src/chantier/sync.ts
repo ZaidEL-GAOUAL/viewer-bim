@@ -82,13 +82,14 @@ export function enqueue(queue: readonly QueueEntry[], change: Omit<QueueEntry, '
 
 /**
  * La file après l'envoi réussi de `sent` : l'entrée est retirée, sauf si elle a changé pendant l'envoi ; une création alors
- * déjà faite devient la modification des seuls champs modifiables.
+ * déjà faite devient la modification des seuls champs modifiables. La version reste : un autre onglet qui envoyait la même
+ * entrée, lue avant le changement, ne la retire pas en finissant.
  */
 export function complete(queue: readonly QueueEntry[], sent: QueueEntry): QueueEntry[] {
   return queue.flatMap((entry) => {
     if (entry.seq !== sent.seq) return [entry];
     if (entry.version === sent.version) return [];
-    return entry.op === 'insert' ? [{ ...entry, op: 'update' as const, fields: updatable(entry.table, entry.fields), version: 0 }] : [{ ...entry, version: 0 }];
+    return entry.op === 'insert' ? [{ ...entry, op: 'update' as const, fields: updatable(entry.table, entry.fields) }] : [entry];
   });
 }
 

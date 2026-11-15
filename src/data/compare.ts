@@ -162,7 +162,10 @@ export function geometryStatus(a: GeometrySignature | null, b: GeometrySignature
   if (!a || !b) return a === b ? 'same' : 'changed';
   if (!sameShape(a, b, tolerance, ignoreArea)) return 'changed';
   if (!a.box.every((value, i) => Math.abs(value - b.box[i]) <= tolerance.box)) return 'moved';
-  return a.triangles === b.triangles || ignoreArea ? 'same' : 'remeshed';
+  if (a.triangles === b.triangles || ignoreArea) return 'same';
+  // Stricte (un même moteur) : un autre maillage n'explique qu'un volume et une surface égaux à 4 chiffres. Une petite
+  // réservation dans une grande dalle (−0,08 % du volume, même boîte) reste une modification.
+  return tolerance.relative > STRICT_TOLERANCE.relative || (a.volume === b.volume && a.area === b.area) ? 'remeshed' : 'changed';
 }
 
 /** Ce qui diffère entre les propriétés de deux éléments, hors motifs ignorés, par chemin. */

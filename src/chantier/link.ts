@@ -10,6 +10,7 @@ import { authorName } from '../ui/ObservationsPanel.ts';
 import { button, clear, h, stored } from '../ui/dom.ts';
 import { connectBackend, localDatabase } from './backend/connect.ts';
 import { openKv } from './kv.ts';
+import type { TopicRow } from './rows.ts';
 import { ChantierStore } from './store.ts';
 import { linkKey } from './viewerLink.ts';
 
@@ -43,12 +44,18 @@ function openStore(withServer: boolean): Promise<ChantierStore> {
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const textOf = (book: ObservationBook) => JSON.stringify(observationsToJson(book) ?? null);
 
-/** Réunit les observations du projet à celles du viewer ; les numéros sont ceux du projet. */
+/**
+ * Réunit les observations du projet à celles du viewer ; les numéros sont ceux du projet. Celles que le projet garde
+ * supprimées quittent le viewer (elles ne reviennent pas au projet) ; celles d'un autre projet y entrent sous de nouveaux
+ * identifiants (`forProject`).
+ */
 async function pull(app: App, store: ChantierStore, link: Link): Promise<void> {
   if (app.fileName !== link.file) return;
   const project = await store.book(link.projectId);
+  const deleted = new Set((await store.rows<TopicRow>('topics', link.projectId)).filter((row) => row.deleted_at).map((row) => row.id));
+  const viewer = await store.forProject(link.projectId, app.observations.topics.filter((topic) => !deleted.has(topic.guid)));
   const numbers = new Map(project.topics.filter((topic) => topic.number > 0).map((topic) => [topic.guid, topic.number]));
-  const { book } = mergeBooks(app.observations, project);
+  const { book } = mergeBooks({ ...app.observations, topics: viewer }, project);
   const merged = { ...book, topics: book.topics.map((topic) => ({ ...topic, number: numbers.get(topic.guid) ?? topic.number })) };
   if (textOf(merged) !== textOf(app.observations)) app.setObservations(merged, false);
   link.known = new Set(merged.topics.map((topic) => topic.guid));
@@ -58,8 +65,11 @@ async function pull(app: App, store: ChantierStore, link: Link): Promise<void> {
 async function push(app: App, store: ChantierStore, link: Link): Promise<void> {
   if (current !== link || app.fileName !== link.file) return;
   const book = app.observations;
-  for (const topic of book.topics) await store.saveObservation(link.projectId, topic);
-  const present = new Set(book.topics.map((topic) => topic.guid));
+  // Une observation d'un autre projet (un .bcf ouvert dans le viewer lié) : le viewer prend ses nouveaux identifiants.
+  const topics = await store.forProject(link.projectId, book.topics);
+  if (topics.some((topic, i) => topic !== book.topics[i]) && app.observations === book) app.setObservations({ ...book, topics }, false);
+  await store.saveObservations(link.projectId, topics);
+  const present = new Set(topics.map((topic) => topic.guid));
   for (const guid of link.known) if (!present.has(guid)) await store.deleteObservation(link.projectId, guid, authorName());
   link.known = present;
   // Photos et images sont gardées sur l'appareil avec le projet : plus rien n'est seulement dans la page.

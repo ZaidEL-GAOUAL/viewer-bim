@@ -246,6 +246,26 @@ test('crossAt is three centred 30 cm segments along X, Y and Z', () => {
   assert.equal(crossCentre([]), undefined);
 });
 
+test('only a cross gives the point: redlines of another tool do not move the pin; lines and viewer-bim.json are capped', async () => {
+  assert.deepEqual(crossCentre(crossAt([1, 2, 3])), [1, 2, 3]);
+  const redline = { start: [0, 0, 0], end: [10, 0, 0] } as { start: [number, number, number]; end: [number, number, number] };
+  assert.equal(crossCentre([redline]), undefined, 'one long line');
+  assert.equal(crossCentre([...crossAt([1, 2, 3]), redline]), undefined, 'a cross and something else');
+  assert.equal(crossCentre(crossAt([1, 2, 3]).map((line, i) => ({ start: line.start.map((v) => v + i) as typeof line.start, end: line.end.map((v) => v + i) as typeof line.end }))), undefined, 'three short lines apart');
+  // Redlines in the first viewpoint, our cross in the second: the cross gives the point.
+  const { viewerBim: _viewerBim, ...written } = toBcfTopic(observed());
+  void _viewerBim;
+  const marked: BcfTopic = { ...written, viewpoints: [{ ...written.viewpoints[0], lines: [redline, redline] }, { ...written.viewpoints[1], lines: crossAt(POINT) }] };
+  assert.deepEqual(fromBcfTopic(marked, 1).point, POINT);
+  assert.equal(fromBcfTopic({ ...marked, viewpoints: [marked.viewpoints[0]] }, 1).point, undefined, 'redlines only: no point');
+  // Read back: at most 1 000 lines per viewpoint, and an oversized viewer-bim.json is set aside with a note.
+  const many = { ...written, viewpoints: [{ ...written.viewpoints[0], lines: Array.from({ length: 1500 }, () => redline) }], viewerBim: { point: POINT, padding: 'x'.repeat(70_000) } };
+  const read = await readBcf(await writeBcf([many]), nodeInflate);
+  assert.equal(read.topics[0].viewpoints[0].lines?.length, 1000);
+  assert.equal(read.topics[0].viewerBim, undefined);
+  assert.match(read.notes.join(' '), /viewer-bim\.json trop gros/);
+});
+
 test('a hand-written BCF 2.1 that marks the object only by Coloring (or a visibility exception) gives its elements', async () => {
   const folder = '2b9d2f1e-6c4a-4f3e-9d1a-1f2e3d4c5b6b';
   const markup = (vp: string) => `<Markup><Topic Guid="${folder}" TopicType="Issue" TopicStatus="Open"><Title>x</Title><CreationDate>2026-10-02T09:15:00Z</CreationDate><CreationAuthor>a</CreationAuthor></Topic><Viewpoints Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9"><Viewpoint>${vp}</Viewpoint></Viewpoints></Markup>`;

@@ -267,9 +267,8 @@ export class App {
     const project = projectCard(this, () => { if (observationsPanel.el.hidden) observationsPanel.toggle(true); });
     const study = studyCard(this);
 
-    const mapToggle = button('Carte', () => {
-      void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
-    }, { title: 'Poser la maquette sur la carte (globe, plan ou photo aérienne)', attrs: { 'aria-pressed': 'false' } });
+    // Le mode carte est un mode de la vue (pas un outil du panneau) : son état pressé suit `mapPanel.onChange`.
+    const mapToggle = button('Carte', () => void this.mapPanel.toggle(), { title: 'Poser la maquette sur la carte (globe, plan ou photo aérienne)', attrs: { 'aria-pressed': 'false' } });
     const sectionPanel = new SectionPanel(this);
     const viewsPanel = new ViewsPanel(this);
     // Mode visite : touche V ou bouton, carte d'aide dans la vue ; le double-clic ne replace que hors mesure.
@@ -481,7 +480,8 @@ export class App {
     });
     const pressButton = (label: string, summary: string, el: HTMLElement, control: HTMLButtonElement): ShellTool => ({
       label, summary, el,
-      open: () => { if (el.hidden) control.click(); },
+      // Bouton grisé (impression et DXF en mode carte) : sa raison plutôt qu'un clic sans effet.
+      open: () => { if (el.hidden) { if (control.disabled) this.toast(control.title, true); else control.click(); } },
       close: () => { if (!el.hidden) control.click(); },
     });
     const measures: ShellTool[] = MEASURES.map((measure) => ({
@@ -495,11 +495,13 @@ export class App {
     const shell = new Shell([
       { id: 'explorer', label: 'Explorer', icon: 'tree', content: [tree.el] },
       { id: 'couleurs', label: 'Couleurs', title: 'Couleurs et filtres', icon: 'palette', content: [filters.el] },
+      // La carte est un mode de la vue, pas un outil : sa ligne l'ouvre ou le quitte, et ses réglages restent sous la liste et sous
+      // l'outil ouvert (une section du groupe, dans le panneau : rien ne couvre la maquette). Ouvrir un outil ne quitte pas la carte.
       { id: 'vues', label: 'Vues', title: 'Vues et coupes', icon: 'eye', intro: 'Retrouver une vue, couper la maquette, la poser sur la carte.', tools: [
         pressButton('Vues', 'Les vôtres, celles du fichier et un plan par niveau', viewsPanel.el, viewsPanel.button),
         { label: 'Coupes', summary: 'Plans de coupe et boîte de coupe', el: sectionPanel.el, open: () => { if (sectionPanel.el.hidden) sectionPanel.toggle(); }, close: () => { if (!sectionPanel.el.hidden) sectionPanel.toggle(); } },
-        { label: 'Carte', summary: 'Poser la maquette sur le globe, un plan ou une photo aérienne', el: this.mapPanel.el, open: () => { if (!this.mapPanel.isOpen) void this.mapPanel.toggle(); }, close: () => { if (this.mapPanel.isOpen) void this.mapPanel.toggle(); } },
-      ] },
+        { label: 'Carte', summary: 'Poser la maquette sur le globe, un plan ou une photo aérienne ; cliquer de nouveau pour quitter', open: () => void this.mapPanel.toggle(), active: () => this.mapOpen },
+      ], footer: [this.mapPanel.el] },
       { id: 'mesurer', label: 'Mesurer', icon: 'distance', intro: 'Mesurer dans la vue, ou calculer les quantités qui manquent.', tools: [...measures, card(quantitiesPanel)] },
       { id: 'controler', label: 'Contrôler', icon: 'check', intro: 'Réunir des maquettes, comparer deux versions, chercher les conflits, vérifier les propriétés.', tools: [card(modelsPanel), card(comparePanel), card(clashPanel), card(requirementsPanel)] },
       { id: 'planifier', label: 'Planifier', icon: 'calendar', intro: 'Préparer le phasage : découper, ranger par zones, dérouler le planning.', tools: [
@@ -516,8 +518,19 @@ export class App {
       ] },
       { id: 'assistant', label: 'Assistant', icon: 'chat', content: [assistant.el] },
     ]);
-    shell.onDockVisible = (visible) => setPanel.get('left')?.(!visible);
+    // Fenêtre étroite : le panneau et les propriétés s'ouvrent par-dessus la maquette, un seul à la fois.
+    shell.onDockVisible = (visible) => {
+      setPanel.get('left')?.(!visible);
+      if (visible && narrow.matches) setPanel.get('right')?.(true);
+    };
     this.on('tool', () => shell.refresh());
+    // La carte qui s'ouvre amène ses réglages devant (groupe « Vues ») ; sa ligne suit l'état du mode.
+    let mapShown = false;
+    this.on('map', () => {
+      if (this.mapOpen && !mapShown) shell.open('vues');
+      mapShown = this.mapOpen;
+      shell.refresh();
+    });
     // Fenêtre étroite ou repli par ailleurs : le rail suit l'état réel du panneau.
     new MutationObserver(() => shell.setVisible(!isCollapsed('left'), false)).observe(root, { attributes: true, attributeFilter: ['class'] });
     shell.setVisible(!isCollapsed('left'), false);

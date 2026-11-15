@@ -127,6 +127,16 @@ export function boxOnlyReason(model: Pick<Model, 'boxOnly'>, element: number): s
   return model.boxOnly.has(element) ? 'sa forme n’a pas été lue, seule sa boîte englobante est dessinée' : null;
 }
 
+/**
+ * Les triangles qui comptent dans le budget de l'appareil : sans ceux des boîtes des éléments que le lecteur Revit n'a pas
+ * maillés (c'est ainsi qu'il tient ce budget, comme `addSource` les compte).
+ */
+export function meshedTriangles(model: Pick<Model, 'triangleCount' | 'boxOnly' | 'parts'>): number {
+  let count = model.triangleCount;
+  for (const element of model.boxOnly) for (const part of model.parts(element)) count -= part.count / 3;
+  return count;
+}
+
 const DET_EPSILON = 1e-14;
 const BLOCK_INDICES = BLOCK_TRIANGLES * 3;
 

@@ -12,7 +12,7 @@ import { defaultLists, extendLists, fromBcfTopic, mergeBooks, parseObservations,
 import { BackendError, cursorColumn, type Account, type BackendPort, type Row, type Table } from './backend/port.ts';
 import type { Kv, KvWrite, StoreName } from './kv.ts';
 import {
-  commentRows, filePath, listsOf, observationOf, rowId, sha256, topicRow, viewpointRows,
+  commentRows, derivedId, filePath, listsOf, observationOf, rowId, sha256, topicRow, viewpointRows,
   type CommentRow, type EventRow, type MembershipRow, type PhotoRow, type PlanRow, type ProfileRow, type ProjectRow, type Role, type TopicRow, type ViewpointRow,
 } from './rows.ts';
 import { complete, enqueue, fail, groupFields, mergeRemote, nextCursor, pendingFields, retry, sameJson, serverFields, sinceOf, type QueueEntry } from './sync.ts';
@@ -29,9 +29,28 @@ export interface SyncState {
 /** Une étape d'écriture : une ligne (créée, modifiée, supprimée) ou un fichier à déposer. */
 type Step = { table: Table; row: Row; op: 'insert' | 'update' | 'delete'; changed?: readonly string[] } | { path: string; blob: Blob };
 
+/** Ce que l'appareil garde déjà, lu une fois pour toutes les observations d'un envoi (une liaison, un import). */
+interface Known {
+  /** Les observations de tous les projets. */
+  topics: Map<string, TopicRow>;
+  /** Commentaires, points de vue et photos du projet. */
+  ids: Set<string>;
+  photos: PhotoRow[];
+}
+
+/** Le nom et l'entreprise tapés sur cet appareil, et le compte à qui ils sont (absent : tapés sans compte). */
+interface LocalProfile {
+  name: string;
+  company: string;
+  email?: string;
+}
+
 const PROJECT_TABLES: readonly Table[] = ['topics', 'comments', 'viewpoints', 'photos', 'plans', 'events'];
-/** Les champs d'une observation comparés pour savoir ce qui a changé. */
-const TOPIC_FIELDS = ['type', 'status', 'title', 'priority', 'labels', 'stage', 'assigned_to', 'due_date', 'description', 'extra', 'deleted_at'] as const;
+/**
+ * Les champs d'une observation comparés pour savoir ce qui a changé. Pas `deleted_at` : une observation venue d'ailleurs (le
+ * viewer lié, un fichier) ne ressuscite pas une observation supprimée ; seule `deleteObservation` le pose.
+ */
+const TOPIC_FIELDS = ['type', 'status', 'title', 'priority', 'labels', 'stage', 'assigned_to', 'due_date', 'description', 'extra'] as const;
 
 const asError = (error: unknown): BackendError => (error instanceof BackendError ? error : new BackendError('refused', error instanceof Error ? error.message : String(error)));
 const live = <T extends Row>(rows: T[]) => rows.filter((row) => !row.deleted_at);
@@ -120,8 +139,14 @@ export class ChantierStore {
 
   async profile(): Promise<{ name: string; company: string }> {
     const row = this.account ? ((await this.kv.get('profiles', this.account.userId)) as ProfileRow | undefined) : undefined;
-    const local = ((await this.kv.get('meta', 'profile')) as { name: string; company: string } | undefined) ?? { name: '', company: '' };
-    return row ? { name: row.display_name || local.name, company: row.company || local.company } : local;
+    const { name, company } = (await this.localProfile()) ?? { name: '', company: '' };
+    return row ? { name: row.display_name || name, company: row.company || company } : { name, company };
+  }
+
+  /** Le profil tapé sur cet appareil, s'il est celui de ce compte : sur un appareil partagé, il ne passe pas au compte suivant. */
+  private async localProfile(account = this.account): Promise<LocalProfile | undefined> {
+    const local = (await this.kv.get('meta', 'profile')) as LocalProfile | undefined;
+    return local && (!account || local.email === account.email) ? local : undefined;
   }
 
   async file(path: string): Promise<Blob | undefined> {
@@ -231,7 +256,7 @@ export class ChantierStore {
   }
 
   async saveProfile(name: string, company: string): Promise<void> {
-    const profile = { name: name.trim(), company: company.trim() };
+    const profile: LocalProfile = { name: name.trim(), company: company.trim(), email: this.account?.email };
     await this.kv.write([{ store: 'meta', key: 'profile', value: profile }]);
     if (this.account) await this.apply([{ table: 'profiles', row: { id: this.account.userId, display_name: profile.name, company: profile.company }, op: 'update', changed: ['display_name', 'company'] }]);
     else this.notify();
@@ -246,15 +271,29 @@ export class ChantierStore {
     return [{ path, blob }, { table: 'photos', row, op: 'insert' }];
   }
 
-  /**
-   * Enregistre une observation du projet : sa ligne (créée, ou les seuls champs changés), ses nouveaux commentaires, points de
-   * vue et photos ; une photo retirée est marquée supprimée. Rien ne part si rien n'a changé.
-   */
+  /** Enregistre une observation du projet (voir `saveObservations`). */
   async saveObservation(projectId: string, observation: Observation): Promise<void> {
-    const [stored, comments, viewpoints, photos] = await Promise.all([
-      this.kv.get('topics', observation.guid) as Promise<TopicRow | undefined>, this.rows<CommentRow>('comments', projectId),
-      this.rows<ViewpointRow>('viewpoints', projectId), this.rows<PhotoRow>('photos', projectId),
+    await this.saveObservations(projectId, [observation]);
+  }
+
+  /**
+   * Enregistre des observations du projet en une seule écriture, toutes ou aucune : pour chacune sa ligne (créée, ou les seuls
+   * champs changés), ses nouveaux commentaires, points de vue et photos ; une photo retirée est marquée supprimée. `also` : des
+   * étapes écrites avec elles (les listes du projet d'un import). Rien ne part si rien n'a changé.
+   */
+  async saveObservations(projectId: string, observations: readonly Observation[], also: readonly Step[] = []): Promise<void> {
+    const [topics, comments, viewpoints, photos] = await Promise.all([
+      this.rows<TopicRow>('topics'), this.rows<CommentRow>('comments', projectId), this.rows<ViewpointRow>('viewpoints', projectId), this.rows<PhotoRow>('photos', projectId),
     ]);
+    const known: Known = { topics: new Map(topics.map((row) => [row.id, row])), ids: new Set([...comments, ...viewpoints, ...photos].map((item) => item.id)), photos };
+    const steps: Step[] = [];
+    for (const observation of observations) steps.push(...await this.observationSteps(projectId, observation, known));
+    steps.push(...also);
+    if (steps.length > 0) await this.apply(steps);
+  }
+
+  private async observationSteps(projectId: string, observation: Observation, known: Known): Promise<Step[]> {
+    const stored = known.topics.get(observation.guid);
     if (stored && stored.project_id !== projectId) throw new Error('Cette observation appartient à un autre projet.');
     const row = { ...topicRow(observation, projectId), _modified: observation.modifiedDate };
     const steps: Step[] = [];
@@ -263,22 +302,42 @@ export class ChantierStore {
       const changed = TOPIC_FIELDS.filter((name) => !sameJson(stored[name], row[name]));
       if (changed.length > 0) steps.push({ table: 'topics', row: { ...stored, ...Object.fromEntries(changed.map((name) => [name, row[name]])), modified_author: row.modified_author, _modified: row._modified }, op: 'update', changed });
     }
-    const known = new Set([...comments, ...viewpoints, ...photos].map((item) => item.id));
-    for (const comment of commentRows(observation, projectId)) if (!known.has(comment.id)) steps.push({ table: 'comments', row: comment, op: 'insert' });
+    for (const comment of commentRows(observation, projectId)) if (!known.ids.has(comment.id)) steps.push({ table: 'comments', row: comment, op: 'insert' });
     for (const [i, viewpoint] of viewpointRows(observation, projectId).entries()) {
-      if (known.has(viewpoint.id)) continue;
+      if (known.ids.has(viewpoint.id)) continue;
       steps.push({ table: 'viewpoints', row: viewpoint, op: 'insert' });
       const snapshot = observation.viewpoints[i].snapshot;
       if (snapshot) steps.push(...await this.photoSteps(projectId, observation.guid, globalThis.crypto.randomUUID(), 'vue.png', snapshot, viewpoint.id));
     }
     for (const document of observation.documents) {
-      if (!known.has(document.guid) && document.data) steps.push(...await this.photoSteps(projectId, observation.guid, document.guid, document.filename, document.data, null));
+      if (!known.ids.has(document.guid) && document.data) steps.push(...await this.photoSteps(projectId, observation.guid, document.guid, document.filename, document.data, null));
     }
     const kept = new Set(observation.documents.map((document) => document.guid));
-    for (const photo of photos) {
+    for (const photo of known.photos) {
       if (photo.topic_id === observation.guid && !photo.viewpoint_id && !photo.deleted_at && !kept.has(photo.id)) steps.push({ table: 'photos', row: { ...photo, deleted_at: new Date().toISOString() }, op: 'update', changed: ['deleted_at'] });
     }
-    if (steps.length > 0) await this.apply(steps);
+    return steps;
+  }
+
+  /**
+   * Les observations avec des identifiants que ce projet peut prendre (ils sont uniques dans toute la base) : une observation
+   * déjà dans un autre projet — le même BCF importé dans deux projets, une maquette liée à un autre projet — prend, avec ses
+   * commentaires, points de vue et photos, des identifiants tirés de ce projet et des siens. Les mêmes à chaque fois :
+   * réimporter le fichier met à jour au lieu de doubler.
+   */
+  async forProject(projectId: string, observations: readonly Observation[]): Promise<Observation[]> {
+    const elsewhere = new Set((await this.rows<TopicRow>('topics')).filter((row) => row.project_id !== projectId).map((row) => row.id));
+    const id = (guid: string) => derivedId(projectId, guid);
+    return Promise.all(observations.map(async (topic) => {
+      if (!elsewhere.has(topic.guid)) return topic;
+      const viewpoints = new Map(await Promise.all(topic.viewpoints.map(async (viewpoint) => [viewpoint.guid, await id(viewpoint.guid)] as const)));
+      return {
+        ...topic, guid: await id(topic.guid),
+        comments: await Promise.all(topic.comments.map(async (comment) => ({ ...comment, guid: await id(comment.guid), viewpoint: comment.viewpoint === undefined ? undefined : viewpoints.get(comment.viewpoint) ?? comment.viewpoint }))),
+        viewpoints: topic.viewpoints.map((viewpoint) => ({ ...viewpoint, guid: viewpoints.get(viewpoint.guid)! })),
+        documents: await Promise.all(topic.documents.map(async (document) => ({ ...document, guid: await id(document.guid) }))),
+      };
+    }));
   }
 
   async deleteObservation(projectId: string, id: string, author: string): Promise<void> {
@@ -331,10 +390,12 @@ export class ChantierStore {
       viewpoints: topic.viewpoints.map((viewpoint) => ({ ...viewpoint, guid: rowId(viewpoint.guid) })),
       documents: topic.documents.map((document) => ({ ...document, guid: rowId(document.guid) })),
     }));
+    incoming.topics = await this.forProject(projectId, incoming.topics);
     const { book, added, updated } = mergeBooks(await this.book(projectId), incoming);
-    for (const topic of book.topics) await this.saveObservation(projectId, topic);
     const lists = extendLists(book.lists, book.topics);
-    if (JSON.stringify(lists) !== JSON.stringify(listsOf(project))) await this.saveProject({ ...project, lists }, ['lists']);
+    // Une seule écriture : un import qui échoue ne laisse rien à moitié.
+    const listsStep: Step[] = JSON.stringify(lists) !== JSON.stringify(listsOf(project)) ? [{ table: 'projects', row: { ...project, lists }, op: 'update', changed: ['lists'] }] : [];
+    await this.saveObservations(projectId, book.topics, listsStep);
     return { added, updated, notes };
   }
 
@@ -349,7 +410,8 @@ export class ChantierStore {
         await this.backend?.signOut().catch(() => undefined);
         throw new Error(`Cet appareil garde ${plural(waiting, 'modification non envoyée', 'modifications non envoyées')} du compte ${owner.email}. Connectez-vous avec ce compte pour les envoyer, ou effacez les données de cet appareil.`);
       }
-      const profile = await this.kv.get('meta', 'profile');
+      // Le profil tapé à l'inscription de ce compte reste ; celui du compte précédent part avec ses données.
+      const profile = await this.localProfile(account);
       await this.kv.clear();
       if (profile) await this.kv.write([{ store: 'meta', key: 'profile', value: profile }]);
     }
@@ -359,7 +421,8 @@ export class ChantierStore {
 
   async signUp(email: string, password: string, name: string, company: string): Promise<{ confirmEmail: boolean }> {
     if (!this.backend) throw new Error('Ce site n’est relié à aucun serveur.');
-    await this.kv.write([{ store: 'meta', key: 'profile', value: { name: name.trim(), company: company.trim() } }]);
+    const profile: LocalProfile = { name: name.trim(), company: company.trim(), email: email.trim().toLowerCase() };
+    await this.kv.write([{ store: 'meta', key: 'profile', value: profile }]);
     const result = await this.backend.signUp(email.trim(), password, name.trim());
     if (!result.confirmEmail) await this.signIn(email, password);
     return result;
@@ -370,8 +433,8 @@ export class ChantierStore {
     await this.adopt(await this.backend.signIn(email.trim(), password));
     this.notify();
     await this.sync();
-    // Le nom et l'entreprise tapés à l'inscription rejoignent le profil du serveur s'il est vide.
-    const local = (await this.kv.get('meta', 'profile')) as { name: string; company: string } | undefined;
+    // Le nom et l'entreprise tapés à l'inscription de ce compte rejoignent le profil du serveur s'il est vide.
+    const local = await this.localProfile();
     const row = this.account ? ((await this.kv.get('profiles', this.account.userId)) as ProfileRow | undefined) : undefined;
     if (local && row && ((!row.display_name && local.name) || (!row.company && local.company))) {
       await this.saveProfile(row.display_name || local.name, row.company || local.company);
@@ -540,15 +603,24 @@ export class ChantierStore {
       await this.kv.write(lost.map((row) => ({ store: 'projects', key: row.id, value: { ...row, _lost: true } })));
     });
     for (const project of projects) {
-      await this.merge('memberships', await backend.pull('memberships', { projectId: project.id }), { projectId: project.id });
+      const members = await backend.pull('memberships', { projectId: project.id }) as MembershipRow[];
+      await this.merge('memberships', members, { projectId: project.id });
+      // Le curseur ne voit que les lignes changées depuis. Des lignes plus anciennes peuvent devenir visibles sans changer : celles
+      // d'une observation attribuée après coup à un invité, toutes celles qu'un invité promu ne voyait pas. Invité : tout est relu ;
+      // mon adhésion changée (rôle, entreprise) : les curseurs du projet repartent de zéro.
+      const mine = members.find((row) => row.email === this.account!.email);
+      const memberKey = `member:${project.id}`, member = mine ? `${mine.role}|${mine.company}` : '';
+      const fresh = mine?.role === 'guest' || member !== await this.kv.get('meta', memberKey);
       for (const table of PROJECT_TABLES) {
         const key = `cursor:${table}:${project.id}`;
-        const cursor = (await this.kv.get('meta', key)) as string | undefined;
+        const saved = (await this.kv.get('meta', key)) as string | undefined;
+        const cursor = fresh ? undefined : saved;
         const rows = await backend.pull(table, { projectId: project.id, since: sinceOf(cursor) });
         await this.merge(table, rows);
         const next = nextCursor(rows, cursorColumn(table), cursor);
-        if (next !== cursor) await this.kv.write([{ store: 'meta', key, value: next }]);
+        if (next !== saved) await this.kv.write([{ store: 'meta', key, value: next }]);
       }
+      await this.kv.write([{ store: 'meta', key: memberKey, value: member }]);
       this.notify();
     }
   }

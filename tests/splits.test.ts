@@ -10,7 +10,7 @@ import { toModelPoint, toViewerPoint, type Vec3 } from '../src/data/modelFrame.t
 import { MAX_CUTS, MAX_PARTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, describeOutcome, freeLineProblem, loadSplits, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition, type SplitOutcome } from '../src/data/splits.ts';
 import { splitJob, type ElementSplit, type SplitRefusal } from '../src/engine/derivedParts.ts';
 import { boxOnlyReason, type Model } from '../src/engine/Model.ts';
-import { extendAcross } from '../src/engine/sketch.ts';
+import { extendAcross, straightReach } from '../src/engine/sketch.ts';
 import type { CutPlane } from '../src/engine/splitMesh.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
 import { cutRefusal } from '../src/ui/SplitPanel.ts';
@@ -271,6 +271,20 @@ test('a straight two-point cut shorter than the element cuts it completely; draw
   const short = run(set.compute(toDefinition(model, 'courte', [[a, b]]), []));
   assert.equal(short.splits.length, 0);
   assert.match(short.refused[0].reason, /aucune coupe ne traverse/, 'a stored line keeps its meaning (bounded by its two points): definitions saved before load the same');
+});
+
+test('a straight cut saved, then its element widened by a revision: still cut through (stored across the whole model and beyond)', async () => {
+  const model = await build();
+  const offset = model.offset.toArray();
+  const [a, b] = [[1, 0.2, 0.8], [1, 0.2, 1.2]].map((point) => new Vector3(...toViewerPoint(point, offset)));
+  const saved = toDefinition(model, 'droite', [extendAcross(a, b, straightReach(model.box))]);
+  // La dalle passe de 2 à 8 m en z : bien au-delà de la sélection d'alors.
+  const widened = await buildFromNodes([{ ...nodes[0], scale: [4, 0.2, 8] }, nodes[1]], [0, 1], CUBE);
+  const outcome = run(new SplitSet(widened, select).compute(saved, []));
+  assert.deepEqual(outcome.refused, []);
+  assert.deepEqual(volumesOf(outcome), [1.6, 4.8]);
+  const before = toDefinition(model, 'avant', [extendAcross(a, b, model.boxOf([0], new Box3()))]);
+  assert.match(run(new SplitSet(widened, select).compute(before, [])).refused[0].reason, /coupe partielle/, 'extended only across the selection, as before: refused');
 });
 
 test('a definition saved before (crossing lines) gives the same parts as before, and as the same lines drawn with the tool', async () => {

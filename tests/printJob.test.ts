@@ -65,15 +65,20 @@ test('the visible box stops at the crop of the plan', () => {
 
 test('an element lost far from the building does not stretch the page', () => {
   const boxes: Box[] = [];
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     const x = (i % 10) * 1.9, z = Math.floor(i / 10) * 1.9;
     boxes.push([x, 0, z, x + 1, 3, z + 1]);
   }
   boxes.push([2000, 0, 2000, 2001, 1, 2001]);
-  close(visibleBox(model(boxes), new Sections(), right, up), { minX: 0, maxX: 18.1, minY: -10.5, maxY: 0 });
+  close(visibleBox(model(boxes), new Sections(), right, up), { minX: 0, maxX: 18.1, minY: -21.9, maxY: 0 });
   // A second wing next to the first is part of the building.
-  const wing = boxes.slice(0, 60).map(([x0, y0, z0, x1, y1, z1]): Box => [x0 + 25, y0, z0, x1 + 25, y1, z1]);
-  close(visibleBox(model([...boxes.slice(0, 60), ...wing]), new Sections(), right, up), { minX: 0, maxX: 43.1, minY: -10.5, maxY: 0 });
+  const wing = boxes.slice(0, 120).map(([x0, y0, z0, x1, y1, z1]): Box => [x0 + 25, y0, z0, x1 + 25, y1, z1]);
+  close(visibleBox(model([...boxes.slice(0, 120), ...wing]), new Sections(), right, up), { minX: 0, maxX: 43.1, minY: -21.9, maxY: 0 });
+});
+
+test('a small model keeps every element: five centres at -10, 0, 0.1, 0.2 and 10 m all fit on the page', () => {
+  const boxes: Box[] = [-10, 0, 0.1, 0.2, 10].map((x) => [x - 0.05, 0, 0, x + 0.05, 1, 0.1]);
+  close(visibleBox(model(boxes), new Sections(), right, up), { minX: -10.05, maxX: 10.05, minY: -0.1, maxY: 0 });
 });
 
 test('on a large model the bounds are read on a sample, and the edge elements it skipped are kept', () => {

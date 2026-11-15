@@ -12,6 +12,17 @@ export const PLACE_ZOOM = 14;
 const MAX_ZOOM = 19;
 
 const wrap = (degrees: number) => ((((degrees + 180) % 360) + 360) % 360) - 180;
+/** Fin d'un geste de molette (ms sans événement) : les tuiles du niveau atteint sont demandées alors. */
+const WHEEL_SETTLE = 200;
+
+/**
+ * Les niveaux de zoom d'un événement de molette, selon son `deltaY` (et son unité) : un cran de souris (≈ 100 px) vaut un
+ * demi-niveau, les petits pas d'un pavé tactile autant de fractions ; jamais plus d'un niveau par événement.
+ */
+export function wheelLevels(deltaY: number, deltaMode = 0): number {
+  const pixels = deltaY * (deltaMode === 1 ? 40 : deltaMode === 2 ? 800 : 1);
+  return Math.max(-1, Math.min(1, -pixels / 200));
+}
 
 export class WorldMap {
   readonly el: HTMLElement;
@@ -28,6 +39,9 @@ export class WorldMap {
   private zoom = 2;
   private pin: { x: number; y: number } | null = null;
   private queued = false;
+  /** Centre et zoom des tuiles posées (`render`) : un geste de molette les étire en attendant de s'arrêter. */
+  private drawn: { x: number; y: number; zoom: number } | null = null;
+  private settle: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     const zoomButton = (label: string, delta: number, title: string) => {
@@ -70,7 +84,8 @@ export class WorldMap {
     this.y = half >= 0.5 ? 0.5 : Math.min(1 - half, Math.max(half, this.y));
   }
 
-  private zoomAt(delta: number, at: { px: number; py: number } | null): void {
+  /** `gesture` : pendant un geste de molette, les tuiles ne sont demandées qu'au niveau où il s'arrête (`preview`). */
+  private zoomAt(delta: number, at: { px: number; py: number } | null, gesture = false): void {
     const next = Math.max(1, Math.min(MAX_ZOOM, this.zoom + delta));
     if (next === this.zoom) return;
     const px = at?.px ?? this.el.clientWidth / 2, py = at?.py ?? this.el.clientHeight / 2;
@@ -80,7 +95,23 @@ export class WorldMap {
     const size = this.worldSize;
     this.x = anchor.x - (px - this.el.clientWidth / 2) / size;
     this.y = anchor.y - (py - this.el.clientHeight / 2) / size;
-    this.render();
+    if (gesture) this.preview();
+    else this.render();
+  }
+
+  /** Les tuiles déjà posées, déplacées et étirées jusqu'à la vue demandée ; `render` suit quand le geste s'arrête. */
+  private preview(): void {
+    const width = this.el.clientWidth, height = this.el.clientHeight, drawn = this.drawn;
+    if (!drawn || width === 0 || height === 0) return this.render();
+    this.clampY();
+    const size = this.worldSize;
+    Object.assign(this.tiles.style, {
+      transformOrigin: `${width / 2}px ${height / 2}px`,
+      transform: `translate(${(drawn.x - this.x) * size}px, ${(drawn.y - this.y) * size}px) scale(${2 ** (this.zoom - drawn.zoom)})`,
+    });
+    this.overlays(width, height);
+    clearTimeout(this.settle);
+    this.settle = setTimeout(() => this.render(), WHEEL_SETTLE);
   }
 
   private bind(): void {
@@ -120,7 +151,7 @@ export class WorldMap {
     this.el.addEventListener('wheel', (event) => {
       event.preventDefault();
       const rect = this.el.getBoundingClientRect();
-      this.zoomAt(event.deltaY < 0 ? 0.5 : -0.5, { px: event.clientX - rect.left, py: event.clientY - rect.top });
+      this.zoomAt(wheelLevels(event.deltaY, event.deltaMode), { px: event.clientX - rect.left, py: event.clientY - rect.top }, true);
     }, { passive: false });
   }
 
@@ -137,6 +168,9 @@ export class WorldMap {
     const width = this.el.clientWidth, height = this.el.clientHeight;
     if (width === 0 || height === 0) return;
     this.clampY();
+    clearTimeout(this.settle);
+    this.tiles.style.transform = '';
+    this.drawn = { x: this.x, y: this.y, zoom: this.zoom };
     const z = Math.max(0, Math.min(this.source.maxZoom, Math.round(this.zoom)));
     const count = 2 ** z;
     const tile = TILE * 2 ** (this.zoom - z);
@@ -160,6 +194,11 @@ export class WorldMap {
       img.remove();
       this.shown.delete(key);
     }
+    this.overlays(width, height);
+  }
+
+  /** Le repère du projet et la consigne, pour la vue demandée. */
+  private overlays(width: number, height: number): void {
     if (this.pin) {
       // La copie du repère la plus proche du centre (la carte se répète d'est en ouest).
       const dx = this.pin.x - this.x - Math.round(this.pin.x - this.x);
