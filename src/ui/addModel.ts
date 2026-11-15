@@ -1,23 +1,23 @@
-// « Ajouter une maquette… » et « Comparer avec… » : lire un fichier de plus (glb, gltf, usd ou ifc converti) et l'ajouter
-// au modèle ouvert (voir data/federation.ts). Les propriétés, l'historique, la sélection et les masquages suivent par
-// `App.changeParts`, comme après un découpage. Le fichier Revit n'est pas accepté ici : son lecteur construit le modèle
-// morceau par morceau avec son propre budget, ce qui ne se branche pas encore sur un modèle déjà ouvert.
+// « Ajouter une maquette… » et « Comparer avec… » : lire un fichier de plus (glb, gltf, usd, ifc converti ou fichier Revit
+// lu) et l'ajouter au modèle ouvert (voir data/federation.ts). Les propriétés, l'historique, la sélection et les masquages
+// suivent par `App.changeParts`, comme après un découpage. Un fichier Revit est lu en entier (sans affichage par morceaux),
+// avec ce qui reste du budget de triangles de l'appareil après les maquettes déjà affichées.
 
 import { IFC_READ_ONLY, type Metadata } from '../data/metadata.ts';
-import { chooseMetadata, orphanNotice } from '../data/sidecar.ts';
-import { FederationError, MODEL_PROPERTY, addSource, framesNotice, rekeyMetadata, removeLastSource, sourceIndexOf, type ModelSourceInfo } from '../data/federation.ts';
+import { chooseMetadata, metadataUse, orphanNotice } from '../data/sidecar.ts';
+import { FederationError, MODEL_PROPERTY, addSource, framesNotice, generatorOf, producerOf, rekeyMetadata, removeLastSource, revitBudget, sourceIndexOf, trianglesText, type ModelSourceInfo } from '../data/federation.ts';
 import { integer, plural, s } from '../data/text.ts';
-import { gltfSource, type ModelSource } from '../engine/buildModel.ts';
+import { gltfSource, type ModelSource, type RawInput } from '../engine/buildModel.ts';
 import { fileKind, isIfcFile, isJsonFile, isModelFile, isRevitFile, isUsdFile, withoutExtension } from '../engine/fileKinds.ts';
+import { parseGlb } from '../engine/glbFile.ts';
 import { loadModelFiles, type InputFile } from '../engine/loadModel.ts';
 import { convertIfc } from '../ifc/convertIfc.ts';
-import { deviceTriangleBudget } from '../revit/readRevit.ts';
+import { RevitTooLargeError, deviceTriangleBudget, isMemoryFailure, readRevit, revitFailureToError } from '../revit/readRevit.ts';
+import { describeRevitReport } from '../revit/revitReport.ts';
 import { loadUsdFile } from '../usd/loadUsd.ts';
 import type { App } from './App.ts';
 
-export const REVIT_REFUSED = 'Un fichier Revit ne s’ajoute pas encore à une maquette ouverte : ouvrez-le seul, ou ajoutez sa version IFC.';
-
-const kindOf = (name: string): ModelSourceInfo['kind'] => {
+export const kindOf = (name: string): ModelSourceInfo['kind'] => {
   const kind = fileKind(name);
   return kind === 'ifc' || kind === 'revit' || kind === 'usd' ? kind : 'glb';
 };
@@ -42,24 +42,36 @@ function stampModels(app: App): void {
   app.propertyEdits!.stamp(MODEL_PROPERTY, (i) => model.sources[sourceIndexOf(model, i)]?.name);
 }
 
+export interface AddOptions {
+  /** Où dire ce que l'ajout a donné (`error` : à montrer comme une erreur) ; un message de l'application par défaut. */
+  report?: (text: string, error: boolean) => void;
+  /** Triangles au plus pour toutes les maquettes réunies : le budget de l'appareil par défaut. */
+  maxTriangles?: number;
+}
+
 /**
  * Ajoute la maquette des fichiers déposés (un modèle, et ses JSON) au modèle ouvert. `role` : `reference` pour l'ancienne
- * version d'une comparaison. Rend la maquette ajoutée, ou null (refus ou erreur : déjà dits à l'utilisateur).
+ * version d'une comparaison. Rend la maquette ajoutée, ou null (refus, arrêt ou erreur : déjà dits par `options.report`).
  */
-export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSourceInfo['role'] = 'model'): Promise<ModelSourceInfo | null> {
+export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSourceInfo['role'] = 'model', options: AddOptions = {}): Promise<ModelSourceInfo | null> {
+  const report = options.report ?? ((text: string, error: boolean) => app.toast(text, error));
   const fail = (text: string) => {
-    app.toast(text, true);
+    report(text, true);
     return null;
   };
   const blocked = federationBlocked(app);
   if (blocked) return fail(blocked);
   const model = app.model!;
+  const maxTriangles = options.maxTriangles ?? deviceTriangleBudget();
   const depth = (input: InputFile) => input.path.split('/').length;
   const byDepth = (list: InputFile[]) => list.sort((a, b) => depth(a) - depth(b));
   const file = byDepth(inputs.filter((input) => isModelFile(input.file.name) || isUsdFile(input.file.name)))[0]
-    ?? byDepth(inputs.filter((input) => isIfcFile(input.file.name)))[0];
-  if (!file) return fail(inputs.some((input) => isRevitFile(input.file.name)) ? REVIT_REFUSED : 'Choisissez un fichier .ifc, .glb, .gltf ou .usdz à ajouter, avec éventuellement son .json.');
+    ?? byDepth(inputs.filter((input) => isIfcFile(input.file.name)))[0]
+    ?? byDepth(inputs.filter((input) => isRevitFile(input.file.name)))[0];
+  if (!file) return fail('Choisissez un fichier .ifc, Revit (.rvt, .rfa), .glb, .gltf ou .usdz à ajouter, avec éventuellement son .json.');
   const name = file.file.name;
+  const kind = kindOf(name);
+  const controller = new AbortController();
   adding = true;
   app.busy(`Lecture de « ${name} »…`);
   try {
@@ -72,8 +84,10 @@ export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSo
         metadataError ||= `« ${input.file.name} » : ${error instanceof Error ? error.message : String(error)}`;
       }
     }
-    let geometry: ModelSource;
+    let geometry: ModelSource | RawInput;
     let own: Metadata | null = null;
+    let generator: string | undefined;
+    let readNote = '';
     if (isUsdFile(name)) {
       const usd = await loadUsdFile(file.file);
       if (usd.metadata) candidates.push({ ...usd.metadata, source: `${name} (embarquées)` });
@@ -81,10 +95,22 @@ export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSo
     } else if (isIfcFile(name)) {
       const result = await convertIfc(file.file, (message) => app.busy(message));
       own = app.readMetadata(result.metadata, `${withoutExtension(name)}.json`);
+      generator = generatorOf(parseGlb(result.glb).json);
       const glb = new File([result.glb], `${withoutExtension(name)}.glb`, { type: 'model/gltf-binary' });
       geometry = gltfSource((await loadModelFiles({ file: glb, path: glb.name }, [])).gltf);
+    } else if (kind === 'revit') {
+      // Ce que les maquettes affichées laissent du budget, dit avant la lecture ; au-delà, le lecteur montre des boîtes.
+      const budget = revitBudget(name, maxTriangles, model.triangleCount);
+      const figures = `Budget de cette maquette : ${trianglesText(budget)} (l’appareil en permet ${trianglesText(maxTriangles)}, dont ${trianglesText(model.triangleCount)} déjà affichés).`;
+      const read = await readRevit(file.file, (message) => app.busy(`${message} ${figures}`, () => controller.abort()), controller.signal, undefined, budget);
+      own = app.readMetadata(read.metadata, `${withoutExtension(name)}.json`);
+      geometry = read.raw;
+      const described = describeRevitReport(read.report);
+      if (described.warning) readNote = described.text;
     } else {
-      geometry = gltfSource((await loadModelFiles(file, inputs.filter((input) => input !== file))).gltf);
+      const { gltf } = await loadModelFiles(file, inputs.filter((input) => input !== file));
+      generator = generatorOf(gltf.parser.json);
+      geometry = gltfSource(gltf);
     }
     // Un autre modèle a été ouvert pendant la lecture : l'ajout est abandonné.
     if (app.model !== model || app.mapOpen) return null;
@@ -93,13 +119,14 @@ export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSo
     if (app.model !== model || app.mapOpen) return null;
     const added = addSource({
       model, splits: app.splits!, selectColor: app.viewer.selectColor, original: originalOf(app),
-      first: { name: app.sourceName, kind: kindOf(app.sourceName) }, maxTriangles: deviceTriangleBudget(),
-    }, { name, kind: kindOf(name), role, geometry });
+      first: { name: app.sourceName, kind: kindOf(app.sourceName), origin: app.sourceOrigin ?? undefined }, maxTriangles,
+    }, { name, kind, role, geometry });
 
     // Ses métadonnées : la base qui décrit le plus de ses éléments, puis ses JSON de modifications (des étapes annulables).
     const { metadata, overlays } = chooseMetadata(own, candidates, [...added.keyMap.keys()]);
+    added.source.origin = { ...producerOf(kind, generator), metadata: metadataUse(own, metadata, overlays) };
     app.changeParts(added.change, metadata ? rekeyMetadata(metadata, added.keyMap) : null);
-    const locks = metadata?.readOnly ?? (kindOf(name) === 'ifc' ? IFC_READ_ONLY : []);
+    const locks = metadata?.readOnly ?? (kind === 'ifc' ? IFC_READ_ONLY : []);
     app.store.readOnly = [...new Set([...app.store.readOnly, ...locks])];
     const notes: string[] = [];
     for (const overlay of overlays) {
@@ -112,14 +139,21 @@ export async function addModelFiles(app: App, inputs: InputFile[], role: ModelSo
 
     const { source } = added;
     notes.unshift(`« ${source.name} » ajouté${role === 'reference' ? ' comme version de référence' : ''} : ${plural(source.count, 'élément')}, ${integer.format(source.triangles)} triangles.`);
+    if (readNote) notes.push(readNote);
     if (added.prefixed > 0) notes.push(`${plural(added.prefixed, 'identifiant')} déjà pris par une autre maquette : préfixé${s(added.prefixed)} « ${source.id}| » dans cette session (les exports gardent les clés du fichier).`);
     if (!metadata && metadataError) notes.push(`JSON non pris en compte. ${metadataError}`);
     const frames = framesNotice(added.apart, name);
     if (frames) notes.push(frames);
-    app.toast(notes.join(' '), frames !== '' || (!metadata && metadataError !== ''));
+    report(notes.join(' '), frames !== '' || readNote !== '' || (!metadata && metadataError !== ''));
     return source;
   } catch (error) {
-    if (error instanceof FederationError) return fail(error.message);
+    if (controller.signal.aborted) {
+      report(`Ajout de « ${name} » arrêté : rien n’a changé.`, false);
+      return null;
+    }
+    if (error instanceof FederationError || error instanceof RevitTooLargeError) return fail(error.message);
+    // Construire le modèle d'un gros fichier Revit peut épuiser la mémoire du fil principal : même message que dans le lecteur.
+    if (kind === 'revit' && error instanceof Error && isMemoryFailure(error)) return fail(revitFailureToError(file.file, error).message);
     return fail(`« ${name} » n’a pas pu être ajouté : ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     adding = false;

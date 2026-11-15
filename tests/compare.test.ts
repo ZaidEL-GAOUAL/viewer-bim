@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { compareCsv, compareJob, compareReport, elementSignature, statusLayer, type CompareSide, type GeometrySignature } from '../src/data/compare.ts';
+import { LOOSE_TOLERANCE, STRICT_TOLERANCE, compareCsv, compareJob, compareReport, elementSignature, geometryStatus, statusLayer, type CompareSide, type GeometrySignature } from '../src/data/compare.ts';
 import type { FlatProps } from '../src/data/metadata.ts';
 import { CUBE, buildFromNodes } from './helpers.ts';
 
@@ -157,4 +157,87 @@ test('the CSV defuses formulas in keys and names', () => {
   const empty = side([], 900);
   const csv = compareCsv(run(compareJob(evil, empty)), evil, empty);
   assert.equal(csv.split('\r\n')[1], "ajouté;'=1+1;'+cmd;;");
+});
+
+// ------------------------------------------------------------- deux formats d'un même modèle (corrections, 13)
+
+test('same box, volume and area with another triangle count: « même forme, maillage différent », not modified', () => {
+  const result = run(compareJob(side([{ key: 'mur', triangles: 14 }]), side([{ key: 'mur', triangles: 12 }], 100)));
+  assert.deepEqual(result.modified.geometry, []);
+  assert.deepEqual(result.unchanged, []);
+  assert.deepEqual(result.remeshed.map((pair) => [pair.current, pair.reference, pair.geometry, pair.triangles]), [[0, 100, 'remeshed', [12, 14]]]);
+  assert.equal(statusLayer(result).get(0)?.color, '#9ca3af', 'dimmed like unchanged');
+  assert.match(compareCsv(result, side([{ key: 'mur' }]), side([{ key: 'mur' }], 100)), /même forme, maillage différent;mur;mur;mur;même forme, maillage différent \(12 → 14 triangles\)/);
+});
+
+test('a 5 mm move is a move under both tolerances; +1 % volume is a change under the strict one', () => {
+  const moved = (tolerance: typeof STRICT_TOLERANCE) => run(compareJob(side([{ key: 'p', at: 0.005 }]), side([{ key: 'p' }], 100), { tolerance })).modified.moved.length;
+  assert.equal(moved(STRICT_TOLERANCE), 1);
+  assert.equal(moved(LOOSE_TOLERANCE), 1, 'the looser tolerance never hides a move of more than 2 mm');
+  const fatter: CompareSide = { ...side([{ key: 'p' }]), signature: () => ({ box: [0, 0, 0, 1000, 1000, 1000], triangles: 12, volume: 1.01, area: 6 }) };
+  assert.equal(geometryStatus(fatter.signature(0), side([{ key: 'p' }]).signature(0), STRICT_TOLERANCE), 'changed');
+  assert.equal(run(compareJob(fatter, side([{ key: 'p' }], 100))).modified.geometry.length, 1, 'strict by default');
+  assert.equal(geometryStatus(fatter.signature(0), side([{ key: 'p' }]).signature(0), LOOSE_TOLERANCE), 'same', 'within 1 % between two engines');
+});
+
+test('the pieces of a split are compared as their original, with the note « découpé en 2 pièces »', () => {
+  const original = { Catégorie: 'Mur', Matériau: 'Béton', 'Quantités calculées / Longueur (m)': 4 };
+  const piece = (number: number, extra: FlatProps = {}): FlatProps => ({ ...original, 'Quantités calculées / Longueur (m)': 2, 'Pièce / Numéro': number, 'Pièce / Origine': 'Mur (w)', ...extra });
+  // Deux moitiés d'un cube de 2 m de long : la boîte réunie et le volume sont ceux de l'original ; la surface a les faces de la coupe.
+  const halves: CompareSide = {
+    elements: [0, 1], key: (i) => `w~${i + 1}`, label: () => 'Mur', props: (i) => (i === 0 ? piece(1) : piece(2, { Matériau: 'Brique' })),
+    signature: (i) => ({ box: [i * 1000, 0, 0, (i + 1) * 1000, 1000, 1000], triangles: 12, volume: 1, area: 6 }),
+  };
+  const whole: CompareSide = { elements: [100], key: () => 'w', label: () => 'Mur', props: () => original, signature: () => ({ box: [0, 0, 0, 2000, 1000, 1000], triangles: 12, volume: 2, area: 10 }) };
+  const result = run(compareJob(halves, whole));
+  assert.deepEqual([result.added, result.removed], [[], []], 'never one removed plus two added');
+  assert.equal(result.modified.properties.length, 1);
+  const [pair] = result.modified.properties;
+  assert.deepEqual(pair.changes, [{ path: 'Matériau', before: 'Béton', after: 'Brique' }], 'what the split wrote is not a change, the hand edit on one piece is');
+  assert.equal(pair.geometry, 'same');
+  assert.deepEqual(pair.pieces, { side: 'current', elements: [0, 1] });
+  assert.match(compareCsv(result, halves, whole), /découpé en 2 pièces/);
+  const layer = statusLayer(result);
+  assert.equal(layer.get(1)?.color, '#f59e0b', 'every piece carries the status');
+  // Dans l'autre sens : l'original ouvert, ses pièces dans la référence.
+  const back = run(compareJob(whole, halves));
+  assert.deepEqual(back.modified.properties[0].pieces, { side: 'reference', elements: [0, 1] });
+});
+
+test('duplicate keys inside one model are reported as such, not as added or removed', () => {
+  const twice = side([{ key: 'x' }, { key: 'x', at: 5 }, { key: 'y', at: 10 }]);
+  const result = run(compareJob(twice, side([{ key: 'x' }, { key: 'y', at: 10 }], 100)));
+  assert.deepEqual(result.duplicates, { current: [1], reference: [] });
+  assert.deepEqual([result.added, result.removed], [[], []]);
+  assert.equal(result.unchanged.length, 2);
+  assert.match(compareCsv(result, twice, twice), /identifiant en double;x;x;;/);
+});
+
+test('the second pass still refuses two elements of the same type and size far apart, and pairs them within 50 cm', () => {
+  const far = run(compareJob(side([{ key: 'n', label: 'Poteau', props: { Catégorie: 'Poteau' }, at: 10 }]), side([{ key: 'o', label: 'Poteau', props: { Catégorie: 'Poteau' } }], 100)));
+  assert.deepEqual([far.added, far.removed, far.renamedIds], [[0], [100], []]);
+  // Un millimètre de plus sur la taille, de part et d'autre d'un arrondi au centimètre : toujours « probablement le même ».
+  const near = run(compareJob(side([{ key: 'n', label: 'Poteau', props: { Catégorie: 'Poteau' }, at: 0.1, size: 1.0151 }]), side([{ key: 'o', label: 'Poteau', props: { Catégorie: 'Poteau' }, size: 1.0149 }], 100), { tolerance: LOOSE_TOLERANCE }));
+  assert.deepEqual(near.renamedIds.map((pair) => [pair.current, pair.reference]), [[0, 100]]);
+});
+
+test('an element drawn as its box only is « non comparable (forme approchée) », never changed', () => {
+  const boxed: CompareSide = { ...side([{ key: 'b', triangles: 12 }]), approximate: () => true };
+  const read = side([{ key: 'b', size: 3, triangles: 900 }], 100);
+  const result = run(compareJob(boxed, read));
+  assert.deepEqual(result.modified.geometry, []);
+  assert.deepEqual(result.approximate.map((pair) => pair.geometry), ['approximate']);
+  assert.match(compareCsv(result, boxed, read), /non comparable \(forme approchée\);b;b;b;non comparable \(forme approchée\)/);
+});
+
+test('two engines: differences on locked paths are conversion gaps, apart; an edited property is still one change', () => {
+  const opened = side([{ key: 'm', props: { 'Classe IFC': 'IfcWall', Qto_WallBaseQuantities: 1, Résistance: 'REI 60' } }]);
+  const before = side([{ key: 'm', props: { 'Classe IFC': 'IfcWallStandardCase', Qto_WallBaseQuantities: 1.001, Résistance: 'REI 30' } }], 100);
+  const result = run(compareJob(opened, before, { conversionPaths: ['Classe IFC', 'Qto_*'] }));
+  assert.deepEqual(result.modified.properties.map((pair) => pair.changes.map((change) => change.path)), [['Résistance']]);
+  assert.deepEqual(result.conversion.map((pair) => pair.conversion.map((change) => change.path)), [['Classe IFC', 'Qto_WallBaseQuantities']]);
+  const report = compareReport(result, opened, before, ['Ouverte : « a.ifc »', 'Référence : « a.glb »']);
+  assert.deepEqual(report.origins, ['Ouverte : « a.ifc »', 'Référence : « a.glb »']);
+  assert.equal(report.conversion.length, 1);
+  assert.match(compareCsv(result, opened, before, ['Ouverte : « a.ifc »']), /^Ouverte : « a\.ifc »\r\nStatut;/);
 });

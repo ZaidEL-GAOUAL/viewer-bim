@@ -121,6 +121,10 @@ export class Viewer {
   private readonly background = new Color(0xe9ebef);
   private width = 1;
   private height = 1;
+  /** Vue parallèle renversée gauche-droite (`setMirrored`). */
+  private mirror = false;
+  /** Vrai pendant une passe dessinée par une caméra en miroir : le sens des faces avant est inversé (voir le constructeur). */
+  private flipFaces = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -131,6 +135,11 @@ export class Viewer {
     this.renderer.info.autoReset = false;
     // Le dessin de la coupe d'un plan est découpé par les autres plans (matériau par matériau).
     this.renderer.localClippingEnabled = true;
+    // three.js déduit le sens des faces avant de la seule matrice de chaque objet ; une caméra en miroir (`setMirrored`) le
+    // retourne à l'écran : il est retourné ici pour toute passe qu'elle dessine (élimination des faces, coupes, éclairage).
+    const state = this.renderer.state;
+    const setMaterial = state.setMaterial.bind(state);
+    state.setMaterial = (material, frontFaceCW, clipping) => setMaterial(material, frontFaceCW !== this.flipFaces, clipping);
     container.appendChild(this.renderer.domElement);
 
     this.camera.position.copy(DEFAULT_DIRECTION).multiplyScalar(30);
@@ -337,6 +346,8 @@ export class Viewer {
    * cadrage de la perspective ; retour en perspective à la distance qui montre la même hauteur.
    */
   setProjection(kind: Projection, rotate = kind === 'perspective'): void {
+    // Le miroir n'existe qu'en vue 2D : rendre l'orbite le retire.
+    if (rotate) this.setMirrored(false);
     if (this.projection === kind || (this.externalCamera && kind === 'orthographic')) {
       if (this.projection === kind && !this.externalCamera) this.controls.enableRotate = rotate;
       return;
@@ -455,6 +466,7 @@ export class Viewer {
 
   /** Vue standard (face, dessus…) : la maquette entière, regardée depuis cette direction. */
   viewFrom(view: StandardView): void {
+    this.setMirrored(false);
     const { direction, up } = STANDARD_VIEWS[view];
     this.camera.up.copy(up);
     const box = this.model && !this.model.box.isEmpty() ? this.model.box : new Box3(new Vector3(-5, 0, -5), new Vector3(5, 3, 5));
@@ -466,10 +478,29 @@ export class Viewer {
     const aspect = this.width / this.height;
     camera.top = halfHeight;
     camera.bottom = -halfHeight;
-    camera.left = -halfHeight * aspect;
-    camera.right = halfHeight * aspect;
+    camera.left = -halfHeight * aspect * (this.mirror ? -1 : 1);
+    camera.right = -camera.left;
     camera.zoom = 1;
     camera.updateProjectionMatrix();
+  }
+
+  get mirrored(): boolean {
+    return this.mirror;
+  }
+
+  /**
+   * Vue 2D renversée gauche-droite : la projection parallèle a sa gauche et sa droite échangées. Un plan de plafond, regardé
+   * d'en dessous, se lit alors comme Revit le montre, superposable au plan d'étage. Tout suit la projection : le picking, les
+   * étiquettes, le déplacement à la souris, les captures ; le sens des faces est retourné à chaque passe (`flipFaces`).
+   * Retiré par toute vue qui rend l'orbite, une vue standard ou `setMirrored(false)`.
+   */
+  setMirrored(on: boolean): void {
+    if (on === this.mirror) return;
+    this.mirror = on;
+    const ortho = this.orthographic;
+    [ortho.left, ortho.right] = [ortho.right, ortho.left];
+    ortho.updateProjectionMatrix();
+    this.invalidate();
   }
 
   /** Cadre la caméra sur une boîte, en conservant la direction de vue sauf indication contraire. */
@@ -659,8 +690,8 @@ export class Viewer {
     this.perspective.aspect = width / height;
     this.perspective.updateProjectionMatrix();
     const ortho = this.orthographic;
-    ortho.left = -ortho.top * (width / height);
-    ortho.right = ortho.top * (width / height);
+    ortho.left = -ortho.top * (width / height) * (this.mirror ? -1 : 1);
+    ortho.right = -ortho.left;
     ortho.updateProjectionMatrix();
     this.cut.setResolution(width, height);
     // Rendu immédiat : évite une image vide ou étirée pendant le redimensionnement.
@@ -758,6 +789,9 @@ export class Viewer {
   /** Les passes d'une image (opaque, coupe, transparent, superpositions) vue par `camera`, dans la cible courante. */
   private renderLayers(camera: Camera): void {
     const { renderer, scene, sections } = this;
+    // Une projection en miroir (gauche et droite échangées) retourne le sens des faces à l'écran.
+    const projection = camera.projectionMatrix.elements;
+    this.flipFaces = projection[0] * projection[5] < 0;
     if (!this.model || !sections.active) {
       renderer.clippingPlanes = NO_PLANES;
       renderer.render(scene, camera);
@@ -780,6 +814,7 @@ export class Viewer {
 
     renderer.clippingPlanes = NO_PLANES;
     renderer.render(this.overlay, camera);
+    this.flipFaces = false;
   }
 
   /**

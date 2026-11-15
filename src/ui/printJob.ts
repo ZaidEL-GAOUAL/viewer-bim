@@ -58,6 +58,8 @@ export function viewFacts(app: App): ViewFacts {
   camera.updateMatrixWorld();
   const direction = camera.getWorldDirection(new Vector3());
   const right = new Vector3().setFromMatrixColumn(camera.matrixWorld, 0), up = new Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  // Vue en miroir (plan de plafond) : la droite de l'écran est la gauche de la caméra.
+  if (viewer.mirrored) right.negate();
   const scaled = viewer.projection === 'orthographic' && !viewer.walk.active;
   let viewHeight = 0;
   if (viewer.projection === 'orthographic') viewHeight = (viewer.orthographic.top - viewer.orthographic.bottom) / viewer.orthographic.zoom;
@@ -72,7 +74,8 @@ export function viewFacts(app: App): ViewFacts {
     }
     extent = { width: maxR - minR, height: maxU - minU };
   }
-  return { scaled, plan: scaled && direction.y < -0.999, direction, right, up, viewHeight, extent, facing: facingPlanes(viewer.sections, direction) };
+  // Un plan : vu de dessus, ou d'en dessous en miroir (un plan de plafond se lit comme le plan d'étage, nord compris).
+  return { scaled, plan: scaled && (direction.y < -0.999 || (viewer.mirrored && direction.y > 0.999)), direction, right, up, viewHeight, extent, facing: facingPlanes(viewer.sections, direction) };
 }
 
 /** Le nord (vecteur du repère du viewer) et d'où il vient : le vrai nord du géoréférencement s'il existe, sinon +Y du modèle. */

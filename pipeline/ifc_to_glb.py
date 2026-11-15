@@ -466,8 +466,22 @@ def convert(
         scene=scene,
         metadata=metadata,
         report=report,
-        generator=f"viewer-bim ifc_to_glb (IfcOpenShell {ifcopenshell.version})",
+        generator=f"viewer-bim ifc_to_glb (IfcOpenShell {engine_version()})",
     )
+
+
+def engine_version() -> str:
+    """La version d'IfcOpenShell, écrite dans le GLB : la comparaison du viewer s'en sert pour savoir si deux fichiers ont été
+    convertis par le même moteur. Le paquet pour navigateur (0.8.5) se dit « 0.0.0 » : la version de son wheel la remplace."""
+    version = str(ifcopenshell.version)
+    if version.startswith("0.0.0"):
+        try:
+            from importlib.metadata import version as installed
+
+            return installed("ifcopenshell")
+        except Exception:
+            pass
+    return version
 
 
 def convert_file(path: str | Path, **options: Any) -> Conversion:

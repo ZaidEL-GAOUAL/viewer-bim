@@ -40,6 +40,8 @@ export interface Metadata {
   views?: SavedView[];
   /** Niveaux du modèle (voir data/levels.ts), si le fichier en donne. */
   levels?: Level[];
+  /** Le « Grouper par » que la source propose à l'ouverture (section `grouping`) : ses propriétés, dans l'ordre. */
+  grouping?: string[];
   /** Découpages en pièces (voir data/splits.ts), si le fichier en donne. */
   splits?: SplitDefinition[];
   /** Découpages écartés à la lecture (trop de coupes), en phrases à montrer à l'utilisateur. */
@@ -209,6 +211,8 @@ export function parseMetadata(json: unknown): Metadata {
   if (views.length > 0) metadata.views = views;
   const levels = parseLevels(json.levels);
   if (levels.length > 0) metadata.levels = levels;
+  const grouping = Array.isArray(json.grouping) ? json.grouping.filter((path): path is string => typeof path === 'string' && path !== '') : [];
+  if (grouping.length > 0) metadata.grouping = grouping;
   if (splits.length > 0) metadata.splits = splits;
   if (zones.length > 0) metadata.zones = zones;
   return metadata;

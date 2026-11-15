@@ -4,14 +4,19 @@ import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
 import { captureView, newViewId } from './userViews.ts';
 
+/** Ce que dit une vue 2D sans type de Revit. Un plan de plafond est vu d'en dessous, renversé comme dans Revit (`Viewer.setMirrored`). */
+const FLAT_KINDS: Partial<Record<SavedView['kind'], string>> = { plan: 'plan', ceiling: 'plan de plafond', section: 'coupe', elevation: 'façade' };
+
 /**
- * Ce que la vue règle en plus de la caméra, en quelques mots pour la liste. Un plan d'étage dit son type de vue (« Floor
- * Plan »…), pas sa projection ni sa boîte de coupe : toujours parallèle, sa boîte est celle de sa hauteur de coupe.
+ * Ce que la vue règle en plus de la caméra, en quelques mots pour la liste. Une vue 2D (plan, plan de plafond, coupe, façade) dit
+ * son type de vue (« Floor Plan », « Building Section »…), pas sa projection ni sa boîte de coupe : toujours parallèle, sa boîte
+ * est celle de sa hauteur de coupe ou de son cadre.
  */
 function details(view: SavedView): string {
-  const plan = view.kind === 'plan';
-  const parts = [plan ? view.type ?? 'plan' : view.camera.projection === 'perspective' ? 'perspective' : 'parallèle'];
-  if (!plan && view.sectionBox) parts.push('boîte de coupe');
+  const flat = view.kind !== '3d';
+  const parts = [flat ? view.type ?? FLAT_KINDS[view.kind] ?? '' : view.camera.projection === 'perspective' ? 'perspective' : 'parallèle'];
+  if (view.kind === 'ceiling') parts.push('vu d’en dessous, orienté comme le plan d’étage');
+  if (!flat && view.sectionBox) parts.push('boîte de coupe');
   if (view.sections?.some((plane) => plane.enabled)) parts.push('coupes');
   const hidden = (view.hiddenElements?.length ?? 0) + (view.hiddenCategories?.values.length ?? 0);
   if (hidden > 0) parts.push('masquages');
@@ -23,8 +28,8 @@ function details(view: SavedView): string {
 
 /**
  * Les vues : celles de l'utilisateur (« Mes vues » : enregistrer ce qu'on voit, l'ouvrir, la mettre à jour, la renommer, la
- * dupliquer, la supprimer, la déplacer), celles du fichier (section `views` du contrat : pour Revit, ses vues 3D nommées et
- * ses plans d'étage ; en lecture seule, mais duplicables), et un plan par niveau (section `levels`) que le fichier n'a pas,
+ * dupliquer, la supprimer, la déplacer), celles du fichier (section `views` du contrat : pour Revit, ses vues 3D nommées, ses
+ * plans d'étage et de plafond, ses coupes et ses façades ; en lecture seule, mais duplicables), et un plan par niveau (section `levels`) que le fichier n'a pas,
  * calculé à la demande. Un clic ouvre la vue ; « Vue par défaut » rétablit l'affichage normal. Bouton « Vues » de la barre
  * d'outils et carte dans la vue 3D.
  */
@@ -39,7 +44,7 @@ export class ViewsPanel {
 
   constructor(app: App) {
     this.app = app;
-    this.button = button('Vues', () => this.toggle(), { title: 'Vues : les vôtres, celles du fichier (vues 3D, plans d’étage) et un plan par niveau', attrs: { 'aria-pressed': 'false', hidden: '' } });
+    this.button = button('Vues', () => this.toggle(), { title: 'Vues : les vôtres, celles du fichier (vues 3D, plans d’étage et de plafond, coupes, façades) et un plan par niveau', attrs: { 'aria-pressed': 'false', hidden: '' } });
     this.list = h('div', { class: 'views-list', attrs: { role: 'group', 'aria-label': 'Vues enregistrées' } });
     this.save = button('Enregistrer cette vue', () => this.saveCurrent(), { class: 'primary', title: 'Enregistrer ce que vous voyez : caméra, coupes, boîte, masquages, isolement, phase, couleurs et regroupement' });
     this.el = h('section', { class: 'card views-card', attrs: { hidden: '', 'aria-label': 'Vues enregistrées' } },
@@ -49,7 +54,7 @@ export class ViewsPanel {
       ),
       h('div', { class: 'section-place' }, this.save),
       this.list,
-      h('p', { class: 'hint', text: 'Vos vues reprennent tout ce que vous voyez et s’enregistrent avec « JSON ↓ » ou « Modifications ↓ ». Celles du fichier reprennent caméra, boîte de coupe, masquages et phase ; un plan d’étage s’ouvre vu du dessus, en 2D, coupé à sa hauteur de coupe.' }),
+      h('p', { class: 'hint', text: 'Vos vues reprennent tout ce que vous voyez et s’enregistrent avec « JSON ↓ » ou « Modifications ↓ ». Celles du fichier reprennent caméra, boîte de coupe, masquages et phase ; un plan d’étage s’ouvre vu du dessus, en 2D, coupé à sa hauteur de coupe ; une coupe ou une façade, en 2D face à son plan de coupe ; un plan de plafond, vu d’en dessous et orienté comme le plan d’étage, comme dans Revit.' }),
     );
     app.on('model', () => {
       this.generated = levelPlans(app.levels, app.savedViews);
@@ -103,8 +108,11 @@ export class ViewsPanel {
     const files = app.savedViews;
     // L'indice d'une vue du fichier reste celui de la liste entière (voir `sync`).
     const fileEntries = (member: (view: SavedView) => boolean) => files.flatMap((view, index) => member(view) ? [entry(`f:${index}`, view, view.name, details(view), duplicate(view))] : []);
-    group('Vues 3D', fileEntries((view) => view.kind !== 'plan'));
+    group('Vues 3D', fileEntries((view) => view.kind === '3d'));
     group('Plans d’étage', fileEntries((view) => view.kind === 'plan'));
+    group('Plans de plafond', fileEntries((view) => view.kind === 'ceiling'));
+    group('Coupes', fileEntries((view) => view.kind === 'section'));
+    group('Façades', fileEntries((view) => view.kind === 'elevation'));
     group('Plans par niveau', this.generated.map((view, index) => entry(`g:${index}`, view, view.name, 'calculé : coupe à 1,20 m au-dessus du niveau')));
     this.sync();
   }

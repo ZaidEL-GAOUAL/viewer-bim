@@ -148,3 +148,99 @@ test('the same file added twice gets a distinct model name', async () => {
   assert.deepEqual(model.sources.map((source) => source.name), ['a.glb', 'a.glb (2)']);
   assert.deepEqual(model.keys, ['a', 'b', 'm2|a', 'm2|b']);
 });
+
+// ------------------------------------------------------------ origines, Revit ajouté, formes approchées (corrections, 13 et 14)
+
+test('the origin line of each kind of source, and engines compared', async () => {
+  const { REVIT_ENGINE, enginesDiffer, generatorOf, originLine, producerOf } = await import('../src/data/federation.ts');
+  const { metadataUse } = await import('../src/data/sidecar.ts');
+  const browser = { ...producerOf('ifc', 'viewer-bim ifc_to_glb (IfcOpenShell 0.8.5)'), metadata: 'de la conversion' };
+  const cli = { ...producerOf('glb', generatorOf({ asset: { version: '2.0', generator: 'viewer-bim ifc_to_glb (IfcOpenShell 0.9.0)' } })), metadata: 'JSON complet' };
+  assert.equal(originLine({ name: 'demo.ifc', origin: browser }), '« demo.ifc », converti dans le navigateur (IfcOpenShell 0.8.5) ; métadonnées : de la conversion.');
+  assert.equal(originLine({ name: 'demo.glb', origin: cli }), '« demo.glb », glTF écrit par « viewer-bim ifc_to_glb (IfcOpenShell 0.9.0) » ; métadonnées : JSON complet.');
+  assert.deepEqual(producerOf('revit'), { producer: 'lu nativement (Revit)', engine: REVIT_ENGINE });
+  assert.equal(producerOf('usd').producer, 'USD');
+  assert.equal(producerOf('glb').producer, 'glTF sans convertisseur indiqué');
+  assert.equal(enginesDiffer(browser, cli), true, 'two IfcOpenShell versions');
+  assert.equal(enginesDiffer(cli, { ...cli, metadata: 'de la conversion' }), false, 'same generator, whatever the metadata');
+  assert.equal(enginesDiffer({ ...producerOf('revit'), metadata: '' }, { ...producerOf('glb', REVIT_ENGINE), metadata: '' }), false, 'a GLB ↓ of a Revit read compares to its .rvt');
+  assert.equal(generatorOf({ asset: {} }), undefined);
+  // Les métadonnées utilisées.
+  const own = parseMetadata({ elements: { a: {} } }), json = parseMetadata({ elements: { a: {} } });
+  assert.equal(metadataUse(own, own, []), 'de la conversion');
+  assert.equal(metadataUse(own, json, []), 'conversion + JSON appliqué');
+  assert.equal(metadataUse(own, own, [json]), 'conversion + JSON appliqué');
+  assert.equal(metadataUse(null, json, []), 'JSON complet');
+  assert.equal(metadataUse(null, null, []), 'propriétés du fichier');
+});
+
+/** La maquette Revit d'essai (licence MIT), lue par le module WebAssembly livré ; `triangleBudget` comme le lecteur le reçoit. */
+async function revitDemo(triangleBudget?: number) {
+  const { readFileSync } = await import('node:fs');
+  const { initSync, readRevit } = await import('../src/revit/pkg/revit.js');
+  const { rawFromOutput } = await import('../src/revit/readRevit.ts');
+  initSync({ module: readFileSync(new URL('../src/revit/pkg/revit_bg.wasm', import.meta.url)) });
+  const output = readRevit(new Uint8Array(readFileSync(new URL('../public/samples/revit-demo.rvt', import.meta.url))), triangleBudget === undefined ? undefined : { triangleBudget });
+  return { output, raw: rawFromOutput(output), metadata: parseMetadata(JSON.parse(output.metadata)) };
+}
+
+test('a Revit file is added to an open GLB, as a model or as the reference of a comparison, with its metadata', async () => {
+  const { model, store, edits, context } = await session();
+  const { output, raw, metadata } = await revitDemo();
+  const added = addSource(context, { name: 'revit-demo.rvt', kind: 'revit', role: 'reference', geometry: raw });
+  apply(model, store, edits, added.change, rekeyMetadata(metadata, added.keyMap));
+  assert.equal(added.source.count, output.keys.length);
+  assert.equal(added.source.role, 'reference');
+  assert.equal(added.source.triangles, output.report.triangles);
+  assert.deepEqual(model.keys.slice(2), output.keys, 'the Revit keys, none taken by the GLB');
+  const first = 2 + output.keys.findIndex((key) => Object.keys(metadata.elements.get(key)?.props ?? {}).length > 0);
+  assert.ok(Object.keys(store.propsOf(first) ?? {}).length > 1, 'its own properties');
+  assert.equal(store.propsOf(first)?.[MODEL_PROPERTY], 'revit-demo.rvt');
+  // Retirée, la session revient au GLB seul.
+  apply(model, store, edits, removeLastSource(model, context.splits, context.original));
+  assert.equal(model.count, 2);
+});
+
+test('a Revit file that does not fit is refused with the figures, before reading and after', async () => {
+  const { revitBudget, FederationError } = await import('../src/data/federation.ts');
+  assert.throws(() => revitBudget('maquette.rvt', 2_000_000, 2_500_000), (error: Error) => error instanceof FederationError
+    && error.message === '« maquette.rvt » n’est pas ajouté : les 2,5 millions de triangles déjà affichés atteignent le budget de cet appareil (2 millions de triangles).');
+  assert.equal(revitBudget('maquette.rvt', 10_000_000, 2_500_000), 7_500_000, 'what is left is the budget of the reading');
+  const { model, context } = await session();
+  const { raw } = await revitDemo();
+  const before = model.count;
+  assert.throws(() => addSource({ ...context, maxTriangles: model.triangleCount + 100 }, { name: 'revit-demo.rvt', kind: 'revit', geometry: raw }),
+    /« revit-demo\.rvt » n’est pas ajouté : ses [\d\s]+ triangles, avec les 24 triangles déjà affichés, dépasseraient le budget de cet appareil \(124 triangles\)\./);
+  assert.equal(model.count, before, 'nothing changed');
+});
+
+test('elements the reader drew as their box are flagged on the model: indicative quantities, out of clashes, not compared, not split', async () => {
+  const { model, store, edits, context } = await session();
+  // Un tout petit budget : passé lui, le lecteur montre les éléments par leur boîte et le dit.
+  const { output, raw } = await revitDemo(200);
+  assert.ok(output.report.sources.unknown > 0, 'some elements drawn as boxes');
+  // Lu avec ce qui reste du budget, il entre : ses boîtes (12 triangles par élément) n'y comptent pas.
+  const added = addSource({ ...context, maxTriangles: model.triangleCount + 200 }, { name: 'revit-demo.rvt', kind: 'revit', geometry: raw });
+  assert.ok(added.source.triangles > 200, 'more triangles than the budget, all of them boxes');
+  apply(model, store, edits, added.change);
+  const boxed = [...model.boxOnly];
+  assert.equal(boxed.length, output.report.sources.unknown);
+  assert.ok(boxed.every((i) => i >= 2 && output.sources[i - 2] === 3), 'the flag comes from the reader, per element');
+  const { boxOnlyReason } = await import('../src/engine/Model.ts');
+  assert.match(boxOnlyReason(model, boxed[0]) ?? '', /seule sa boîte englobante/);
+  assert.equal(boxOnlyReason(model, 0), null);
+  const { computeQuantities } = await import('../src/engine/quantities.ts');
+  const quantities = await computeQuantities(model, [boxed[0], 0]);
+  assert.deepEqual([quantities.get(boxed[0])?.exact, quantities.get(boxed[0])?.approximate], [false, true], 'indicatif');
+  assert.equal(quantities.get(0)?.approximate, undefined);
+  const { clashJob } = await import('../src/engine/clash.ts');
+  const everything = Array.from({ length: model.count }, (_, i) => i);
+  const finish = <T>(job: Generator<number, T, unknown>): T => { for (;;) { const next = job.next(); if (next.done) return next.value; } };
+  const withoutBoxes = finish(clashJob(model, everything, everything));
+  assert.ok(withoutBoxes.boxOnly >= boxed.length, 'counted, out of the clash sets');
+  assert.ok(withoutBoxes.clashes.every((clash) => !model.boxOnly.has(clash.a) && !model.boxOnly.has(clash.b)));
+  assert.equal(finish(clashJob(model, everything, everything, { includeBoxOnly: true })).boxOnly, 0, 'unless asked');
+  // Retirée, la maquette n'en laisse aucun.
+  apply(model, store, edits, removeLastSource(model, context.splits, context.original));
+  assert.equal(model.boxOnly.size, 0);
+});

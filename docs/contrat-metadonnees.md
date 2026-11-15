@@ -313,8 +313,8 @@ graphiques de lignes (couleur de trait, motif, demi-teinte) ne sont pas repris.
 ## 2 sexies. Vues enregistrées (`views`)
 
 Un tableau optionnel à la racine liste des vues enregistrées du modèle : un clic dans le menu « Vues » place la caméra et
-règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du projet et ses plans d'étage (voir « Plans
-d'étage » plus bas).
+règle ce que la vue règle. Pour un `.rvt`, ce sont les vues 3D nommées du projet, ses plans d'étage, ses plans de plafond,
+ses coupes et ses façades (voir « Plans d'étage », « Plans de plafond » et « Coupes et façades » plus bas).
 
 ```json
 "views": [
@@ -343,9 +343,9 @@ d'étage » plus bas).
 | Champ | Obligatoire | Rôle |
 | --- | --- | --- |
 | `name` | oui | Nom affiché dans le menu. |
-| `kind` | non | `"plan"` pour un plan d'étage ; absent (ou `"3d"`) pour une vue 3D. Voir « Plans d'étage ». |
-| `type` | non | Le type de vue de Revit (« Floor Plan », « Structural Plan »…) : sert à distinguer deux plans de même nom. Affiché dans le menu. |
-| `range` | plans | `{ "bottom": nombre, "top": nombre }`, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). `top` est le plan de coupe ; `bottom` est la profondeur de vue, absente quand elle est illimitée. |
+| `kind` | non | `"plan"` pour un plan d'étage, `"ceiling"` pour un plan de plafond, `"section"` pour une coupe, `"elevation"` pour une façade ; absent (ou `"3d"`) pour une vue 3D. Une autre valeur est ignorée : la vue s'ouvre comme une vue 3D. Voir « Plans d'étage », « Plans de plafond », « Coupes et façades ». |
+| `type` | non | Le type de vue de Revit (« Floor Plan », « Structural Plan », « Ceiling Plan », « Building Section »…) : sert à distinguer deux vues de même nom. Affiché dans le menu. |
+| `range` | plans | `{ "bottom": nombre, "top": nombre }`, en mètres, dans le repère du modèle (Y vers le haut, comme `sectionBox`). Plan d'étage : `top` est le plan de coupe, `bottom` la profondeur de vue, absente quand elle est illimitée. Plan de plafond : `bottom` est le plan de coupe, `top` la profondeur de vue vers le haut, absente quand elle est illimitée. |
 | `camera` | oui | Voir ci-dessous. |
 | `sectionBox` | non | Boîte de coupe active de la vue (voir ci-dessous). |
 | `hiddenCategories` | non | `property` : nom de la propriété des éléments qui porte leur catégorie ; `values` : les valeurs masquées. La vue désigne elle-même sa propriété : le viewer n'en connaît aucune. |
@@ -387,20 +387,44 @@ entre sa profondeur de vue (`range.bottom`) et son plan de coupe (`range.top`), 
 - **Étendue lisible.** Un plan a besoin d'un `range.top` fini ; `range.bottom`, s'il est écrit, doit être fini et plus bas
   que `range.top`. Sinon l'étendue est écartée et l'entrée est lue comme une vue ordinaire (sa caméra, ses masquages et sa
   phase restent). `range` sur une vue qui n'est pas un plan est sans effet.
-- **Menu « Vues ».** Les groupes « Mes vues », « Vues 3D », « Plans d'étage » et « Plans par niveau » (chacun s'il a des
-  vues) ; la note d'un plan est son
-  `type` (ou « plan »), puis « masquages » et sa phase.
+- **Menu « Vues ».** Les groupes « Mes vues », « Vues 3D », « Plans d'étage », « Plans de plafond », « Coupes », « Façades »
+  et « Plans par niveau » (chacun s'il a des vues) ; la note d'une vue 2D est son `type` (ou « plan », « plan de plafond »,
+  « coupe », « façade »), puis « masquages » et sa phase.
 - **Mode carte.** Comme pour toute vue : le reste de la vue est appliqué, la caméra attend la fermeture de la carte.
 
-**Compatibilité des plans.** `kind`, `type` et `range` sont des ajouts : un viewer qui ignore `kind` ouvre un plan comme
-une vue parallèle de dessus (sa caméra, ses masquages et sa phase), sans coupe à la hauteur du plan.
+**Plans de plafond** (`kind: "ceiling"`). Un plan de plafond montre ce qui est **au-dessus** de sa coupe, jusqu'à sa
+profondeur de vue : `range.bottom` est la coupe (obligatoire, finie), `range.top` la profondeur (absente : illimitée ;
+écrite : finie et plus haute que la coupe, sinon l'étendue est écartée et l'entrée lue comme une vue ordinaire). Sa caméra
+est celle de son fichier : vue de dessus, comme un plan d'étage (Revit montre un plan de plafond orienté comme le plan
+d'étage, en miroir de ce qu'on voit d'en dessous). Le viewer l'ouvre en 2D, sans rotation, **regardé d'en dessous** (la
+caméra retournée, le même haut d'écran), dans une boîte qui va en y de la coupe à la profondeur plus 2 cm (sans profondeur :
+au haut du modèle plus 1 m), en x et z comme un plan d'étage. On y voit ce que Revit montre, la face inférieure des plafonds
+et de ce qui est au-dessus de la coupe, **renversée gauche-droite comme dans Revit** (projection parallèle en miroir) : l'image se
+superpose au plan d'étage du même niveau. Une vue de l'utilisateur enregistrée depuis un plan de plafond, une coupe ou une
+façade ouverts en 2D en garde la sorte (`kind`) et se rouvre de même ; celle d'un plan de plafond a la caméra de son fichier
+(vers le bas) et pour `range` sa boîte du moment.
+
+**Coupes et façades** (`kind: "section"`, `"elevation"`). Une coupe ou une façade est une vue parallèle face à son plan de
+coupe : `camera.direction` est horizontal (le regard de la vue), `camera.up` vertical, `camera.size` le cadre de la vue s'il
+est recadré (sinon la maquette est cadrée) et `camera.position` le centre de ce cadre sur le plan de coupe. Sa `sectionBox`
+est obligatoire (sans elle, l'entrée est lue comme une vue ordinaire) : tournée autour de la verticale, sa face proche est le
+plan de coupe, ses côtés le cadre (sans cadre : 10 km de part et d'autre), et elle s'étend à 10 km au-delà du plan de coupe.
+Le viewer l'ouvre en 2D, sans rotation, la caméra reculée sur son axe hors de la maquette, et garde l'intérieur de la boîte :
+ce qui est devant le plan de coupe est retiré, ce qui le traverse est coupé. `range` est sans effet.
+
+**Compatibilité des vues 2D.** `kind`, `type` et `range` sont des ajouts : un viewer qui ignore `kind` ouvre un plan comme
+une vue parallèle de dessus (sa caméra, ses masquages et sa phase), sans coupe à la hauteur du plan ; une coupe ou une
+façade comme une vue parallèle 3D avec sa boîte de coupe (l'orbite reste) ; un plan de plafond comme une vue parallèle de
+dessus sans boîte. Un viewer qui connaît `kind` mais pas l'une de ses valeurs ouvre la vue comme une vue 3D (c'est ce que
+fait ce viewer d'une valeur inconnue).
 
 **À l'ouverture.** Quand le fichier a au moins une vue 3D, les éléments que **toutes** ses vues 3D masquent (une clé de
 `hiddenElements`, ou une valeur de `hiddenCategories`, comme quand la vue est ouverte) démarrent masqués : Revit ne les
 montre dans aucune vue 3D du fichier. Un élément que seules certaines vues 3D masquent reste visible, puisqu'une autre vue
 le montre ; sans vue 3D, ou si aucun élément n'est masqué par toutes, rien ne change. **Les plans d'étage ne comptent pas
-dans cette règle** : l'ouverture montre la maquette en 3D, et un plan s'écarte de la 3D dans les deux sens (il montre le
-dessin DWG d'un niveau que les vues 3D masquent, et masque celui d'un autre niveau). Les éléments masqués restent dans
+dans cette règle**, ni les plans de plafond, les coupes et les façades : l'ouverture montre la maquette en 3D, et une vue 2D
+s'écarte de la 3D dans les deux sens (un plan montre le dessin DWG d'un niveau que les vues 3D masquent, et masque celui d'un
+autre niveau). Les éléments masqués restent dans
 l'arbre, œil éteint : l'utilisateur peut les afficher, et « Tout afficher » les montre. C'est un comportement du viewer,
 pas un changement de format.
 
@@ -440,7 +464,9 @@ s'écrivent dans `views`, à la suite des vues du fichier, avec ces champs en pl
 Une vue de l'utilisateur est **tout** ce qu'il voyait : à son ouverture, tout est d'abord réaffiché, puis la vue masque,
 isole, coupe (ses plans ; sans `sections`, aucun plan libre) et colore. Les éléments masqués par la phase ne sont pas
 écrits (la phase les masque de nouveau). Enregistrée depuis un plan d'étage ouvert en 2D, elle est un plan (`kind: "plan"`)
-dont `range` et `sectionBox` sont la boîte du moment : elle se rouvre en 2D, sans rotation. Une clé qu'aucun élément ne
+dont `range` et `sectionBox` sont la boîte du moment : elle se rouvre en 2D, sans rotation. De même depuis un plan de plafond
+(`"ceiling"`, sa caméra écrite vers le bas comme celle du fichier), une coupe ou une façade (`"section"`, `"elevation"`, avec
+leur `sectionBox`). Une clé qu'aucun élément ne
 porte (le fichier a changé depuis) est ignorée, et le viewer dit combien. Les vues de l'utilisateur ne comptent pas dans la
 règle « À l'ouverture » ci-dessus. Elles sont écrites par « JSON ↓ » et par « Modifications ↓ » ; à la relecture d'un
 `.rvt` avec un JSON complet déposé, les vues du fichier sont relues fraîches et celles de l'utilisateur viennent du JSON.
@@ -453,10 +479,11 @@ que l'utilisateur ne l'enregistre pas.
 **Ce qui n'est pas repris** (un `.rvt` le contient, mais le viewer ne le dessine pas) : les remplacements graphiques par
 catégorie ou par élément, les filtres de vue, le niveau de détail, le style visuel, le rendu (ombres, arrière-plan), les
 gabarits de vue (la vue enregistre déjà les valeurs qu'un gabarit lui a appliquées) et la profondeur de découpe d'une vue
-3D (celle d'un plan est sa plage `range`). Pour un plan, ne sont pas repris non plus : les plans de plafond, les fonds de
-plan, les régions de plan, les sous-catégories masquées, les styles de ligne, les motifs de coupe, le tracé au-delà de la
-coupe et les annotations (le détail de ce que la lecture d'un `.rvt` prend est dans `docs/lecture-revit.md`). Une vue
-dont la caméra est illisible est ignorée sans empêcher les autres.
+3D (celle d'un plan est sa plage `range`). Pour un plan, ne sont pas repris non plus : les fonds de plan, les régions de
+plan, les sous-catégories masquées, les styles de ligne, les motifs de coupe, le tracé au-delà de la coupe et les
+annotations ; pour une coupe ou une façade, la découpe lointaine (la vue montre tout ce qui est derrière son plan de coupe)
+et les coupes à décrochement, qui ne sont pas écrites (le détail de ce que la lecture d'un `.rvt` prend est dans
+`docs/lecture-revit.md`). Une vue dont la caméra est illisible est ignorée sans empêcher les autres.
 
 ## 2 septies. Compatibilité
 
@@ -464,8 +491,9 @@ Les sections `phases`, `views` et `levels` sont facultatives et ajoutées sans c
 continue de s'ouvrir tel quel, un viewer qui ne les connaît pas les ignore, et une section illisible est ignorée (elle n'empêche
 pas d'ouvrir le modèle). `source` et la valeur `null` qui retire une propriété en mode fusion (§ 2 bis) sont des ajouts de même
 nature : un viewer qui ignore `source` lit le JSON de modifications comme un complément, et un viewer qui ignore le sens de `null`
-montre une valeur vide. Les champs `kind`, `type` et `range` des vues (plans d'étage) sont des ajouts de même nature : un
-viewer qui les ignore ouvre un plan comme une vue parallèle de dessus. « JSON ↓ » les réécrit telles qu'elles ont été lues.
+montre une valeur vide. Les champs `kind`, `type` et `range` des vues (plans d'étage et de plafond, coupes, façades) sont des
+ajouts de même nature : un viewer qui les ignore ouvre un plan comme une vue parallèle de dessus, une coupe comme une vue
+parallèle avec sa boîte (« Compatibilité des vues 2D », § 2 sexies). « JSON ↓ » les réécrit telles qu'elles ont été lues.
 Les champs des vues de l'utilisateur (`origin`, `id`, `sections`, `isolated`, `appearanceRules`, `grouping`) le sont aussi :
 un viewer qui les ignore ouvre la vue comme une vue du fichier (sa caméra, sa boîte, ses masquages, sa phase). Les sections
 `splits` et `zones` aussi : un viewer qui les ignore montre les éléments entiers, et les propriétés écrites sur des pièces
@@ -491,7 +519,11 @@ Le viewer la trie par altitude et écarte une entrée sans nom ou sans altitude 
 (§ 2 sexies) et la coupe « au niveau » (carte « Coupes » : un plan horizontal à 1,20 m au-dessus du niveau choisi, ou à une
 hauteur saisie dans le même repère). Le convertisseur IFC fourni l'écrit depuis les `IfcBuildingStorey` : la hauteur de leur
 placement (c'est elle qui place la géométrie), à défaut leur attribut `Elevation`, convertie en mètres. La lecture d'un
-`.rvt` ne l'écrit pas encore. « JSON ↓ » la réécrit telle qu'elle a été lue.
+`.rvt` l'écrit depuis les niveaux du projet (`Level`) : leur altitude dans le repère de la géométrie et des plages de vue des
+plans (le point interne de Revit, non le point de base du projet), les copies de niveaux des définitions de groupes et des
+familles écartées, deux niveaux de même altitude (au millimètre) réunis sous leurs deux noms (« A / B »), deux de même nom
+réduits au plus bas (voir `docs/lecture-revit.md`, « Niveaux »). Une famille (`.rfa`) n'en écrit pas. « JSON ↓ » la réécrit
+telle qu'elle a été lue.
 
 ## 2 nonies. Découpage en pièces (`splits`)
 
@@ -546,8 +578,10 @@ haut) ; seuls x et z comptent. Une zone de même nom dans deux fichiers est donn
 ## 2 undecies. Plusieurs maquettes
 
 « Ajouter… » (et la carte « Maquettes » du menu « Contrôles ») ouvre une maquette de plus dans la même scène : un `.glb`, un
-`.gltf`, un `.usdz` ou un `.ifc` (converti), avec son JSON. Un fichier Revit ne s'ajoute pas encore. Rien ne change dans les
-fichiers ; c'est un comportement du viewer :
+`.gltf`, un `.usdz`, un `.ifc` (converti) ou un fichier Revit (lu), avec son JSON. Plusieurs maquettes déposées ensemble
+s'ouvrent ensemble, après confirmation : la première comme d'habitude, les suivantes ajoutées ainsi (un JSON va à la maquette
+dont il porte le nom ; deux fichiers de même nom, un IFC et son GLB, n'en font qu'une, et le viewer dit lequel est écarté).
+Rien ne change dans les fichiers ; c'est un comportement du viewer :
 
 - **Repère.** Un seul, celui de la première maquette. Les suivantes sont placées par leurs coordonnées d'origine, jamais
   recentrées sur elles-mêmes : deux fichiers d'un même projet se superposent s'ils partagent leur repère. Quand deux maquettes
@@ -563,16 +597,28 @@ fichiers ; c'est un comportement du viewer :
   première maquette.
   « GLB ↓ » écrit la réunion des maquettes, sous les clés de la session, et le dit.
 - **Limites.** Toutes les maquettes partagent le budget de triangles de l'appareil : un ajout qui le dépasserait est refusé,
-  avec les chiffres. Seule la dernière maquette ajoutée se retire. Le découpage en pièces ne porte que sur la première. En
+  avec les chiffres. Un fichier Revit ajouté est lu avec ce qui reste du budget (dit avant la lecture) : au-delà, ses éléments
+  sont dessinés par leur boîte, qui ne compte pas dans le budget, et le compte rendu le dit. Seule la dernière maquette ajoutée se retire. Le découpage en pièces ne porte que sur la première. En
   mode carte, ajouter, comparer et chercher des conflits attendent la fermeture de la carte.
 
 **Comparer deux versions.** « Comparer avec… » (carte « Comparaison ») ajoute l'autre version comme maquette de référence
-et apparie les éléments par leur clé : propriétés ajoutées, retirées ou changées (des motifs ignorés, même syntaxe que
-`readOnly`), et géométrie (boîte au millimètre, nombre de triangles, volume et surface à 4 chiffres significatifs : même
-forme au même endroit, déplacée, ou modifiée). Un élément sans paire qui a la même catégorie (une propriété choisie), le même
-nom et la même forme qu'un élément supprimé, à moins de 50 cm, est montré « identifiant changé, probablement le même », jamais
-fusionné. Le résultat colore la vue (ajouté vert, supprimé rouge translucide, modifié orange, inchangé estompé) : ce n'est pas
-une propriété, rien n'en est exporté dans les JSON ; le rapport se télécharge à part (CSV ou JSON).
+(un fichier Revit compris) et apparie les éléments par leur clé : propriétés ajoutées, retirées ou changées (des motifs
+ignorés, même syntaxe que `readOnly`), et géométrie (boîte, volume et surface à 4 chiffres significatifs : même forme au même
+endroit, déplacée, ou modifiée). Le nombre de triangles ne décide rien : seul, il donne « même forme, maillage différent »,
+compté à part et estompé. La tolérance est stricte (0,1 % du volume et de la surface, 1 mm sur la boîte) quand les deux
+maquettes viennent du même moteur, large (1 % et 2 mm) sinon ; elle se choisit dans la carte, qui dit laquelle sert. Le
+moteur de chaque maquette est ce qui l'a produite (`asset.generator` d'un glTF, la conversion d'un IFC dans le navigateur, la
+lecture d'un fichier Revit) ; la carte écrit, pour chacune, ce moteur et les métadonnées utilisées (« de la conversion »,
+« conversion + JSON appliqué », « JSON complet »). Quand les moteurs diffèrent, elle le dit, et les écarts des propriétés
+verrouillées (`readOnly`) sont des « écarts de conversion », listés à part, pas des modifications. Les pièces d'un découpage
+(`<clé>~<n>`) d'un côté sont comparées à leur original de l'autre (« découpé en N pièces »), une clé portée deux fois dans
+une même maquette est signalée « identifiant en double », et un élément que le lecteur Revit n'a dessiné que par sa boîte est
+« non comparable (forme approchée) ». Un élément sans paire qui a la même catégorie (une propriété choisie), le même nom et la
+même forme qu'un élément supprimé, à moins de 50 cm, est montré « identifiant changé, probablement le même », jamais fusionné ;
+la carte dit quelle part des éléments est appariée par clé et quelle part par ressemblance (le cas d'un IFC exporté de son
+fichier Revit, dont les clés ne coïncident qu'en partie). Le résultat colore la vue (ajouté vert, supprimé rouge translucide,
+modifié orange, inchangé estompé) : ce n'est pas une propriété, rien n'en est exporté dans les JSON ; le rapport se télécharge
+à part (CSV ou JSON), avec en tête l'origine de chaque maquette et la tolérance.
 
 ## 2 duodecies. Conflits (`clashTests`, `clashes`)
 
@@ -605,7 +651,8 @@ l'utilisateur leur a donnés (carte « Conflits ») :
 | `comment` | Texte libre. |
 | `depth`, `point` | Profondeur approchée (mètres) et centre de la zone de recouvrement, dans le repère du modèle (mètres, Y vers le haut). |
 
-Un nouveau calcul retrouve chaque conflit par ses deux éléments : il garde son commentaire, un conflit ignoré le reste, un
+Un élément que le lecteur Revit n'a dessiné que par sa boîte (forme non lue) est exclu des ensembles par défaut : la carte dit
+combien, et une case les inclut. Un nouveau calcul retrouve chaque conflit par ses deux éléments : il garde son commentaire, un conflit ignoré le reste, un
 conflit qui n'est plus trouvé devient `resolved`. Un conflit dont une maquette n'est pas ouverte est gardé tel quel. Le viewer
 ne connaît aucun nom de propriété : les ensembles, les exclusions et `sameValue` sont choisis par l'utilisateur. « JSON ↓ » et
 « Modifications ↓ » écrivent ces deux sections ; une section illisible, ou une entrée illisible, est ignorée.
@@ -635,11 +682,17 @@ structure spatiale d'un IFC devient :
 "properties": { "Site": "Campus", "Bâtiment": "A", "Étage": "R+1", "Local": "Bureau 104" }
 ```
 
+**Regroupement proposé** (`grouping`, facultatif, à la racine). La source peut proposer le « Grouper par » de l'ouverture :
+`"grouping": ["Catégorie"]`, des chemins de propriétés dans l'ordre. Ceux que le modèle n'a pas sont ignorés ; sans eux (ou
+sans la section), le viewer choisit d'après les valeurs. La lecture d'un `.rvt` propose `["Catégorie"]` (la catégorie Revit,
+plus parlante que la « Classe IFC » qui l'emporterait sinon) ; « JSON ↓ » la réécrit, un JSON complet déposé avec le fichier
+garde celle du fichier. Un viewer qui l'ignore choisit lui-même, comme avant.
+
 ## 4. Évolutions prévues par le format
 
 Le champ `version` permet d'ajouter plus tard des sections optionnelles à côté de `elements`
 (regroupements prédéfinis, unités) sans casser les fichiers existants : un viewer en version 1
-ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `splits`, `zones`, `clashTests`, `clashes` et `observations` sont déjà de
+ignore les sections qu'il ne connaît pas. `georeference`, `phases`, `views`, `levels`, `grouping`, `splits`, `zones`, `clashTests`, `clashes` et `observations` sont déjà de
 celles-là.
 
 ## 5. Variante USD

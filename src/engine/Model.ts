@@ -67,6 +67,8 @@ interface ModelGrowth {
   /** Matériaux et textures créés pour ces lots (ceux d'un lot précédent, réutilisés, n'y sont pas). */
   materials: Material[];
   textures: Texture[];
+  /** Numéros (dans le modèle) des éléments de ce morceau dessinés par leur seule boîte (voir `Model.boxOnly`). */
+  boxOnly?: readonly number[];
 }
 
 export interface RaycastOptions {
@@ -88,6 +90,16 @@ interface Candidate {
   t: number;
 }
 
+/** D'où vient une maquette (voir data/federation.ts, `producerOf`) : de quoi dire si deux maquettes ont été converties de même. */
+export interface SourceOrigin {
+  /** Ce qui a produit sa géométrie, en clair : « converti dans le navigateur (IfcOpenShell 0.8.5) », « lu nativement (Revit) »… */
+  producer: string;
+  /** Le moteur, comparé d'une maquette à l'autre : le `generator` d'un glTF, celui du lecteur Revit… ; vide : inconnu. */
+  engine: string;
+  /** Les métadonnées utilisées : « de la conversion », « conversion + JSON appliqué », « JSON complet »… */
+  metadata: string;
+}
+
 /**
  * Une maquette d'une session à plusieurs maquettes (voir data/federation.ts) : ses éléments du fichier sont `count` éléments
  * consécutifs à partir de `start`, dans ses propres lots ; les pièces dérivées restent toutes à la fin du modèle.
@@ -107,6 +119,12 @@ export interface ModelSourceInfo {
   triangles: number;
   /** Le centre de cette maquette dans le repère du modèle : le décalage qu'elle aurait pris ouverte seule. */
   offset: [number, number, number];
+  origin?: SourceOrigin;
+}
+
+/** Pourquoi un élément dessiné par sa seule boîte (`Model.boxOnly`) ne se découpe pas, ou null. */
+export function boxOnlyReason(model: Pick<Model, 'boxOnly'>, element: number): string | null {
+  return model.boxOnly.has(element) ? 'sa forme n’a pas été lue, seule sa boîte englobante est dessinée' : null;
 }
 
 const DET_EPSILON = 1e-14;
@@ -163,6 +181,11 @@ export class Model {
   readonly parents: number[] = [];
   /** Les maquettes réunies dans ce modèle (voir data/federation.ts) ; vide pour une maquette ouverte seule. */
   readonly sources: ModelSourceInfo[] = [];
+  /**
+   * Les éléments dessinés par leur seule boîte, leur forme n'ayant pas été lue (lecteur Revit : au-delà du budget de triangles,
+   * ou forme illisible). Quantités indicatives, exclus des conflits par défaut, non comparés, jamais découpés.
+   */
+  readonly boxOnly = new Set<number>();
   /** Boîtes englobantes des éléments : minX, minY, minZ, maxX, maxY, maxZ. Réalloué par `grow` : à relire, jamais à garder. */
   boxes: Float32Array;
   readonly ranges: ElementRange[][];
@@ -226,6 +249,7 @@ export class Model {
     }
     for (const material of part.materials) this.materials.push(material);
     for (const texture of part.textures) this.textures.push(texture);
+    for (const element of part.boxOnly ?? []) this.boxOnly.add(element);
     this.boxes = part.boxes;
     this.count = this.keys.length;
     this.triangleCount += part.triangleCount;
@@ -259,6 +283,7 @@ export class Model {
     this.doubled = Math.min(this.doubled, this.chunks.length);
     this.keys.length = this.names.length = this.extras.length = this.parents.length = this.ranges.length = count;
     this.boxes = this.boxes.slice(0, count * 6);
+    for (const element of this.boxOnly) if (element >= count) this.boxOnly.delete(element);
     this.state.truncate(count);
     this.count = count;
     // La boîte du modèle suit ce qui reste (une maquette retirée la réduit ; des pièces, jamais : l'original reste).

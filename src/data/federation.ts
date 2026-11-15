@@ -14,20 +14,21 @@
 // pièces ne porte que sur la première.
 
 import { Box3, Vector3, type Color, type IUniform } from 'three';
-import { ModelBuilder, collect, type ModelSource, type RawModel } from '../engine/buildModel.ts';
-import type { Model, ModelSourceInfo } from '../engine/Model.ts';
+import { ModelBuilder, collect, type ModelSource, type RawInput } from '../engine/buildModel.ts';
+import type { Model, ModelSourceInfo, SourceOrigin } from '../engine/Model.ts';
 import { isRecord } from './json.ts';
 import type { Metadata, MetadataEntry } from './metadata.ts';
 import type { OriginalOf, SplitSet, TailChange } from './splits.ts';
 import { integer } from './text.ts';
 
-export type { ModelSourceInfo } from '../engine/Model.ts';
+export type { ModelSourceInfo, SourceOrigin } from '../engine/Model.ts';
 
 /** La propriété que chaque élément reçoit dans une session à plusieurs maquettes : le nom du fichier de sa maquette. */
 export const MODEL_PROPERTY = 'Modèle';
 export const KEY_SEPARATOR = '|';
 
-const millions = (n: number) => `${(n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} million${n >= 2e6 ? 's' : ''}`;
+/** « 2,5 millions de triangles », « 1 500 triangles ». */
+export const trianglesText = (n: number) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} million${n >= 2e6 ? 's' : ''} de triangles` : `${integer.format(n)} triangle${n >= 2 ? 's' : ''}`);
 
 /** La maquette d'un élément (les pièces sont celles de leur original), ou −1 hors session à plusieurs maquettes. */
 export function sourceIndexOf(model: Model, element: number): number {
@@ -80,14 +81,55 @@ export function framesNotice(apart: number | null, name: string): string {
   return `« ${name} » est à ${integer.format(Math.round(apart))} m de la maquette ouverte : les deux fichiers n’ont peut-être pas le même repère (point de base déplacé). Le recalage n’est pas encore disponible.`;
 }
 
+/** Le moteur du lecteur Revit : aussi le `generator` du « GLB ↓ » d'un modèle lu ainsi, pour qu'il se compare à son .rvt. */
+export const REVIT_ENGINE = 'viewer-bim, lecteur Revit';
+
+/**
+ * Ce qui a produit une maquette (sans ses métadonnées, voir `metadataUse`) : `kind` sa sorte ; `generator` celui de son glTF (pour
+ * un IFC, celui du GLB que la conversion dans le navigateur vient d'écrire).
+ */
+export function producerOf(kind: ModelSourceInfo['kind'], generator?: string): Omit<SourceOrigin, 'metadata'> {
+  if (kind === 'revit') return { producer: 'lu nativement (Revit)', engine: REVIT_ENGINE };
+  if (kind === 'usd') return { producer: 'USD', engine: generator ?? 'USD' };
+  if (kind === 'ifc') return { producer: `converti dans le navigateur (${/IfcOpenShell [^)\s]+/.exec(generator ?? '')?.[0] ?? 'IfcOpenShell'})`, engine: generator ?? '' };
+  return { producer: generator ? `glTF écrit par « ${generator} »` : 'glTF sans convertisseur indiqué', engine: generator ?? '' };
+}
+
+/** Le `generator` d'un glTF (son JSON : `parser.json` d'un glTF lu, ou `parseGlb(…).json`), s'il en a un. */
+export function generatorOf(json: unknown): string | undefined {
+  const generator = isRecord(json) && isRecord(json.asset) ? json.asset.generator : undefined;
+  return typeof generator === 'string' && generator !== '' ? generator : undefined;
+}
+
+/** Deux maquettes converties par des moteurs différents (ou l'une d'un moteur inconnu) : leurs maillages et propriétés peuvent différer. */
+export function enginesDiffer(a: SourceOrigin | undefined, b: SourceOrigin | undefined): boolean {
+  return (a?.engine ?? '') !== (b?.engine ?? '');
+}
+
+/** « « nom », ce qui l’a produite ; métadonnées : lesquelles. » */
+export function originLine(source: Pick<ModelSourceInfo, 'name' | 'origin'>): string {
+  const { origin } = source;
+  return origin ? `« ${source.name} », ${origin.producer} ; métadonnées : ${origin.metadata}.` : `« ${source.name} ».`;
+}
+
 /** Le budget dépassé : l'ajout refusé, avec les chiffres. */
 export class FederationError extends Error {}
+
+/**
+ * Le budget de triangles de la lecture d'un fichier Revit ajouté : ce que les maquettes déjà affichées (`shown`) laissent du
+ * budget de l'appareil. Rien ne reste : l'ajout est refusé avant la lecture, avec les chiffres.
+ */
+export function revitBudget(name: string, maxTriangles: number, shown: number): number {
+  const remaining = maxTriangles - shown;
+  if (remaining <= 0) throw new FederationError(`« ${name} » n’est pas ajouté : les ${trianglesText(shown)} déjà affichés atteignent le budget de cet appareil (${trianglesText(maxTriangles)}).`);
+  return remaining;
+}
 
 export interface SourceInput {
   name: string;
   kind: ModelSourceInfo['kind'];
   role?: ModelSourceInfo['role'];
-  geometry: ModelSource | RawModel;
+  geometry: ModelSource | RawInput;
 }
 
 export interface AddedSource {
@@ -107,8 +149,8 @@ export interface FederationContext {
   selectColor: IUniform<Color>;
   /** Ce que les pièces reprennent de leur original, pour les remettre après l'ajout (voir `SplitSet.reshape`). */
   original: OriginalOf;
-  /** Le nom et la nature de la maquette déjà ouverte, si c'est la première fois qu'on en ajoute une. */
-  first: { name: string; kind: ModelSourceInfo['kind'] };
+  /** Le nom, la nature et l'origine de la maquette déjà ouverte, si c'est la première fois qu'on en ajoute une. */
+  first: { name: string; kind: ModelSourceInfo['kind']; origin?: SourceOrigin };
   /** Triangles au plus pour toutes les maquettes réunies (voir `deviceTriangleBudget`). */
   maxTriangles: number;
 }
@@ -118,7 +160,7 @@ function firstSource(model: Model, splits: SplitSet, first: FederationContext['f
   const { element, chunk } = splits.tailStart;
   let triangles = 0;
   for (let c = 0; c < chunk; c++) triangles += model.chunks[c].index.length / 3;
-  return { id: 'm1', name: first.name, kind: first.kind, role: 'model', start: 0, count: element, chunkStart: 0, chunkCount: chunk, triangles, offset: model.offset.toArray() };
+  return { id: 'm1', name: first.name, kind: first.kind, role: 'model', start: 0, count: element, chunkStart: 0, chunkCount: chunk, triangles, offset: model.offset.toArray(), ...(first.origin ? { origin: first.origin } : {}) };
 }
 
 /**
@@ -130,9 +172,13 @@ export function addSource(context: FederationContext, input: SourceInput): Added
   const { model, splits } = context;
   const { collected, triangles } = collect(input.geometry, model.offset);
   if (collected.pieces.length === 0) throw new FederationError(`« ${input.name} » ne contient aucune géométrie triangulée.`);
-  const total = model.triangleCount + triangles;
-  if (total > context.maxTriangles) {
-    throw new FederationError(`« ${input.name} » n’est pas ajouté : ses ${millions(triangles)} de triangles, avec les ${millions(model.triangleCount)} déjà affichés, dépasseraient le budget de cet appareil (${millions(context.maxTriangles)}).`);
+  // Les boîtes des éléments que le lecteur Revit n'a pas maillés (12 triangles chacun) ne comptent pas : c'est ainsi qu'il tient
+  // son budget sans jamais retirer un élément, comme quand le fichier est ouvert seul.
+  const boxed = new Set(collected.boxOnly);
+  let counted = triangles;
+  for (const piece of collected.pieces) if (boxed.has(piece.element)) counted -= piece.indexCount / 3;
+  if (model.triangleCount + counted > context.maxTriangles) {
+    throw new FederationError(`« ${input.name} » n’est pas ajouté : ses ${trianglesText(counted)}, avec les ${trianglesText(model.triangleCount)} déjà affichés, dépasseraient le budget de cet appareil (${trianglesText(context.maxTriangles)}).`);
   }
   const first = model.sources.length === 0;
   if (first) model.sources.push(firstSource(model, splits, context.first));

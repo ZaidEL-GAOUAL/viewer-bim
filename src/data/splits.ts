@@ -15,7 +15,7 @@ import { toViewerPoint, type Vec3 } from './modelFrame.ts';
 import groupPreset from './presets/quantites-groupe.json' with { type: 'json' };
 import ifcPreset from './presets/quantites-ifc.json' with { type: 'json' };
 import { ModelBuilder } from '../engine/buildModel.ts';
-import type { Model } from '../engine/Model.ts';
+import { boxOnlyReason, type Model } from '../engine/Model.ts';
 import { partsToRaw, splitJob, type ElementSplit, type PartGeometry, type SplitRefusal } from '../engine/derivedParts.ts';
 import { elementQuantities, reliabilityOf, targetsFor, type QuantityPreset } from '../engine/quantities.ts';
 import type { MeshPart } from '../engine/meshMath.ts';
@@ -326,6 +326,7 @@ export class SplitSet {
       else if (element === undefined) outcome.refused.push({ element: -1, reason: `élément d’origine « ${key} » introuvable dans ce modèle` });
       else if (model.parents[element] >= 0) outcome.refused.push({ element, reason: 'c’est déjà une pièce : retirez le découpage de son original pour le refaire' });
       else if (split.has(key)) outcome.refused.push({ element, reason: 'déjà découpé : retirez d’abord son découpage' });
+      else if (boxOnlyReason(model, element)) outcome.refused.push({ element, reason: boxOnlyReason(model, element)! });
       else elements.push(element);
     }
     const offset = model.offset.toArray();

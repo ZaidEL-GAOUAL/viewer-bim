@@ -132,6 +132,8 @@ export interface Collected {
   offset: Vector3;
   /** Matériaux three.js lus pour construire les pièces ; leurs textures inutiles sont libérées après la cuisson. */
   sourceMaterials: Iterable<Material>;
+  /** Éléments (numéros de la collecte) dessinés par leur seule boîte : voir `Model.boxOnly`. */
+  boxOnly: number[];
 }
 
 /**
@@ -154,6 +156,8 @@ export interface RawModel {
   primitives: Uint32Array;
   /** Sept octets par matériau : r, g, b, a (sRGB), transparent (0/1), double face (0/1), priorité de profondeur (0 ordinaire, 1 surcouche, 2 hôte). */
   materials: Uint8Array;
+  /** Un octet par élément, 1 : sa forme n'a pas été lue, il est dessiné par sa boîte (voir `Model.boxOnly`). */
+  boxOnly?: ArrayLike<number>;
 }
 
 type Attribute = BufferAttribute | InterleavedBufferAttribute;
@@ -281,8 +285,8 @@ export function buildModel(input: GLTF | ModelSource | RawInput, selectColor: IU
  * data/federation.ts) : `triangles` permet de refuser l'ajout avant tout changement. `origin` : `Model.offset` du modèle
  * ouvert (un modèle brut y est ramené ; une scène l'est à la cuisson).
  */
-export function collect(input: ModelSource | RawModel, origin: Vector3): { collected: Collected; triangles: number } {
-  const collected = (input as { kind?: unknown }).kind === 'raw' ? collectRaw(input as RawModel, origin) : collectScene(input as ModelSource);
+export function collect(input: ModelSource | RawInput, origin: Vector3): { collected: Collected; triangles: number } {
+  const collected = isRaw(input) ? collectRaw(input, origin) : collectScene(input);
   let indices = 0;
   for (const piece of collected.pieces) indices += piece.indexCount;
   return { collected, triangles: indices / 3 };
@@ -469,6 +473,7 @@ function collectScene(source: ModelSource): Collected {
     // l'affichage en simple précision. Le décalage est retiré à la cuisson, en double précision.
     offset: modelBox.getCenter(new Vector3()),
     sourceMaterials: materialCache.keys(),
+    boxOnly: [],
   };
 }
 
@@ -548,6 +553,7 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
   const names: string[] = [];
   const extras: (Record<string, unknown> | undefined)[] = [];
   const pieces: Piece[] = [];
+  const boxOnly: number[] = [];
   const rough = emptyBoxes(elementCount);
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
@@ -563,6 +569,7 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
       names.push(raw.names[i] || raw.keys[i]);
       const rest = raw.extras?.[i];
       extras.push(rest && Object.keys(rest).length > 0 ? rest : undefined);
+      if (raw.boxOnly?.[i]) boxOnly.push(elementBase + i);
     }
     // Le décalage du morceau par rapport à l'origine du modèle : nul pour la sortie du lecteur (une seule origine).
     const dx = raw.origin[0] - ox, dy = raw.origin[1] - oy, dz = raw.origin[2] - oz;
@@ -651,6 +658,7 @@ function collectRaw(input: RawInput, origin?: Vector3): Collected {
     // le point que `Model.offset` doit rendre (positions + offset = coordonnées du projet).
     offset: new Vector3(ox, oy, oz),
     sourceMaterials: [],
+    boxOnly,
   };
 }
 
@@ -1104,6 +1112,6 @@ export class ModelBuilder {
     }
     state.commit();
 
-    model.grow({ keys, names, extras, chunks, boxes, triangleCount, materials: newMaterials, textures: newTextures });
+    model.grow({ keys, names, extras, chunks, boxes, triangleCount, materials: newMaterials, textures: newTextures, boxOnly: collected.boxOnly.map((i) => base + i) });
   }
 }

@@ -2,7 +2,7 @@ import { LoadingManager } from 'three';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { extensionOf } from './fileKinds.ts';
+import { extensionOf, fileKind, isJsonFile, withoutExtension } from './fileKinds.ts';
 
 /** Un fichier fourni par l'utilisateur, avec son chemin relatif quand il vient d'un dossier. */
 export interface InputFile {
@@ -249,4 +249,39 @@ export function filesFromList(list: FileList): InputFile[] {
   return [...list]
     .filter((file) => !file.name.startsWith('.'))
     .map((file) => ({ file, path: file.webkitRelativePath || file.name }));
+}
+
+/** Une maquette d'un dépôt : son fichier (glb, gltf, usd, ifc ou Revit) et ceux qui l'accompagnent (JSON, .bin, textures). */
+export interface DroppedModel {
+  main: InputFile;
+  inputs: InputFile[];
+}
+
+/** Ordre des sortes à profondeur égale : un modèle 3D (le résultat d'une conversion), puis l'IFC, puis le fichier Revit. */
+const DROP_ORDER: Record<string, number> = { gltf: 0, usd: 0, ifc: 1, revit: 2 };
+
+/**
+ * Les maquettes d'un dépôt de fichiers, la première à ouvrir d'abord (la plus proche de la racine du dossier ; à profondeur
+ * égale, un glb, gltf ou usd, puis un IFC, puis un fichier Revit). Deux fichiers de même chemin hors extension (un IFC et son
+ * GLB, un GLB et son USD) sont une seule maquette : le second est écarté, et `skipped` le dit. Un JSON va à la maquette dont il
+ * porte le nom (`x.json`, `x.modifications.json`), sinon à la première ; les autres fichiers (.bin, textures) à toutes.
+ */
+export function planDrop(inputs: readonly InputFile[]): { models: DroppedModel[]; skipped: string[] } {
+  const depth = (input: InputFile) => input.path.split('/').length;
+  const rank = (input: InputFile) => DROP_ORDER[fileKind(input.file.name) ?? ''] ?? -1;
+  const mains = inputs.filter((input) => rank(input) >= 0).sort((a, b) => depth(a) - depth(b) || rank(a) - rank(b));
+  const kept: InputFile[] = [], skipped: string[] = [];
+  for (const input of mains) {
+    const twin = kept.find((other) => withoutExtension(other.path) === withoutExtension(input.path));
+    if (twin) skipped.push(`« ${input.file.name} » non ouvert : même nom que « ${twin.file.name} », ouvert à sa place.`);
+    else kept.push(input);
+  }
+  const owner = (json: InputFile) => {
+    const base = withoutExtension(json.path);
+    const found = kept.findIndex((main) => base === withoutExtension(main.path) || base.startsWith(`${withoutExtension(main.path)}.`));
+    return found < 0 ? 0 : found;
+  };
+  const shared = inputs.filter((input) => rank(input) < 0 && !isJsonFile(input.file.name));
+  const models = kept.map((main, index) => ({ main, inputs: [main, ...inputs.filter((input) => isJsonFile(input.file.name) && owner(input) === index), ...shared] }));
+  return { models, skipped };
 }

@@ -9,10 +9,11 @@ import { applyOverlays, buildStore, modificationsFile, openingProps } from '../s
 import { toModelPoint, toViewerPoint, type Vec3 } from '../src/data/modelFrame.ts';
 import { MAX_CUTS, MAX_PARTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, describeOutcome, freeLineProblem, loadSplits, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition, type SplitOutcome } from '../src/data/splits.ts';
 import { splitJob, type ElementSplit, type SplitRefusal } from '../src/engine/derivedParts.ts';
-import type { Model } from '../src/engine/Model.ts';
+import { boxOnlyReason, type Model } from '../src/engine/Model.ts';
 import { extendAcross } from '../src/engine/sketch.ts';
 import type { CutPlane } from '../src/engine/splitMesh.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
+import { cutRefusal } from '../src/ui/SplitPanel.ts';
 import { CUBE, buildFromNodes, loadGlb } from './helpers.ts';
 
 /** Une dalle 4 × 0,2 × 2 m (centrée en x = 2, z = 1) et un mur 1 × 1 × 1 plus loin. */
@@ -317,4 +318,21 @@ test('a reason shared by several elements is said once', () => {
     '2 éléments non découpés (« Poteau 1 », « Poteau 2 ») : aucune coupe ne traverse l’élément.',
     '« Poteau 3 » non découpé : maillage ouvert.',
   ]);
+});
+
+test('an element drawn as its bounding box only is not cut: refused when a saved definition is replayed', async () => {
+  const model = await build();
+  model.boxOnly.add(0);
+  const outcome = run(new SplitSet(model, select).compute(cross, []));
+  assert.equal(outcome.splits.length, 0);
+  assert.deepEqual(outcome.refused, [{ element: 0, reason: boxOnlyReason(model, 0) }]);
+  assert.match(String(boxOnlyReason(model, 0)), /seule sa boîte englobante/);
+});
+
+test('step 1 of the split card lists an element drawn as its box only with that reason, without reading any property', async () => {
+  const model = await build();
+  model.boxOnly.add(0);
+  assert.equal(cutRefusal(model, 0, false), boxOnlyReason(model, 0));
+  assert.equal(cutRefusal(model, 1, false), null, 'a real shape can be cut');
+  assert.match(String(cutRefusal(model, 1, true)), /déjà découpé/);
 });

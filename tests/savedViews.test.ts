@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseMetadata, type PropValue } from '../src/data/metadata.ts';
-import { cameraFromPose, cameraPose, hiddenByView, hiddenInEveryView, missingKeys, parseViews, planCameraPose, planRangeOfBox, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView, type Vec3 } from '../src/data/savedViews.ts';
+import { cameraFromPose, cameraPose, flatCameraPose, hiddenByView, hiddenInEveryView, missingKeys, parseViews, planCameraPose, planRangeOfBox, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView, type Vec3 } from '../src/data/savedViews.ts';
 
 const close = (actual: number, expected: number, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected} (±${tolerance})`);
 const closeVec = (actual: readonly number[], expected: readonly number[], tolerance = 1e-9) => expected.forEach((x, i) => close(actual[i], x, tolerance));
@@ -493,4 +493,125 @@ test('l’étendue d’un plan se déduit de sa boîte, et la boîte du plan rou
   closeVec(reopened.min, box.min);
   closeVec(reopened.max, box.max);
   assert.equal(reopened.rotation, 15);
+});
+
+// ---------------------------------------------------------------------------------------------- plans de plafond, coupes, façades
+
+/** Une coupe : regard vers −X, haut vertical, cadre de 20 × 9 m ; sa boîte tournée de 90° (face proche : le plan de coupe, x = 4). */
+const SECTION = {
+  name: 'Coupe AA', kind: 'section', type: 'Building Section',
+  camera: { position: [4, 3, -2], direction: [-1, 0, 0], up: [0, 1, 0], projection: 'orthographic', size: [20, 9] },
+  sectionBox: { min: [-6, -1.5, -5002], max: [14, 7.5, 2998], rotation: 90 },
+  hiddenElements: ['k'],
+};
+
+test('un plan de plafond garde son étendue vers le haut, avec ou sans profondeur de vue', () => {
+  const [limited, unlimited] = parseViews([
+    { name: 'Level 1', kind: 'ceiling', type: 'Ceiling Plan', camera: PLAN_CAMERA, range: { bottom: 2.3, top: 3.0 } },
+    { name: 'Level 2', kind: 'ceiling', camera: PLAN_CAMERA, range: { bottom: 5.3 } },
+  ]);
+  assert.equal(limited.kind, 'ceiling');
+  assert.deepEqual(limited.range, { bottom: 2.3, top: 3.0 });
+  assert.equal(unlimited.kind, 'ceiling');
+  assert.deepEqual(unlimited.range, { bottom: 5.3 }, 'une profondeur illimitée vers le haut est un haut absent');
+  // Sans coupe, ou un haut qui n'est pas au-dessus de la coupe : la vue devient ordinaire, sans rien perdre d'autre.
+  for (const range of [undefined, {}, { top: 3 }, { bottom: 2, top: 2 }, { bottom: 2, top: 1 }, { bottom: '2' }, { bottom: Number.NaN }]) {
+    const [view] = parseViews([{ name: 'C', kind: 'ceiling', camera: PLAN_CAMERA, range, phase: 'Neuf' }]);
+    assert.equal(view.kind, '3d', JSON.stringify(range));
+    assert.equal(view.range, undefined);
+    assert.equal(view.phase, 'Neuf');
+  }
+});
+
+test('une coupe et une façade gardent leur sorte, leur type et leur boîte ; sans boîte, elles deviennent des vues ordinaires', () => {
+  const [section, elevation, boxless] = parseViews([SECTION, { ...SECTION, name: 'Nord', kind: 'elevation', type: undefined }, { name: 'Sans boîte', kind: 'section', camera: SECTION.camera }]);
+  assert.equal(section.kind, 'section');
+  assert.equal(section.type, 'Building Section');
+  assert.deepEqual(section.sectionBox, SECTION.sectionBox);
+  assert.equal(elevation.kind, 'elevation');
+  assert.equal(boxless.kind, '3d');
+  // Une étendue sur une coupe est sans effet.
+  assert.equal(parseViews([{ ...SECTION, range: { bottom: 0, top: 3 } }])[0].range, undefined);
+});
+
+test('une sorte de vue inconnue est ignorée, pas fatale : la vue s’ouvre comme une vue 3D', () => {
+  const views = parseViews([{ name: 'Dessin', kind: 'drafting', camera: PERSPECTIVE, sectionBox: SECTION.sectionBox, hiddenElements: ['k'] }, { name: 'V', camera: PERSPECTIVE }]);
+  assert.deepEqual(views.map((view) => view.kind), ['3d', '3d']);
+  assert.deepEqual(views[0].hiddenElements, ['k']);
+  assert.ok(views[0].sectionBox);
+});
+
+test('plans de plafond, coupes et façades se réécrivent à l’identique', () => {
+  const views = parseViews([
+    { name: 'Level 1', kind: 'ceiling', type: 'Ceiling Plan', camera: PLAN_CAMERA, range: { bottom: 2.3, top: 3.0 } },
+    { name: 'Level 2', kind: 'ceiling', camera: PLAN_CAMERA, range: { bottom: 5.3 } },
+    SECTION,
+    { ...SECTION, name: 'Nord', kind: 'elevation' },
+  ]);
+  const json = viewsToJson(views);
+  assert.deepEqual(json.map((view) => view.kind), ['ceiling', 'ceiling', 'section', 'elevation']);
+  assert.deepEqual(json[1].range, { bottom: 5.3 });
+  assert.equal('range' in json[2], false);
+  assert.deepEqual(parseViews(JSON.parse(JSON.stringify(json))), views);
+});
+
+test('la boîte d’un plan de plafond va de sa coupe à sa profondeur (plus 2 cm), ou au haut du modèle plus 1 m', () => {
+  const [limited, unlimited] = parseViews([
+    { name: 'L1', kind: 'ceiling', camera: PLAN_CAMERA, range: { bottom: 2.3, top: 3.0 } },
+    { name: 'L2', kind: 'ceiling', camera: PLAN_CAMERA, range: { bottom: 5.3 } },
+  ]);
+  const box = planSectionBox(limited, [0, 0, 0], MODEL_BOX)!;
+  closeVec(box.min, [-11, 2.3, -7]);
+  closeVec(box.max, [31, 3.02, 15]);
+  const open = planSectionBox(unlimited, [0, 1, 0], MODEL_BOX)!;
+  close(open.min[1], 4.3);
+  close(open.max[1], 13);
+  // Une coupe ou une façade n'a pas de boîte de plan : c'est la sienne qui sert.
+  assert.equal(planSectionBox(parseViews([SECTION])[0], [0, 0, 0], MODEL_BOX), null);
+});
+
+test('un plan de plafond est regardé d’en dessous ; une coupe face à son plan, en projection parallèle', () => {
+  const [ceiling, section, plan] = parseViews([
+    { name: 'L1', kind: 'ceiling', camera: PLAN_CAMERA, range: { bottom: 2.3, top: 3.0 } },
+    SECTION,
+    { name: 'GF', kind: 'plan', camera: PLAN_CAMERA, range: { top: 1.5 } },
+  ]);
+  const up = flatCameraPose(ceiling, [0, 0, 0], BOUNDS, 1.5);
+  assert.equal(up.projection, 'orthographic');
+  // Le regard monte, le haut de l'écran reste le nord du plan ; l'œil est sous la maquette.
+  const looking = [up.target[0] - up.position[0], up.target[1] - up.position[1], up.target[2] - up.position[2]];
+  assert.ok(looking[1] > 0 && Math.abs(looking[0]) < 1e-9 && Math.abs(looking[2]) < 1e-9, `${looking}`);
+  closeVec(up.up, [0, 0, -1]);
+  assert.ok(up.position[1] < BOUNDS.center[1] - BOUNDS.radius, `${up.position}`);
+  // Un plan d'étage : la même pose que `planCameraPose`.
+  assert.deepEqual(flatCameraPose(plan, [0, 0, 0], BOUNDS, 1.5), planCameraPose(plan.camera, [0, 0, 0], BOUNDS, 1.5));
+  // Une coupe : regard vers −X, la fenêtre de son cadre, l'œil reculé devant la maquette.
+  const facing = flatCameraPose(section, [0, 0, 0], BOUNDS, 20 / 9);
+  assert.equal(facing.projection, 'orthographic');
+  close(facing.halfHeight!, 4.5);
+  assert.ok(facing.position[0] > BOUNDS.center[0] + BOUNDS.radius - 1e-9, `${facing.position}`);
+  // Une perspective écrite par erreur sur une vue 2D est lue comme parallèle.
+  assert.equal(flatCameraPose({ ...section, camera: { ...section.camera, projection: 'perspective' } }, [0, 0, 0], BOUNDS, 1).projection, 'orthographic');
+});
+
+test('l’ouverture ignore aussi les plans de plafond, les coupes et les façades', () => {
+  const troisD: Pick<SavedView, 'hiddenElements' | 'kind'> = { kind: '3d', hiddenElements: ['a', 'b'] };
+  const flat = (['ceiling', 'section', 'elevation'] as const).map((kind): Pick<SavedView, 'hiddenElements' | 'kind'> => ({ kind, hiddenElements: ['c'] }));
+  assert.deepEqual([...(hiddenInEveryView([troisD, ...flat], 5, KEYS, valueOf) ?? [])], [1, 1, 0, 0, 0]);
+  assert.equal(hiddenInEveryView(flat, 5, KEYS, valueOf), null);
+});
+
+test('a user view saved from a ceiling plan keeps its kind and range: its box gives back the same range, reopened the same way', () => {
+  const offset: [number, number, number] = [100, 10, -50];
+  const ceiling = { kind: 'ceiling' as const, range: { bottom: 12.4, top: 15 }, sectionBox: { min: [90, 0, -60] as [number, number, number], max: [110, 0, -40] as [number, number, number], rotation: 0 } };
+  const box = planSectionBox(ceiling, offset, null)!;
+  const range = planRangeOfBox(box, offset, 'ceiling');
+  assert.ok(Math.abs(range.bottom - 12.4) < 1e-9 && Math.abs(range.top - 15) < 1e-9, JSON.stringify(range));
+  const plan = { kind: 'plan' as const, range: { bottom: 9, top: 11.2 }, sectionBox: ceiling.sectionBox };
+  const planRange = planRangeOfBox(planSectionBox(plan, offset, null)!, offset);
+  assert.ok(Math.abs(planRange.bottom - 9) < 1e-9 && Math.abs(planRange.top - 11.2) < 1e-9, 'a floor plan as before');
+  // Écrite puis relue, la vue reste un plan de plafond.
+  const [back] = parseViews(viewsToJson([{ name: 'Mon plafond', origin: 'user', kind: 'ceiling', range, camera: { position: [100, 12, -50], direction: [0, -1, 0], up: [0, 0, -1], projection: 'orthographic', size: [20, 10] } }]));
+  assert.equal(back.kind, 'ceiling');
+  assert.deepEqual(back.range, range);
 });

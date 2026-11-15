@@ -105,6 +105,7 @@ export class QuantitiesPanel {
       if (report.present) parts.push(`${plural(report.present, 'déjà renseignée', 'déjà renseignées')} (gardée${report.present > 1 ? 's' : ''})`);
       if (report.notComputable) parts.push(`${plural(report.notComputable, 'élément')} sans géométrie`);
       if (report.unmatched) parts.push(`${plural(report.unmatched, 'élément')} d’une classe sans quantités de base`);
+      if (report.approximate) parts.push(`${plural(report.approximate, 'élément')} à forme approchée, ${report.approximate > 1 ? 'mesurés sur leur' : 'mesuré sur sa'} boîte englobante : « indicatif »`);
       if (report.locked) parts.push(`${integer.format(report.locked)} verrouillée${report.locked > 1 ? 's' : ''} par le fichier`);
       this.report.textContent = `${parts.join(' · ')}.${updates.length > 0 ? ' « Annuler » revient en arrière en une fois.' : ''}`;
     } catch (error) {

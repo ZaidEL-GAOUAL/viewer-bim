@@ -83,3 +83,14 @@ test('the IFC preset writes the base quantities of the class, and respects locks
   store.finalize();
   assert.equal(quantityUpdates(store, new Map([[0, q]]), ifc as QuantityPreset, false).report.locked, 4);
 });
+
+test('an element drawn as its box only is measured on the box, « indicatif », and counted with its reason', async () => {
+  const store = new PropertyStore(2);
+  store.finalize();
+  const parts = [[box([0, 0, 0], [1, 1, 1])], [box([0, 0, 0], [1, 1, 1])]];
+  const results = await computeQuantities({ parts: (i) => parts[i], ranges: parts, boxOnly: new Set([1]) }, [0, 1]);
+  assert.deepEqual([results.get(0)?.exact, results.get(1)?.exact, results.get(1)?.approximate], [true, false, true]);
+  const { updates, report } = quantityUpdates(store, results, group as QuantityPreset, false);
+  assert.equal(report.approximate, 1);
+  assert.deepEqual(updates.filter(([, path]) => path === 'Quantités calculées / Fiabilité'), [[0, 'Quantités calculées / Fiabilité', 'exact'], [1, 'Quantités calculées / Fiabilité', 'indicatif']]);
+});

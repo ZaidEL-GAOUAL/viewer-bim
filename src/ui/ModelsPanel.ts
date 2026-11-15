@@ -5,8 +5,8 @@ import { addModelFiles, federationBlocked, removeLastModel } from './addModel.ts
 import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
 
-/** Fichiers qu'« Ajouter… » accepte : un modèle 3D ou un IFC, et ses JSON, .bin et textures. */
-export const MODEL_ACCEPT = '.ifc,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp';
+/** Fichiers qu'« Ajouter… » accepte : un modèle 3D, un IFC ou un fichier Revit, et ses JSON, .bin et textures. */
+export const MODEL_ACCEPT = '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp';
 
 /**
  * Carte « Maquettes » : les maquettes réunies dans la scène (voir data/federation.ts), leurs nombres d'éléments et de
@@ -35,7 +35,7 @@ export class ModelsPanel {
       if (blocked) app.toast(blocked, true);
       else this.input.click();
     };
-    this.addButton = button('Ajouter…', choose, { title: 'Ajouter une maquette à celle qui est ouverte (.ifc, .glb, .gltf, .usdz, avec son .json), placée par ses coordonnées d’origine' });
+    this.addButton = button('Ajouter…', choose, { title: 'Ajouter une maquette à celle qui est ouverte (.ifc, Revit, .glb, .gltf, .usdz, avec son .json), placée par ses coordonnées d’origine' });
     this.el = h('section', { class: 'card tool-card', attrs: { hidden: '', 'aria-label': this.label } },
       h('div', { class: 'card-head' }, h('h2', { class: 'card-title', text: this.label }),
         button('×', () => this.toggle(false), { class: 'close-button', title: 'Fermer', attrs: { 'aria-label': 'Fermer les maquettes' } })),
@@ -69,13 +69,13 @@ export class ModelsPanel {
     this.status.textContent = blocked || (model && model.sources.length > 1 ? `${plural(model.sources.length, 'maquette')} dans la scène, un seul repère : celui de la première.` : 'Une seule maquette ouverte.');
     if (!model) return;
     const sources: ModelSourceInfo[] = model.sources.length > 0 ? model.sources
-      : [{ id: 'm1', name: app.sourceName, kind: 'glb', role: 'model', start: 0, count: model.count, chunkStart: 0, chunkCount: model.chunks.length, triangles: model.triangleCount, offset: [0, 0, 0] }];
+      : [{ id: 'm1', name: app.sourceName, kind: 'glb', role: 'model', start: 0, count: model.count, chunkStart: 0, chunkCount: model.chunks.length, triangles: model.triangleCount, offset: [0, 0, 0], origin: app.sourceOrigin ?? undefined }];
     sources.forEach((source, index) => {
       const elements = model.sources.length > 0 ? this.elementsOf(index) : Array.from({ length: model.count }, (_, i) => i);
       const visible = elements.some((i) => model.state.isVisible(i));
       const item = button('', () => { app.select(elements, 'panel'); app.fitTo(elements); }, { class: 'view-item', title: 'Sélectionner et cadrer cette maquette' });
       item.append(h('span', { class: 'view-name', text: `${source.name}${source.role === 'reference' ? ' (référence)' : ''}` }),
-        h('span', { class: 'view-note', text: `${plural(source.count, 'élément')} · ${integer.format(source.triangles)} triangles` }));
+        h('span', { class: 'view-note', text: [`${plural(source.count, 'élément')} · ${integer.format(source.triangles)} triangles`, source.origin?.producer].filter(Boolean).join(' · ') }));
       const eye = button(visible ? 'Masquer' : 'Afficher', () => app.setVisible(elements, !visible), { class: 'view-action model-eye', title: visible ? 'Masquer cette maquette' : 'Afficher cette maquette', attrs: { 'aria-pressed': String(visible) } });
       const last = model.sources.length > 1 && index === model.sources.length - 1;
       const remove = button('×', () => this.remove(source), {

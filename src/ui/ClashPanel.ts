@@ -45,6 +45,9 @@ export class ClashPanel {
   private readonly exclude = h('input', { attrs: { type: 'text', 'aria-label': 'Exclure', placeholder: 'Catégorie = Réservation' } });
   private readonly sameValue = h('input', { attrs: { type: 'text', 'aria-label': 'Ignorer les paires de même valeur de', list: 'clash-paths', placeholder: 'Hôte' } });
   private readonly tolerance = h('input', { attrs: { type: 'text', inputmode: 'decimal', value: '10', 'aria-label': 'Tolérance en millimètres' } });
+  /** Les éléments dessinés par leur seule boîte (`Model.boxOnly`) sont exclus, sauf si l'on coche. */
+  private readonly approximate = h('input', { attrs: { type: 'checkbox' } });
+  private readonly approximateRow = h('label', { class: 'tool-check', title: 'Leur forme n’a pas été lue : la boîte englobante donnerait de faux conflits' }, this.approximate, 'Inclure les formes approchées (boîte englobante)');
   private readonly groupBy = h('input', { attrs: { type: 'text', 'aria-label': 'Grouper par', list: 'clash-paths' } });
   private readonly paths = h('datalist', { attrs: { id: 'clash-paths' } });
   private readonly status = h('p', { class: 'hint', attrs: { role: 'status' } });
@@ -77,6 +80,7 @@ export class ClashPanel {
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Exclure' }), this.exclude),
       h('label', { class: 'tool-field', title: 'Ignorer les paires d’une même maquette qui ont la même valeur de cette propriété (un élément et son hôte, par exemple)' }, h('span', { class: 'field-label', text: 'Même valeur de' }), this.sameValue),
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Tolérance (mm)' }), this.tolerance),
+      this.approximateRow,
       h('div', { class: 'dimensions-actions' }, this.stop, this.run),
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Grouper par' }), this.groupBy, this.paths),
       h('div', { class: 'tool-row' }, this.sort),
@@ -260,7 +264,7 @@ export class ClashPanel {
     try {
       // Le moteur (et three-mesh-bvh) n'est chargé qu'à la première recherche.
       const { MAX_CANDIDATES, clashJob } = await import('../engine/clash.ts');
-      const outcome = await runSliced(clashJob(model, listA, listB, { tolerance: test.tolerance, exclude }), (progress) => (this.status.textContent = `Recherche… ${Math.round(progress * 100)} %`), controller.signal);
+      const outcome = await runSliced(clashJob(model, listA, listB, { tolerance: test.tolerance, exclude, includeBoxOnly: this.approximate.checked }), (progress) => (this.status.textContent = `Recherche… ${Math.round(progress * 100)} %`), controller.signal);
       if (model !== app.model || revision !== app.revision) return;
       const offset = model.offset.toArray();
       const found: ClashRecord[] = outcome.clashes.map((clash) => ({
@@ -278,6 +282,7 @@ export class ClashPanel {
       this.summaryText = [
         `${plural(outcome.clashes.length, 'conflit')} trouvé${outcome.clashes.length > 1 ? 's' : ''} sur ${plural(outcome.candidates, 'paire testée', 'paires testées')} (${listA.length.toLocaleString('fr-FR')} × ${listB.length.toLocaleString('fr-FR')} éléments), en ${seconds} s.`,
         outcome.capped ? `Plus de ${integer.format(MAX_CANDIDATES)} paires candidates : seules les ${integer.format(MAX_CANDIDATES)} premières ont été testées. Restreignez les ensembles.` : '',
+        outcome.boxOnly > 0 ? `${plural(outcome.boxOnly, 'élément')} à forme approchée (boîte englobante) ${outcome.boxOnly > 1 ? 'exclus' : 'exclu'} : cochez « Inclure les formes approchées » pour ${outcome.boxOnly > 1 ? 'les' : 'le'} tester.` : '',
       ].filter(Boolean).join(' ');
       this.render();
     } catch (error) {
@@ -317,6 +322,7 @@ export class ClashPanel {
     this.syncModels();
     clear(this.results);
     this.status.textContent = message || this.blocked || this.summaryText || 'Choisissez les deux ensembles, puis « Chercher ».';
+    this.approximateRow.hidden = !app.model?.boxOnly.size;
     this.run.disabled = this.controller !== null || this.blocked !== '';
     this.sort.textContent = this.deepestFirst ? 'Plus profonds d’abord' : 'Moins profonds d’abord';
     const records = app.clashes.records;

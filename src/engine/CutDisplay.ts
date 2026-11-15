@@ -301,7 +301,9 @@ export class CutDisplay {
     while (this.slots.length <= k) {
       const fill = new Mesh(new BufferGeometry(), new MeshBasicMaterial({ vertexColors: true, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
       const line = (dashed: boolean) => {
-        const material = new LineMaterial({ color: OUTLINE, linewidth: 2.5, dashed, dashSize: 0.12, gapSize: 0.08 });
+        // Un trait épais est un quadrilatère construit à l'écran, après la projection : il n'a pas d'envers, et une vue en miroir
+        // (plan de plafond, voir `Viewer.setMirrored`), qui retourne le sens des faces, ne doit pas l'éliminer.
+        const material = new LineMaterial({ color: OUTLINE, linewidth: 2.5, dashed, dashSize: 0.12, gapSize: 0.08, side: DoubleSide });
         material.resolution.set(this.resolution.width, this.resolution.height);
         const segments = new LineSegments2(new LineSegmentsGeometry(), material);
         segments.renderOrder = 1;

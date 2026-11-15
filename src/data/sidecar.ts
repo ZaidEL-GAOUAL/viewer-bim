@@ -38,7 +38,17 @@ export function chooseMetadata(own: Metadata | null, dropped: readonly Metadata[
   if (!own || !base || base === own) return { metadata: base, overlays };
   // Les vues du fichier sont relues fraîches ; celles de l'utilisateur viennent du JSON déposé.
   const views = [...(own.views ?? base.views ?? []).filter((view) => view.origin !== 'user'), ...userViewsOf(base, [])];
-  return { metadata: { ...base, readOnly: own.readOnly ?? base.readOnly, georeference: own.georeference ?? base.georeference, phases: own.phases ?? base.phases, views: views.length > 0 ? views : undefined, levels: own.levels ?? base.levels }, overlays };
+  return { metadata: { ...base, readOnly: own.readOnly ?? base.readOnly, georeference: own.georeference ?? base.georeference, phases: own.phases ?? base.phases, views: views.length > 0 ? views : undefined, levels: own.levels ?? base.levels, grouping: own.grouping ?? base.grouping }, overlays };
+}
+
+/**
+ * Les métadonnées qu'une maquette utilise, d'après `chooseMetadata` : celles de sa conversion (IFC, Revit) seules ou avec un JSON
+ * (les chemins verrouillés gardent alors la valeur de la conversion), un JSON complet, ou les seules propriétés du fichier.
+ */
+export function metadataUse(own: Metadata | null, metadata: Metadata | null, overlays: readonly Metadata[]): string {
+  if (own) return metadata === own && overlays.length === 0 ? 'de la conversion' : 'conversion + JSON appliqué';
+  const base = metadata ? 'JSON complet' : 'propriétés du fichier';
+  return overlays.length > 0 ? `${base} + JSON de modifications` : base;
 }
 
 /** Les vues de l'utilisateur de la base et des JSON de modifications, dans cet ordre ; une même vue (`id`) n'est gardée qu'une fois, la plus récente. */

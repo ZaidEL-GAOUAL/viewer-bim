@@ -14,8 +14,9 @@ export const newViewId = (): string => globalThis.crypto?.randomUUID?.() ?? `vue
 
 /**
  * La vue telle que l'utilisateur la voit : caméra, plans de coupe libres, boîte, éléments masqués et isolés, phase, règles
- * de présentation et regroupement. Ouverte depuis un plan d'étage (vue 2D de dessus, sans rotation, avec sa boîte), elle
- * reste un plan : son étendue est celle de la boîte du moment.
+ * de présentation et regroupement. Ouverte depuis une vue 2D (plan d'étage ou de plafond, coupe, façade : vue parallèle, sans
+ * rotation, avec sa boîte), elle en garde la sorte : l'étendue d'un plan est celle de la boîte du moment, la boîte d'une coupe
+ * est la sienne, et un plan de plafond, regardé d'en dessous, s'enregistre comme son fichier le décrit (vu de dessus).
  */
 export function captureView(app: App, name: string, id = newViewId()): SavedView {
   const { viewer, model } = app;
@@ -24,12 +25,14 @@ export function captureView(app: App, name: string, id = newViewId()): SavedView
   const { projection, pose } = viewer.capturePose();
   const { width, height } = viewer.size;
   const box = viewer.sections.boxEnabled ? viewer.sections.boxCut : null;
-  const plan = app.activeView?.kind === 'plan' && projection === 'orthographic' && !viewer.controls.enableRotate && box !== null;
+  const flat = projection === 'orthographic' && !viewer.controls.enableRotate && box !== null;
+  const kind = flat ? app.activeView?.kind ?? '3d' : '3d';
   const view: SavedView = {
-    name, id, origin: 'user', kind: plan ? 'plan' : '3d',
+    name, id, origin: 'user', kind,
     camera: cameraFromPose({ position: pose.position.toArray(), target: pose.target.toArray(), up: pose.up.toArray(), fov: pose.fov, halfHeight: pose.halfHeight }, projection, offset, width / Math.max(height, 1)),
   };
-  if (plan && box) view.range = planRangeOfBox(box, offset);
+  if ((kind === 'plan' || kind === 'ceiling') && box) view.range = planRangeOfBox(box, offset, kind);
+  if (kind === 'ceiling') view.camera.direction = [-view.camera.direction[0], -view.camera.direction[1], -view.camera.direction[2]];
   if (box) view.sectionBox = { min: toModelPoint(box.min, offset), max: toModelPoint(box.max, offset), rotation: box.rotation };
 
   const { sections } = viewer;

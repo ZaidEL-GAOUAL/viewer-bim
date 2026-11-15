@@ -37,7 +37,8 @@ export function frameCamera(viewer: Viewer, aspect: number, spec: FrameSpec = {}
   let camera: PerspectiveCamera | OrthographicCamera;
   if (source instanceof OrthographicCamera) {
     const halfHeight = 'world' in spec ? spec.world.height / 2 : ((source.top - source.bottom) / 2 / source.zoom) * crop;
-    const halfWidth = 'world' in spec ? spec.world.width / 2 : halfHeight * aspect;
+    // Une vue en miroir (plan de plafond, voir `Viewer.setMirrored`) le reste : sa gauche et sa droite échangées.
+    const halfWidth = ('world' in spec ? spec.world.width / 2 : halfHeight * aspect) * Math.sign(source.right - source.left);
     camera = new OrthographicCamera(-halfWidth, halfWidth, halfHeight, -halfHeight, source.near, source.far);
   } else {
     const fov = (2 * Math.atan(Math.tan((source.fov * Math.PI) / 360) * crop) * 180) / Math.PI;

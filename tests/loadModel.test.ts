@@ -31,3 +31,20 @@ test('un .gltf illisible est signalé comme tel', async () => {
     return true;
   });
 });
+
+test('several files dropped together: each model with its own JSON, the first to open first, a twin set aside with a line', async () => {
+  const { planDrop } = await import('../src/engine/loadModel.ts');
+  const input = (path: string) => ({ file: new File([''], path.split('/').pop()!), path });
+  const plan = planDrop([
+    input('lot/structure.rvt'), input('lot/archi.ifc'), input('lot/archi.json'), input('lot/reseaux.glb'), input('lot/reseaux.bin'),
+    input('lot/reseaux.modifications.json'), input('lot/reseaux.usdz'), input('lot/planning.json'),
+  ]);
+  assert.deepEqual(plan.models.map((model) => model.main.path), ['lot/reseaux.glb', 'lot/archi.ifc', 'lot/structure.rvt'], 'a 3D model first, then the IFC, then Revit');
+  assert.deepEqual(plan.models.map((model) => model.inputs.map((item) => item.path)), [
+    ['lot/reseaux.glb', 'lot/reseaux.modifications.json', 'lot/planning.json', 'lot/reseaux.bin'],
+    ['lot/archi.ifc', 'lot/archi.json', 'lot/reseaux.bin'],
+    ['lot/structure.rvt', 'lot/reseaux.bin'],
+  ], 'a JSON goes to the model it is named after, the others to the first');
+  assert.deepEqual(plan.skipped, ['« reseaux.usdz » non ouvert : même nom que « reseaux.glb », ouvert à sa place.']);
+  assert.deepEqual(planDrop([input('a.json')]).models, [], 'a JSON alone opens no model');
+});

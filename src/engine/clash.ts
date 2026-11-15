@@ -21,6 +21,8 @@ export interface ClashModel {
   parts(element: number): MeshPart[];
   /** `isOpen` : vrai si le maillage de l'élément n'est pas un solide fermé ; seul un solide fermé peut en contenir un autre. */
   state?: { isOpen(element: number): boolean };
+  /** Éléments dessinés par leur seule boîte (`Model.boxOnly`) : exclus, sauf `ClashOptions.includeBoxOnly`. */
+  boxOnly?: { has(element: number): boolean };
 }
 
 export interface FoundClash {
@@ -39,6 +41,8 @@ export interface ClashOutcome {
   candidates: number;
   /** Vrai si la phase large a atteint `maxCandidates` : des paires n'ont pas été testées. */
   capped: boolean;
+  /** Éléments des deux ensembles écartés parce que seule leur boîte est connue (leur forme n'a pas été lue). */
+  boxOnly: number;
 }
 
 export interface ClashOptions {
@@ -47,6 +51,8 @@ export interface ClashOptions {
   maxCandidates?: number;
   /** Vrai pour une paire à ne pas tester (même élément, pièce et original, même hôte…). `a < b`. */
   exclude?(a: number, b: number): boolean;
+  /** Tester aussi les éléments dessinés par leur seule boîte : leur boîte donnerait de faux conflits, ils sont exclus par défaut. */
+  includeBoxOnly?: boolean;
 }
 
 export const MAX_CANDIDATES = 20_000;
@@ -143,7 +149,12 @@ export function* clashJob(model: ClashModel, a: readonly number[], b: readonly n
   for (const element of a) inA[element] = 1;
   for (const element of b) inB[element] = 1;
   const items: number[] = [];
-  for (let i = 0; i < model.count; i++) if ((inA[i] || inB[i]) && boxes[i * 6] <= boxes[i * 6 + 3]) items.push(i);
+  let boxOnly = 0;
+  for (let i = 0; i < model.count; i++) {
+    if (!(inA[i] || inB[i]) || !(boxes[i * 6] <= boxes[i * 6 + 3])) continue;
+    if (!options.includeBoxOnly && model.boxOnly?.has(i)) boxOnly++;
+    else items.push(i);
+  }
   items.sort((x, y) => boxes[x * 6] - boxes[y * 6]);
 
   // ------------------------------------------------------------ phase large
@@ -242,5 +253,5 @@ export function* clashJob(model: ClashModel, a: readonly number[], b: readonly n
     }
   }
   for (const entry of cache.values()) entry.bvh.geometry.dispose();
-  return { clashes, candidates: pairs.length, capped };
+  return { clashes, candidates: pairs.length, capped, boxOnly };
 }

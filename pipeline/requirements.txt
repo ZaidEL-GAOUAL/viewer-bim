@@ -1,2 +1,5 @@
-ifcopenshell>=0.8.4
+# La même version que le navigateur (src/ifc/convertIfc.ts) : une autre peut trianguler une face ou écrire un jeu de
+# propriétés autrement. Le GLB dit laquelle l'a écrit (asset.generator) et la comparaison du viewer signale un écart.
+# À changer en même temps que la roue du navigateur.
+ifcopenshell==0.8.5
 numpy

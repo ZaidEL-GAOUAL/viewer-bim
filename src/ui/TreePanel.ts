@@ -59,8 +59,10 @@ export class TreePanel {
 
     app.on('model', () => {
       this.propertyQuery = ''; this.allProperties = false;
+      // Le regroupement que la source propose (section `grouping` de ses métadonnées), sinon celui que les valeurs suggèrent.
+      const proposed = (app.metadata?.grouping ?? []).filter((path) => app.store.paths.includes(path));
       const suggestion = suggestGrouping(app.store);
-      this.paths = suggestion ? [suggestion] : [];
+      this.paths = proposed.length > 0 ? proposed : suggestion ? [suggestion] : [];
       app.groupingPaths = [...this.paths];
       this.rebuild();
     });

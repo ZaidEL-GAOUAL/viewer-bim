@@ -6,6 +6,7 @@ import { MAX_CUTS, MIN_INTERVAL, PART_SEQUENCE, cutPlanes, describeOutcome, free
 import { integer, plural } from '../data/text.ts';
 import { holdView } from '../engine/capture.ts';
 import { formatVolume } from '../engine/Measure.ts';
+import { boxOnlyReason, type Model } from '../engine/Model.ts';
 import { runSliced } from '../engine/sliced.ts';
 import { solidFromParts, solidProblem } from '../engine/splitMesh.ts';
 import { STANDARD_VIEWS } from '../engine/views.ts';
@@ -65,6 +66,18 @@ export function frameDrawing(app: App, elements: readonly number[], from: 'top' 
   const target = box.getCenter(new Vector3()).addScaledVector(right, -((width - free) / 2) * ((2 * halfHeight) / height));
   const position = target.clone().addScaledVector(direction, size.length() + 10);
   if (viewer.setCameraPose({ projection: 'orthographic', position: position.toArray(), target: target.toArray(), up: up.toArray(), halfHeight })) viewer.setProjection('orthographic', false);
+}
+
+/**
+ * Pourquoi l'étape 1 refuse de couper cet élément, sans regarder son maillage (vérifié à part), ou null. `split` : il a déjà
+ * son découpage.
+ */
+export function cutRefusal(model: Model, element: number, split: boolean): string | null {
+  return model.parents[element] >= 0 ? 'c’est une pièce : modifiez ou retirez son découpage ci-dessous'
+    : sourceIndexOf(model, element) > 0 ? 'il vient d’une autre maquette : seuls les éléments de la première se découpent'
+      : split ? 'déjà découpé : modifiez ou retirez son découpage ci-dessous'
+        : model.ranges[element].length === 0 ? 'il n’a pas de géométrie'
+          : boxOnlyReason(model, element);
 }
 
 type Step = 'what' | 'how' | 'where' | 'check' | 'done';
@@ -403,12 +416,7 @@ export class SplitPanel {
     }
     let budget = CHECK_TRIANGLES;
     for (const i of app.selection) {
-      let reason = model.parents[i] >= 0 ? 'c’est une pièce : modifiez ou retirez son découpage ci-dessous'
-        : sourceIndexOf(model, i) > 0 ? 'il vient d’une autre maquette : seuls les éléments de la première se découpent'
-          : app.splits?.definitionOf(i) ? 'déjà découpé : modifiez ou retirez son découpage ci-dessous'
-            : model.ranges[i].length === 0 ? 'il n’a pas de géométrie'
-              : String(app.store.propsOf(i)?.['Source de la géométrie'] ?? '').startsWith('Inconnue') ? 'forme Revit inconnue, seule sa boîte englobante a été lue'
-                : null;
+      let reason = cutRefusal(model, i, app.splits?.definitionOf(i) !== undefined);
       if (!reason) {
         const triangles = model.ranges[i].reduce((sum, range) => sum + range.count / 3, 0);
         if (!this.meshChecks.has(i) && triangles <= budget) {

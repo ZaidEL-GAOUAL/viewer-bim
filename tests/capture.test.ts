@@ -91,3 +91,23 @@ test('printed pages are opaque white JPEG; the clipboard capture keeps the scree
   const source = (await import('node:fs')).readFileSync(new URL('../src/ui/ExportActions.ts', import.meta.url), 'utf8');
   assert.ok(!/background/.test(source));
 });
+
+test('a mirrored view (ceiling plan read as in Revit) is captured mirrored, tiles included: a point on the right stays on the right', () => {
+  const camera = new OrthographicCamera(20, -20, 10, -10, 1, 100);
+  camera.position.set(0, -30, 0);
+  camera.up.set(0, 0, -1);
+  camera.lookAt(0, 0, 0);
+  camera.updateMatrixWorld(true);
+  camera.updateProjectionMatrix();
+  const viewer = { camera, clipRangeOf: () => ({ near: 1, far: 100 }) } as unknown as Viewer;
+  const east = new Vector3(5, 0, 0);
+  const onScreen = east.clone().project(camera).x;
+  const copy = frameCamera(viewer, 2, { world: { width: 40, height: 20 } }) as OrthographicCamera;
+  assert.ok(copy.right < copy.left, 'still mirrored');
+  assert.ok(Math.abs(east.clone().project(copy).x - onScreen) < 1e-9, 'same side of the page as on screen');
+  // Seen from below without the mirror, east would be on the left: the mirror puts it back on the right, as on the floor plan.
+  assert.ok(onScreen > 0);
+  const tile = copy.clone();
+  tile.setViewOffset(400, 200, 200, 0, 200, 200);
+  assert.ok(east.clone().project(tile).x > -1, 'the right-hand tile holds the right-hand half');
+});

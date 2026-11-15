@@ -1,14 +1,15 @@
 import { Box3, Sphere } from 'three';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { PropertyStore, unflattenProperties, ownValue, parseMetadata, type Metadata, type PropValue } from '../data/metadata.ts';
-import { applyOverlays, buildStore, chooseMetadata, countMatches, modificationsFile, orphanNotice, userViewsOf } from '../data/sidecar.ts';
+import { applyOverlays, buildStore, chooseMetadata, countMatches, metadataUse, modificationsFile, orphanNotice, userViewsOf } from '../data/sidecar.ts';
 import { levelsToJson, type Level } from '../data/levels.ts';
 import { SplitSet, applyTailChange, loadSplits, splitRefusalsOf, splitsOf, splitsToJson, type TailChange } from '../data/splits.ts';
 import { zonesOf, zonesToJson, type Zone } from '../data/zones.ts';
 import { clashesToJson, type ClashRecord, type ClashTest } from '../data/clashes.ts';
 import { emptyBook, mergeBooks, observationsToJson, type ObservationBook } from '../data/observations.ts';
-import { documentsBySource } from '../data/federation.ts';
+import { REVIT_ENGINE, documentsBySource, generatorOf, producerOf, type SourceOrigin } from '../data/federation.ts';
 import type { ElementAppearance } from '../data/appearanceRules.ts';
+import { addModelFiles } from './addModel.ts';
 import { ClashPanel } from './ClashPanel.ts';
 import { ComparePanel } from './ComparePanel.ts';
 import { ModelsPanel } from './ModelsPanel.ts';
@@ -22,22 +23,23 @@ import { SplitPanel } from './SplitPanel.ts';
 import { ZonesPanel } from './ZonesPanel.ts';
 import { applyUserView } from './userViews.ts';
 import { evaluatePhases, mergeAppearance, phasesToJson, type PhaseEvaluation, type PhaseSelection, type Phases } from '../data/phases.ts';
-import { cameraPose, hiddenByView, hiddenInEveryView, planCameraPose, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
+import { cameraPose, flatCameraPose, hiddenByView, hiddenInEveryView, planSectionBox, sectionBoxLocal, viewsToJson, type SavedView } from '../data/savedViews.ts';
 import { combineHidden, layerChanges } from '../data/viewLayer.ts';
 import { writeGlb } from '../engine/writeGlb.ts';
+import { parseGlb } from '../engine/glbFile.ts';
 import { PropertyEdits } from '../data/PropertyEdits.ts';
 import { evaluateAppearanceRules, validateAppearanceRules, type AppearanceRule } from '../data/appearanceRules.ts';
 import { updateGlbMetadata } from '../engine/updateGlbMetadata.ts';
 import { hexToRgb } from '../data/palette.ts';
 import { ModelBuilder, buildModel, gltfSource } from '../engine/buildModel.ts';
-import { ModelFileError, filesFromDrop, filesFromList, loadModelFiles, loadModelUrl, type InputFile } from '../engine/loadModel.ts';
+import { ModelFileError, filesFromDrop, filesFromList, loadModelFiles, loadModelUrl, planDrop, type InputFile } from '../engine/loadModel.ts';
 import { extensionOf, isIfcFile, isJsonFile, isModelFile, isRevitFile, isUsdFile, withoutExtension } from '../engine/fileKinds.ts';
 import { Measure, type MeasureKind } from '../engine/Measure.ts';
 import { IfcTooLargeError, convertIfc, packageUsd, preloadIfc } from '../ifc/convertIfc.ts';
 import { rememberIfcUse, watchPreloadIntent } from '../ifc/preloadIntent.ts';
 import { describeTimings } from '../ifc/timings.ts';
 import { loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
-import { isMemoryFailure, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
+import { REVIT_GROUPING, isMemoryFailure, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
 import { describeRevitReport } from '../revit/revitReport.ts';
 import type { ModelSource, RawInput } from '../engine/buildModel.ts';
 import { Model } from '../engine/Model.ts';
@@ -59,6 +61,7 @@ import { ViewsPanel } from './ViewsPanel.ts';
 import { WalkPanel } from './WalkPanel.ts';
 import { MapPanel } from './MapPanel.ts';
 import { georeferenceToJson, type Georeference } from '../geo/georeference.ts';
+import { studyCard } from '../site/studyLink.ts';
 import { TreePanel } from './TreePanel.ts';
 import { SchedulePanel } from './SchedulePanel.ts';
 import { isScheduleDocument, parseSchedule, type Schedule } from '../data/schedule.ts';
@@ -223,6 +226,8 @@ export class App {
   private readonly applePreview = new ApplePreview();
   /** Nombre d'éléments du modèle qui ont trouvé leur bloc dans le JSON. */
   fileName = '';
+  /** D'où vient le modèle ouvert (ce qui l'a produit, ses métadonnées) : dit par la comparaison, repris par une maquette ajoutée. */
+  sourceOrigin: SourceOrigin | null = null;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -271,7 +276,7 @@ export class App {
     const modelsPanel = new ModelsPanel(this), comparePanel = new ComparePanel(this), clashPanel = new ClashPanel(this);
     const checks = new PanelMenu('Contrôles', 'Plusieurs maquettes, comparaison de versions, conflits', [modelsPanel, comparePanel, clashPanel]);
     const observationsPanel = new ObservationsPanel(this);
-    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport', [observationsPanel]);
+    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport ; étude du site de la maquette', [observationsPanel, studyCard(this)]);
     const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el, site.el);
 
     const mapToggle = button('Carte', () => {
@@ -393,6 +398,7 @@ export class App {
     const topbar = h('header', { class: 'topbar' },
       panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
+      h('a', { text: 'Étude de site', title: 'Ouvrir l’étude de site : lieu, terrain, voisins, volumes, soleil (avant-projet)', attrs: { href: 'site.html' } }),
       h('div', { class: 'formats', title: 'Format des téléchargements (GLB ↓ ou USD ↓) et de la conversion d’un IFC, pas celui du fichier ouvert' },
         h('span', { class: 'bar-label', text: 'Export', attrs: { id: 'export-format-label' } }),
         formats,
@@ -874,6 +880,7 @@ export class App {
       this.viewHidden = this.openingHidden;
       this.applyPhase(null);
       this.refreshLayers();
+      viewer.setMirrored(false);
       if (this.cameraBeforeViews) viewer.restorePose(this.cameraBeforeViews, animate);
       this.cameraBeforeViews = null;
       this.syncProjectionUi();
@@ -885,7 +892,8 @@ export class App {
     if (!this.mapPanel.isOpen) this.cameraBeforeViews ??= viewer.capturePose();
     // Une vue de l'utilisateur est exactement ce qu'il voyait : on repart de tout affiché (sans isolement ni masquage).
     if (view.origin === 'user') this.showAll();
-    const plan = view.kind === 'plan';
+    // Plans d'étage et de plafond : leur boîte vient de leur plage. Coupes et façades : celle du fichier (`sectionBox`).
+    const plan = view.kind === 'plan' || view.kind === 'ceiling';
     const offset = model.offset.toArray();
     // Boîte de coupe : celle de la vue, ou aucune. Un plan a la sienne (recadrage en x et z, plage de hauteur en y).
     const box = plan
@@ -904,12 +912,15 @@ export class App {
       const { width, height } = viewer.size;
       const bounds = { center: sphere.center.toArray(), radius: sphere.radius };
       const aspect = width / Math.max(height, 1);
-      if (plan) {
-        // Un plan est toujours vu en projection parallèle : un fichier qui lui donnerait une perspective est lu comme parallèle.
-        const camera = { ...view.camera, projection: 'orthographic' as const };
-        // `setCameraPose` laisse l'orbite en place (une vue parallèle 3D la garde) : le plan la retire ensuite. La projection
+      if (view.kind !== '3d') {
+        // Une vue 2D (plan, plan de plafond, coupe, façade) est toujours vue en projection parallèle (`flatCameraPose`).
+        // `setCameraPose` laisse l'orbite en place (une vue parallèle 3D la garde) : la vue 2D la retire ensuite. La projection
         // est alors déjà parallèle, `setProjection` ne fait que fixer `enableRotate` à faux.
-        if (viewer.setCameraPose(planCameraPose(camera, offset, bounds, aspect), animate)) viewer.setProjection('orthographic', false);
+        // Un plan de plafond, regardé d'en dessous, est renversé gauche-droite : il se lit comme dans Revit, sur le plan d'étage.
+        if (viewer.setCameraPose(flatCameraPose(view, offset, bounds, aspect), animate)) {
+          viewer.setProjection('orthographic', false);
+          viewer.setMirrored(view.kind === 'ceiling');
+        }
       } else {
         viewer.setCameraPose(cameraPose(view.camera, offset, bounds, aspect), animate);
       }
@@ -996,7 +1007,10 @@ export class App {
 
   // ------------------------------------------------------------- chargement
 
-  async loadFiles(inputs: InputFile[]): Promise<void> {
+  async loadFiles(dropped: InputFile[]): Promise<void> {
+    // Plusieurs maquettes déposées ensemble : la première s'ouvre, les autres s'y ajoutent par le chemin d'« Ajouter… » (`planDrop`).
+    const plan = planDrop(dropped);
+    const inputs = plan.models[0]?.inputs ?? dropped;
     // Dans un dossier, on prend le modèle et le JSON les plus proches de la racine.
     const depth = (input: InputFile) => input.path.split('/').length;
     const byDepth = (matches: InputFile[]) => matches.sort((a, b) => depth(a) - depth(b));
@@ -1013,6 +1027,11 @@ export class App {
       return;
     }
     if ((modelFile || sourceFile) && !this.confirmReplace()) return;
+    let others = plan.models.slice(1);
+    if (others.length > 0 && !window.confirm(`${plan.models.length} maquettes déposées : les ouvrir ensemble, dans la même scène ? « Annuler » n’ouvre que « ${plan.models[0].main.file.name} ».`)) {
+      plan.skipped.push(...others.map((other) => `« ${other.main.file.name} » non ouvert.`));
+      others = [];
+    }
     // Un JSON seul (métadonnées ou planning) pendant la lecture d'un fichier Revit ne l'interrompt pas : pas de nouveau
     // chargement (il ferait abandonner la lecture, voir `beginLoad`) ; ses métadonnées rejoignent celles de la lecture.
     const reading = !modelFile && !sourceFile ? this.revitReading : null;
@@ -1022,7 +1041,7 @@ export class App {
       const schedules: { name: string; schedule: Schedule }[] = [];
       let planningError = '';
       // Tout ce que ce chargement a à dire : montré d'un coup à la fin, le plus grave d'abord.
-      const notices: Notice[] = [];
+      const notices: Notice[] = plan.skipped.map((text) => ({ text, error: false }));
       // A planning JSON must never be interpreted as an object's metadata, even in a folder.
       for (const input of jsonFiles) {
         const text = await input.file.text();
@@ -1092,7 +1111,7 @@ export class App {
         const { missingTextures, warnings } = loaded;
         // Un JSON déposé seul avant le modèle reste en attente et s'applique au premier modèle chargé.
         if (candidates.length === 0 && !this.model && this.metadata) candidates.push(this.metadata);
-        const installed = await this.installModel(ticket, loaded.source, null, candidates, modelFile.file.name);
+        const installed = await this.installModel(ticket, loaded.source, null, candidates, modelFile.file.name, 'parser' in loaded.source ? producerOf('glb', generatorOf(loaded.source.parser.json)) : producerOf('usd'));
         if (!installed) return;
         if (extensionOf(modelFile.file.name) === 'glb') this.originalGlb = modelFile.file;
         if (extensionOf(modelFile.file.name) === 'usdz') {
@@ -1104,7 +1123,6 @@ export class App {
           notices.push({ text: `Modèle affiché sans ${missingTextures.length > 1 ? 'ses textures' : 'sa texture'} (« ${missingTextures.join(' », « ')} ») : déposez le dossier complet pour ${missingTextures.length > 1 ? 'les' : 'la'} charger.`, error: true });
         }
         if (warnings.length > 0) notices.push({ text: warnings.join(' '), error: true });
-        if (modelFiles.length > 1) notices.push({ text: `${modelFiles.length} modèles fournis : seul « ${modelFile.file.name} » est chargé.`, error: false });
         const hiddenSentence = this.openingHiddenSentence(false);
         if (hiddenSentence) notices.push({ text: hiddenSentence, error: false });
       } else if (metadataFiles.length && reading && this.revitReading === reading) {
@@ -1178,6 +1196,12 @@ export class App {
         }
       }
       if (ticket !== this.loadTicket) return;
+      // Les autres maquettes déposées s'ajoutent une à une à celle qui vient de s'ouvrir ; chacune dit ce qu'elle a donné.
+      for (const other of others) {
+        if (ticket !== this.loadTicket || !this.model) break;
+        await addModelFiles(this, other.inputs, 'model', { report: (text, error) => notices.push({ text, error }) });
+      }
+      if (ticket !== this.loadTicket) return;
       if (schedules.length) {
         this.planning.loadSchedule(schedules[0].schedule, schedules[0].name);
         if (schedules.length > 1) notices.push({ text: `${schedules.length} plannings fournis : seul « ${schedules[0].name} » est chargé.`, error: false });
@@ -1187,7 +1211,8 @@ export class App {
       // Une simple information ne remplace pas une erreur déjà affichée (par exemple celle de l'association des métadonnées).
       if (notice && (notice.error || !this.errorShown())) this.toast(notice.text, notice.error);
     } catch (error) {
-      if (ticket === this.loadTicket) this.toast(error instanceof Error ? error.message : String(error), true);
+      const unopened = others.length > 0 ? ` Non ouvert${others.length > 1 ? 's' : ''} : ${others.map((other) => `« ${other.main.file.name} »`).join(', ')}.` : '';
+      if (ticket === this.loadTicket) this.toast(`${error instanceof Error ? error.message : String(error)}${unopened}`, true);
     } finally {
       if (!reading) this.endLoad(ticket);
     }
@@ -1231,7 +1256,7 @@ export class App {
       source = (await loadModelFiles({ file: glb, path: glb.name }, [])).gltf;
       produced = { model: glb, extension: 'glb' };
     }
-    if (!(await this.installModel(ticket, source, metadata, dropped, `${base}.${produced.extension}`))) return;
+    if (!(await this.installModel(ticket, source, metadata, dropped, `${base}.${produced.extension}`, producerOf('ifc', generatorOf(parseGlb(result.glb).json))))) return;
 
     this.originalGlb = result.glb;
     this.conversion = { name: base, source: file.name };
@@ -1312,6 +1337,8 @@ export class App {
         throw new Error([`« ${file.name} » ne contient aucun élément avec une géométrie à afficher.`, ...report.warnings].join(' '));
       }
       const metadata = this.readMetadata(result.metadata, `${base}.json`);
+      // Le lecteur range ses éléments par leur catégorie Revit à l'ouverture (section `grouping`, voir docs/contrat-metadonnees.md).
+      metadata.grouping ??= [...REVIT_GROUPING];
       // Le modèle construit pendant la lecture est installé tel quel, avec les libellés des fiches à la place des noms
       // provisoires de ses morceaux ; sans morceau (le lecteur a tout rendu d'un bloc), le modèle brut va tel quel à
       // buildModel. Les téléchargements réécrivent le modèle affiché (writeGlb). Un modèle seul, c'est que la lecture
@@ -1325,7 +1352,7 @@ export class App {
       const source = built ?? result.raw;
       // Le JSON du fichier, et ceux déposés avec lui ou pendant la lecture : `installModel` lit cette liste au moment
       // d'installer, donc un JSON qui arrive encore pendant qu'il prépare le modèle compte aussi.
-      if (!(await this.installModel(ticket, source, metadata, reading.candidates, `${base}.${extension}`))) {
+      if (!(await this.installModel(ticket, source, metadata, reading.candidates, `${base}.${extension}`, producerOf('revit')))) {
         discard();
         return;
       }
@@ -1360,6 +1387,7 @@ export class App {
     const views = [...this.savedViews, ...this.userViews];
     if (views.length > 0) out.views = viewsToJson(views);
     if (this.levels.length > 0) out.levels = levelsToJson(this.levels);
+    if (this.metadata?.grouping) out.grouping = [...this.metadata.grouping];
     if (this.splits?.definitions.length) out.splits = splitsToJson(this.splits.definitions);
     if (this.zones.length > 0) out.zones = zonesToJson(this.zones);
     Object.assign(out, clashesToJson(this.clashes.tests, this.clashes.records));
@@ -1413,7 +1441,9 @@ export class App {
         const source = model.sources.length > 1 ? null : this.originalGlb instanceof Blob ? await this.originalGlb.arrayBuffer() : this.originalGlb;
         // Avec des pièces, le fichier exporté est le modèle affiché : les pièces à la place de leurs originaux.
         const parts = this.splits?.hasParts === true;
-        const glb = updateGlbMetadata(source && !parts ? source : writeGlb(model, undefined, { skip: (i) => model.state.isReplaced(i) }), properties, this.store.readOnly, {
+        // Écrit depuis le modèle d'un fichier Revit, le GLB le dit (`generator`) : la comparaison sait qu'il vient du même lecteur.
+        const generator = model.sources.length === 0 && this.sourceOrigin?.engine === REVIT_ENGINE ? REVIT_ENGINE : undefined;
+        const glb = updateGlbMetadata(source && !parts ? source : writeGlb(model, generator, { skip: (i) => model.state.isReplaced(i) }), properties, this.store.readOnly, {
           nodeKeys: source && !parts && this.originalNodeKeys.size ? this.originalNodeKeys : undefined, labels,
         });
         if (parts) this.toast('Le fichier exporté contient les pièces à la place des éléments découpés.');
@@ -1544,7 +1574,7 @@ export class App {
     try {
       const base = `${import.meta.env.BASE_URL}samples/${name}`;
       const [gltf, text, glb] = await Promise.all([loadModelUrl(`${base}.glb`), fetch(`${base}.json`).then((r) => r.text()), fetch(`${base}.glb`).then((r) => r.blob())]);
-      if (await this.installModel(ticket, gltf, null, [this.readMetadata(text, `${name}.json`)], `${name}.glb`)) {
+      if (await this.installModel(ticket, gltf, null, [this.readMetadata(text, `${name}.json`)], `${name}.glb`, producerOf('glb', generatorOf(gltf.parser.json)))) {
         this.originalGlb = glb;
         this.announceOpeningHidden();
       }
@@ -1637,6 +1667,7 @@ export class App {
     this.metadata = null;
     this.georeference = null;
     this.fileName = '';
+    this.sourceOrigin = null;
     return previous;
   }
 
@@ -1667,7 +1698,7 @@ export class App {
    * `own` : les métadonnées que le fichier donne lui-même (Revit, IFC converti) ; `dropped` : les JSON déposés avec lui.
    * Renvoie faux si le chargement a été abandonné au profit d'un plus récent.
    */
-  private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, own: Metadata | null, dropped: readonly Metadata[], name: string): Promise<boolean> {
+  private async installModel(ticket: number, gltf: GLTF | ModelSource | RawInput | Model, own: Metadata | null, dropped: readonly Metadata[], name: string, producer: Omit<SourceOrigin, 'metadata'>): Promise<boolean> {
     if (ticket !== this.loadTicket) return false;
     const embeddedReadOnly = 'parser' in gltf ? gltf.parser.json.extras?.readOnly : undefined;
     let model: Model;
@@ -1718,6 +1749,7 @@ export class App {
     this.userViews = userViewsOf(metadata, overlays);
     this.georeference = metadata?.georeference ?? null;
     this.fileName = name;
+    this.sourceOrigin = { ...producer, metadata: metadataUse(own, metadata, overlays) };
     // Le modèle lu par morceaux est déjà dans la vue : le remettre cadre la caméra sur le modèle entier.
     this.viewer.setModel(model);
     if (previous && previous !== model) previous.dispose();
@@ -1807,9 +1839,10 @@ export class App {
     this.toastTimer = window.setTimeout(() => (this.toastEl.hidden = true), isError ? 9000 : 5000);
   }
 
-  busy(message: string | null): void {
+  /** Le message d'attente ; `cancel` y ajoute un bouton « Arrêter ». */
+  busy(message: string | null, cancel?: () => void): void {
     this.busyEl.hidden = message === null;
-    if (message !== null) this.busyEl.textContent = message;
+    if (message !== null) this.busyEl.replaceChildren(message, ...(cancel ? [' ', button('Arrêter', cancel)] : []));
   }
 
   private updateStats(): void {

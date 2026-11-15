@@ -20,6 +20,8 @@ export const QUANTITY_LABELS: Readonly<Record<QuantityName, string>> = {
 export type ElementQuantities = Record<QuantityName, number> & {
   /** Vrai pour un solide fermé : `exact` ; sinon `indicatif`. */
   exact: boolean;
+  /** Vrai pour un élément dessiné par sa seule boîte (`Model.boxOnly`) : mesuré sur elle, donc `indicatif`. */
+  approximate?: boolean;
 };
 
 /** Valeur de `Fiabilité` écrite à côté des quantités. */
@@ -133,6 +135,8 @@ export function unionArea(triangles: readonly number[]): number {
 export interface QuantityModel {
   parts(index: number): MeshPart[];
   ranges: readonly (readonly unknown[])[];
+  /** Éléments dessinés par leur seule boîte (`Model.boxOnly`). */
+  boxOnly?: { has(index: number): boolean };
 }
 
 /** Cache par élément : la clé est la liste des plages de l'élément, refaite si l'élément change (pièces régénérées). */
@@ -160,6 +164,8 @@ export function* quantitiesJob(model: QuantityModel, indices: readonly number[],
       out.set(index, quantities);
       for (const part of parts) work += part.count / 3;
     }
+    const measured = out.get(index);
+    if (measured && model.boxOnly?.has(index)) out.set(index, { ...measured, exact: false, approximate: true });
     if (work >= budget) {
       work = 0;
       yield (i + 1) / indices.length;
@@ -212,6 +218,8 @@ export interface QuantityReport {
   locked: number;
   /** Éléments que le préréglage ne concerne pas (classe sans quantités de base). */
   unmatched: number;
+  /** Éléments écrits dont seule la boîte est connue : leurs quantités sont celles de la boîte, `indicatif`. */
+  approximate: number;
 }
 
 const round = (value: number) => Math.round(value * 1e6) / 1e6;
@@ -223,7 +231,7 @@ const round = (value: number) => Math.round(value * 1e6) / 1e6;
  */
 export function quantityUpdates(store: PropertyStore, results: ReadonlyMap<number, ElementQuantities | null>, preset: QuantityPreset, overwrite: boolean): { updates: [number, string, PropValue][]; report: QuantityReport } {
   const updates: [number, string, PropValue][] = [];
-  const report: QuantityReport = { filled: 0, present: 0, notComputable: 0, locked: 0, unmatched: 0 };
+  const report: QuantityReport = { filled: 0, present: 0, notComputable: 0, locked: 0, unmatched: 0, approximate: 0 };
   for (const [index, quantities] of results) {
     if (!quantities) {
       report.notComputable++;
@@ -246,6 +254,7 @@ export function quantityUpdates(store: PropertyStore, results: ReadonlyMap<numbe
       }
     }
     if (wrote && store.isEditable(preset.reliability)) updates.push([index, preset.reliability, reliabilityOf(quantities)]);
+    if (wrote && quantities.approximate) report.approximate++;
   }
   return { updates, report };
 }
