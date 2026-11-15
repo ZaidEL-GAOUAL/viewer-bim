@@ -43,6 +43,67 @@ wrong today and the rules of the new design; the mock-up and the build follow th
 8. **Performance stays first**: no framework added; the existing `h()` helpers and CSS; no layout that
    resizes the canvas while the camera moves.
 
+## The design plan
+
+**Where the look comes from.** The subject is the construction drawing and the building site: sheets with
+a title block (cartouche), thin precise lines, level and section marks, site signage. The interface
+borrows two things from that world and keeps everything else quiet.
+
+**Colour** — light and dark from the same tokens; the theme follows the system and can be forced.
+
+| Token | Light | Dark | Use |
+| --- | --- | --- | --- |
+| Papier | `#F4F5F3` | `#141A21` | page |
+| Calque | `#FFFFFF` | `#1B232C` | panels, header |
+| Trait | `#D6DADD` | `#2B3642` | lines, borders |
+| Encre | `#17212B` | `#E6EAEE` | text |
+| Encre douce | `#5E6B78` | `#93A0AD` | secondary text |
+| Bleu de traçage | `#2647C8` | `#86A4FF` | the one accent: primary action, selection, focus |
+| Signal | `#D9480F` | `#FF8A4C` | attention only: not saved, late, open observation |
+| Fond de vue | `#E8EBED` | `#222A33` | behind the model |
+
+**Type** — one family in two widths: Barlow for the interface, Barlow Semi Condensed for dense data
+(property tables, the cartouche, the tree counts). It comes from road and site signage, reads well small,
+and its narrow cut keeps long French labels on one line. Self-hosted (no call to a font service), weights
+400 / 500 / 600, tabular figures in tables. Scale: 12 · 13 (base) · 15 · 18 · 24. Sentence case
+everywhere; no capitals for labels.
+
+**Layout**
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Viewer BIM   Maquette  Étude de site  Chantier        Fichier ▾  Exporter ▾  │ 44
+├────┬───────────────────┬─────────────────────────────────────┬───────────────┤
+│ ◧  │ Explorer          │                                     │ Propriétés    │
+│ ◩  │ ─ un outil à la   │                                     │ de la         │
+│ ◪  │   fois, avec ses  │            la maquette              │ sélection     │
+│ ◫  │   étapes          │                                     │               │
+│ ▤  │                   │      ┌ outils de vue ┐              │               │
+│ ✎  │                   │      └───────────────┘              │               │
+├────┴───────────────────┴─────────────────────────────────────┴───────────────┤
+│ Fichier wadduwa.rvt │ Éléments 437 │ Sélection 2 │ Vue 1F │ Non enregistré   │ cartouche
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Rail** (left, icons with their name underneath): Explorer · Couleurs · Vues et coupes · Mesurer ·
+  Contrôler · Planifier · Chantier · Assistant. One group open at a time in the dock beside it; a group
+  with several tools shows them as a short list, and a tool opens in the same place with a way back.
+  The former floating cards live there: nothing covers the model.
+- **View tools**: one small bar at the bottom centre of the view (select, 2D, visite, carte, cadrer,
+  masquer, isoler, tout afficher, annuler / rétablir), icons with tooltips and shortcuts.
+- **Header**: the three pages as tabs, then two menus. *Fichier*: ouvrir, ajouter une maquette, ouvrir un
+  dossier, joindre des métadonnées, exemples. *Exporter*: enregistrer mes modifications, toutes les
+  propriétés, la maquette 3D (GLB ou USD), imprimer en PDF, DXF, copier l'image, voir sur Apple.
+- **Cartouche**: the status line, drawn as the title block of a sheet — labelled cells for file, elements,
+  selection, current view, and the "not saved" state. This is the one characteristic element; the rest
+  stays plain.
+- Left aligned throughout; panels 320 px, properties 320 px, both resizable later, both collapsible.
+
+**Checked against the usual defaults.** A rail with a dock and a properties panel is the standard layout
+of professional tools: kept on purpose, because the brief is "intuitive and professional". What is
+specific here: the cartouche instead of a dotted status line, the signage type in two widths, steps drawn
+only where the task really is a sequence, and no card grid, no gradient, no decorative icon set.
+
 ## Watch out for
 
 - `window.viewerBim` and every keyboard shortcut keep working; tests that query the DOM by label follow.
