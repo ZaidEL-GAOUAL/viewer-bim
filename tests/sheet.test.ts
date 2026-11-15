@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clipSegment, frameOnScreen, frameRect, mmOf, nextPaperThatFits, northAngle, paperSize, parseScale, scaleBar, sheetOf, suggestScale, tilePlacement, titleBlockCells, worldSize, fits, flowLayout, wrapText } from '../src/data/sheet.ts';
+import { PAPERS, clipSegment, frameOnScreen, frameRect, mmOf, nextPaperThatFits, northAngle, pageScale, paperSize, parseScale, scaleBar, sheetOf, suggestScale, tilePlacement, titleBlockCells, worldSize, fits, flowLayout, wrapText } from '../src/data/sheet.ts';
 
 const close = (actual: number, expected: number, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
 
@@ -47,6 +47,25 @@ test('the suggested scale is the largest standard one that fits', () => {
   assert.equal(suggestScale(sheet, { width: 30, height: 20 }), 100);
   assert.equal(suggestScale(sheet, { width: 7, height: 4 }), 20);
   assert.equal(suggestScale(sheet, { width: 500, height: 20 }), null);
+});
+
+test('fit to page: the largest standard scale that holds a 30 × 20 m box, on each paper', () => {
+  // Landscape frames: A4 277 × 162, A3 400 × 249, A2 574 × 372, A1 821 × 546, A0 1169 × 793 mm.
+  const expected = { A4: 200, A3: 100, A2: 100, A1: 50, A0: 50 };
+  for (const paper of PAPERS) {
+    const sheet = sheetOf(paper, true, 10);
+    assert.deepEqual(pageScale(sheet, { width: 30, height: 20 }, null), { scale: expected[paper], fits: true }, paper);
+  }
+  // A fixed scale is kept, and says whether the box holds.
+  assert.deepEqual(pageScale(sheetOf('A3', true, 10), { width: 30, height: 20 }, 50), { scale: 50, fits: false });
+  assert.deepEqual(pageScale(sheetOf('A3', true, 10), { width: 30, height: 20 }, 200), { scale: 200, fits: true });
+});
+
+test('a box larger than A0 at the smallest scale is reported', () => {
+  const box = { width: 700, height: 500 };
+  // Fit to page falls back on the smallest standard scale and says it does not hold, on any paper.
+  assert.deepEqual(pageScale(sheetOf('A0', true, 10), box, null), { scale: 500, fits: false });
+  assert.equal(nextPaperThatFits(sheetOf('A4', true, 10), 500, box), null);
 });
 
 test('typed scales: 1:75, 75 and 1/75 mean the same', () => {

@@ -1513,6 +1513,13 @@ button[aria-pressed='true'] {
 .print-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .print-frame { position: absolute; border: 2px solid var(--accent); box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.28); box-sizing: border-box; }
 .print-frame[hidden] { display: none; }
+/* Les vignettes des pages cochées, sur fond de papier quel que soit le thème. */
+.print-previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 6px; }
+.print-previews:empty { display: none; }
+.print-preview { display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0; }
+.print-preview img, .print-preview-pending { width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
+.print-preview-pending { background: var(--panel-alt); }
+.print-preview figcaption { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 
 /* Chantier : observations (carte ouverte par le menu « Chantier »). */
 .observations-card .tool-row select, .observations-card .tool-field select { flex: 1 1 110px; min-width: 0; height: 28px; }

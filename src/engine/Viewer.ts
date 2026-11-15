@@ -735,6 +735,15 @@ export class Viewer {
     }
   }
 
+  /**
+   * Les plans proche et lointain d'une image vue par `camera`, autour du modèle (voir `clipRange`). Une capture les calcule pour
+   * sa propre caméra : ceux de la caméra de la vue ne valent que pour la dernière image que la boucle d'affichage a dessinée.
+   */
+  clipRangeOf(camera: Camera): { near: number; far: number } {
+    const { center, radius } = this.sphere;
+    return clipRange(camera.position, camera.getWorldDirection(new Vector3()), center, radius, camera.position.distanceTo(this.controls.target));
+  }
+
   private draw(): void {
     const { renderer } = this;
     this.updateClipRange();

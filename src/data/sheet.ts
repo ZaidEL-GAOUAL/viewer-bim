@@ -75,6 +75,15 @@ export function suggestScale(sheet: Sheet, extent: { width: number; height: numb
   return SCALES.find((scale) => fits(sheet, scale, extent)) ?? null;
 }
 
+/**
+ * L'échelle d'une page qui montre `extent` (mètres) : `fixed`, ou (null, « Ajuster à la page ») la plus grande échelle standard
+ * où elle tient, à défaut la plus petite. `fits` : l'étendue tient dans le cadre à cette échelle.
+ */
+export function pageScale(sheet: Sheet, extent: { width: number; height: number }, fixed: number | null): { scale: number; fits: boolean } {
+  const scale = fixed ?? suggestScale(sheet, extent) ?? SCALES[SCALES.length - 1];
+  return { scale, fits: fits(sheet, scale, extent) };
+}
+
 /** « 1:75 », « 75 » ou « 1/75 » : le dénominateur, ou null. */
 export function parseScale(text: string): number | null {
   const match = /^\s*(?:1\s*[:/]\s*)?(\d+)\s*$/.exec(text);

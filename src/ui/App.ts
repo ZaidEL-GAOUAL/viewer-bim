@@ -860,9 +860,13 @@ export class App {
    * « 2D »). La boîte de coupe est celle du plan (`planSectionBox`) : son recadrage en x et z, sa profondeur de vue et sa
    * hauteur de coupe en y. La rotation revient à la sortie du plan : toute autre vue passe par `Viewer.setCameraPose` ou
    * `restorePose`, qui rétablissent l'orbite (voir `Viewer.moveTo`).
+   *
+   * `animate` faux : la caméra est posée sans glisser (impression, vignettes : rien à attendre). `activeView` : la vue retenue
+   * comme ouverte à la place de `view` (ce que l'utilisateur voyait, rétabli après une impression, garde le nom de sa vue).
    */
-  openView(view: SavedView | null): void {
+  openView(view: SavedView | null, options: { animate?: boolean; activeView?: SavedView | null } = {}): void {
     const model = this.model, { viewer } = this;
+    const animate = options.animate ?? true;
     if (!model) return;
     if (view === null) {
       viewer.sections.setBox(null);
@@ -870,7 +874,7 @@ export class App {
       this.viewHidden = this.openingHidden;
       this.applyPhase(null);
       this.refreshLayers();
-      if (this.cameraBeforeViews) viewer.restorePose(this.cameraBeforeViews);
+      if (this.cameraBeforeViews) viewer.restorePose(this.cameraBeforeViews, animate);
       this.cameraBeforeViews = null;
       this.syncProjectionUi();
       this.activeView = null;
@@ -905,13 +909,13 @@ export class App {
         const camera = { ...view.camera, projection: 'orthographic' as const };
         // `setCameraPose` laisse l'orbite en place (une vue parallèle 3D la garde) : le plan la retire ensuite. La projection
         // est alors déjà parallèle, `setProjection` ne fait que fixer `enableRotate` à faux.
-        if (viewer.setCameraPose(planCameraPose(camera, offset, bounds, aspect))) viewer.setProjection('orthographic', false);
+        if (viewer.setCameraPose(planCameraPose(camera, offset, bounds, aspect), animate)) viewer.setProjection('orthographic', false);
       } else {
-        viewer.setCameraPose(cameraPose(view.camera, offset, bounds, aspect));
+        viewer.setCameraPose(cameraPose(view.camera, offset, bounds, aspect), animate);
       }
       this.syncProjectionUi();
     }
-    this.activeView = view;
+    this.activeView = options.activeView === undefined ? view : options.activeView;
     if (view.origin === 'user') applyUserView(this, view);
     this.emit('phase');
     this.emit('view');

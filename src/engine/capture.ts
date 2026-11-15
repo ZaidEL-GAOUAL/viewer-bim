@@ -4,7 +4,7 @@
 // Rien de ce qui est à l'écran ne change : la caméra de la vue n'est pas touchée (on dessine avec une copie), et le moteur
 // de rendu reprend sa cible, sa couleur de fond et ses matériaux dès que chaque tuile est lue (`Viewer.renderToPixels`).
 
-import { OrthographicCamera, PerspectiveCamera, SRGBColorSpace, WebGLRenderTarget } from 'three';
+import { Color, OrthographicCamera, PerspectiveCamera, SRGBColorSpace, WebGLRenderTarget } from 'three';
 import type { Viewer } from './Viewer.ts';
 
 export interface TileRect { x: number; y: number; width: number; height: number }
@@ -48,6 +48,13 @@ export function frameCamera(viewer: Viewer, aspect: number, spec: FrameSpec = {}
   camera.up.copy(source.up);
   camera.layers.mask = source.layers.mask;
   camera.updateMatrixWorld(true);
+  // La profondeur de cette caméra-ci, pas celle de la vue : la boucle d'affichage ne règle celle-ci qu'en dessinant, et une vue
+  // ouverte pour l'impression (onglet caché, boucle ralentie) peut être capturée avant toute image, avec la profondeur d'une
+  // autre vue (le {3D} vu à 500 m avec celle d'un plan vu à 80 m : la page est blanche).
+  const { near, far } = viewer.clipRangeOf(camera);
+  camera.near = near;
+  camera.far = far;
+  camera.updateProjectionMatrix();
   return camera;
 }
 
@@ -72,9 +79,45 @@ export interface CaptureOptions {
   signal?: AbortSignal;
 }
 
-export interface CaptureTile extends TileRect { blob: Blob }
+export interface CaptureTile extends TileRect {
+  blob: Blob;
+  /** Rien n'est dessiné sur la tuile : tous ses pixels sont de la couleur de fond demandée (`background`, sinon toujours faux). */
+  blank: boolean;
+}
 
 const aborted = () => new DOMException('Capture interrompue.', 'AbortError');
+
+let queue: Promise<unknown> = Promise.resolve();
+let held = false;
+
+/**
+ * La file de toutes les captures : la vue n'a qu'un maître à la fois. Un travail qui ouvre d'autres vues (impression,
+ * vignettes) la tient jusqu'à ce que la vue de l'utilisateur soit rétablie ; une capture de la vue telle qu'elle est (copie
+ * d'image, photo d'une observation) attend son tour au lieu de dessiner la vue d'une page. `job` ne rappelle pas `holdView`.
+ */
+export function holdView<T>(job: () => Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    held = true;
+    try {
+      return await job();
+    } finally {
+      held = false;
+    }
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+/** Vrai pendant qu'une capture tient la vue : celle qui est montrée n'est peut-être pas celle de l'utilisateur. */
+export const viewHeld = (): boolean => held;
+
+/** Vrai si les `count` premiers pixels RGBA sont tous de la couleur `rgb` (octets sRGB), à `tolerance` près par canal. */
+export function onlyBackground(pixels: Uint8Array, count: number, rgb: readonly [number, number, number], tolerance = 2): boolean {
+  for (let i = 0; i < count * 4; i += 4) {
+    if (Math.abs(pixels[i] - rgb[0]) > tolerance || Math.abs(pixels[i + 1] - rgb[1]) > tolerance || Math.abs(pixels[i + 2] - rgb[2]) > tolerance) return false;
+  }
+  return true;
+}
 
 function encode(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('L’image n’a pas pu être encodée.'))), type, quality));
@@ -85,6 +128,7 @@ function encode(canvas: HTMLCanvasElement, type: string, quality: number): Promi
  * Interrompre la boucle (`break`, erreur, `signal`) libère la cible de rendu et laisse le moteur dans son état.
  */
 export async function* captureTiles(viewer: Viewer, options: CaptureOptions): AsyncGenerator<CaptureTile, void, undefined> {
+  if (!held) throw new Error('Une capture passe par holdView : la vue n’a qu’un maître à la fois.');
   const { widthPx, heightPx } = options;
   if (!Number.isInteger(widthPx) || !Number.isInteger(heightPx) || widthPx < 1 || heightPx < 1) throw new Error('Taille d’image invalide.');
   const { renderer } = viewer;
@@ -95,6 +139,9 @@ export async function* captureTiles(viewer: Viewer, options: CaptureOptions): As
   // Une cible sRGB : le matériel encode ce que les shaders écrivent en linéaire, sans perdre de précision dans les ombres.
   target.texture.colorSpace = SRGBColorSpace;
   const pixels = new Uint8Array(size * size * 4);
+  // Le fond tel que la cible sRGB le rend, en octets : une tuile qui n'a que lui est vide.
+  const paper = options.background === undefined ? null : new Color(options.background).getRGB({ r: 0, g: 0, b: 0 }, SRGBColorSpace);
+  const backdrop = paper && ([paper.r, paper.g, paper.b].map((x) => Math.round(x * 255)) as [number, number, number]);
   const canvas = document.createElement('canvas');
   try {
     for (const rect of tileRects(widthPx, heightPx, size)) {
@@ -103,6 +150,7 @@ export async function* captureTiles(viewer: Viewer, options: CaptureOptions): As
       camera.setViewOffset(widthPx, heightPx, rect.x, rect.y, rect.width, rect.height);
       camera.updateMatrixWorld(true);
       viewer.renderToPixels(camera, target, rect, { cutLines: options.cutLines ?? true, lineScale: options.lineScale ?? 1, background: options.background }, pixels);
+      const blank = backdrop !== null && onlyBackground(pixels, rect.width * rect.height, backdrop);
       // La lecture part du bas : les lignes sont remises à l'endroit en les recopiant.
       const image = new ImageData(rect.width, rect.height);
       const stride = rect.width * 4;
@@ -112,7 +160,7 @@ export async function* captureTiles(viewer: Viewer, options: CaptureOptions): As
       canvas.getContext('2d')!.putImageData(image, 0, 0);
       const blob = await encode(canvas, type, options.quality ?? 0.9);
       if (options.signal?.aborted) throw aborted();
-      yield { ...rect, blob };
+      yield { ...rect, blob, blank };
     }
   } finally {
     target.dispose();
@@ -125,12 +173,15 @@ export async function* captureTiles(viewer: Viewer, options: CaptureOptions): As
  * La vue courante en une seule image PNG, au plus de `widthPx` × `heightPx` (réduite aux mêmes proportions si la carte
  * graphique ne fait pas de texture aussi grande). Pour les petites tailles (copie dans le presse-papiers, vignette).
  */
-export async function capturePng(viewer: Viewer, widthPx: number, heightPx: number, options: Partial<CaptureOptions> = {}): Promise<Blob> {
+export function capturePng(viewer: Viewer, widthPx: number, heightPx: number, options: Partial<CaptureOptions> = {}): Promise<Blob> {
   const limit = viewer.renderer.capabilities.maxTextureSize;
   const shrink = Math.min(1, limit / Math.max(widthPx, heightPx));
   const width = Math.max(1, Math.round(widthPx * shrink)), height = Math.max(1, Math.round(heightPx * shrink));
-  for await (const tile of captureTiles(viewer, { ...options, widthPx: width, heightPx: height, tile: Math.max(width, height), format: 'png' })) return tile.blob;
-  throw new Error('Aucune image.');
+  // Après une impression ou un aperçu en cours : la vue de l'utilisateur est alors rétablie.
+  return holdView(async () => {
+    for await (const tile of captureTiles(viewer, { ...options, widthPx: width, heightPx: height, tile: Math.max(width, height), format: 'png' })) return tile.blob;
+    throw new Error('Aucune image.');
+  });
 }
 
 /** Les options d'une page imprimée : tuiles JPEG sur fond blanc, quel que soit le thème de l'interface. */
