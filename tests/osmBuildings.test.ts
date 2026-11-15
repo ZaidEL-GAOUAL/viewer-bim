@@ -70,6 +70,9 @@ test('les instances Overpass sont essayées dans l’ordre jusqu’à une répon
     globalThis.fetch = (async (url: string | URL | Request) => { calls.push(String(url)); return new Response('', { status: 504 }); }) as typeof fetch;
     await assert.rejects(fetchOsmBuildings({ south: 0, west: 0, north: 1, east: 1 }, undefined, ['https://a.test/'], 0), /504 \(serveur saturé\)/);
     assert.deepEqual(calls, ['https://a.test/', 'https://a.test/']);
+    // Pas de réseau (le navigateur lève « Failed to fetch ») : la page le dit en clair.
+    globalThis.fetch = (async () => { throw new TypeError('Failed to fetch'); }) as typeof fetch;
+    await assert.rejects(fetchOsmBuildings({ south: 0, west: 0, north: 1, east: 1 }, undefined, ['https://a.test/'], 0), /Overpass\) est injoignable/);
   } finally {
     globalThis.fetch = original;
   }

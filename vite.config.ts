@@ -68,8 +68,14 @@ const supabaseEnv = () => {
   const env = loadEnv('production', root, 'VITE_SUPABASE_');
   return Object.fromEntries(['VITE_SUPABASE_URL', 'VITE_SUPABASE_KEY'].map((key) => [`import.meta.env.${key}`, JSON.stringify(env[key] ?? '')]));
 };
+// La photo satellite mondiale (facultative) de l'étude de site : adresse de tuiles et crédit, de .env.production ou des
+// variables du dépôt (voir deploy.yml) ; le viewer les lit lui-même (mode production).
+const satelliteEnv = () => {
+  const env = loadEnv('production', root, 'VITE_SATELLITE_');
+  return Object.fromEntries(['VITE_SATELLITE_TILES', 'VITE_SATELLITE_CREDIT'].map((key) => [`import.meta.env.${key}`, JSON.stringify(env[key] ?? '')]));
+};
 export default defineConfig(({ mode }) => (mode === 'site'
-  ? { base: './', publicDir: false, build: { emptyOutDir: false, chunkSizeWarningLimit: 6000, rolldownOptions: { input: resolve(root, 'site.html') } } }
+  ? { base: './', publicDir: false, define: satelliteEnv(), build: { emptyOutDir: false, chunkSizeWarningLimit: 6000, rolldownOptions: { input: resolve(root, 'site.html') } } }
   : mode === 'chantier'
   ? { base: './', publicDir: false, define: supabaseEnv(), build: { emptyOutDir: false, rolldownOptions: { input: resolve(root, 'chantier.html') } } }
   : {

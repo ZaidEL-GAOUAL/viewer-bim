@@ -75,6 +75,10 @@ jobs:
           # Adresse du worker, inscrite dans le site au build. ASSISTANT_URL (variable du dépôt)
           # permet de la fixer à la main si elle n'est pas lue dans la sortie de wrangler.
           VITE_ASSISTANT_URL: ${{ vars.ASSISTANT_URL || steps.worker.outputs.deployment-url }}
+          # Photo satellite mondiale (facultative) : adresse de tuiles avec la clé du fournisseur, restreinte à
+          # l'adresse du site, et son crédit (variables du dépôt SATELLITE_TILES, SATELLITE_CREDIT).
+          VITE_SATELLITE_TILES: ${{ vars.SATELLITE_TILES }}
+          VITE_SATELLITE_CREDIT: ${{ vars.SATELLITE_CREDIT }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

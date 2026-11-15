@@ -8,6 +8,7 @@ export const LICENCE_FILES = {
   'licences/three.txt': 'node_modules/three/LICENSE',
   'licences/cesium.txt': 'node_modules/cesium/LICENSE.md',
   'licences/three-mesh-bvh.txt': 'node_modules/three-mesh-bvh/LICENSE',
+  'licences/leaflet.txt': 'node_modules/leaflet/LICENSE',
   'licences/jspdf.txt': 'node_modules/jspdf/LICENSE',
   'licences/supabase-js.txt': 'node_modules/@supabase/supabase-js/LICENSE',
   'licences/phoenix.txt': 'node_modules/@supabase/phoenix/LICENSE.md',

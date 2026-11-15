@@ -1,213 +1,110 @@
-// La carte du monde de l'écran d'accueil et de l'étape « Lieu » : des tuiles OpenStreetMap posées en images dans la
-// page (aucune bibliothèque de carte ni de globe). Glisser pour se déplacer, molette ou boutons pour zoomer, cliquer
-// pour zoomer sur une région puis, de près, pour placer le projet. La carte fait le tour du monde (antiméridien) et
-// s'arrête vers 85° de latitude, comme toute carte Web Mercator : la page le dit.
+// La carte pour choisir le lieu du projet (écran d'accueil, étape « Lieu ») : une carte web ordinaire, Leaflet (BSD-2),
+// chargée sur cette page seulement. Glisser pour se déplacer (avec inertie), molette, pincement ou double-clic pour
+// zoomer autour du curseur, boutons + et −, échelle. Une seule façon de placer le projet : un clic (ou un résultat de
+// recherche) pose un repère, que l'on peut glisser, avec « Placer le projet ici » / « Annuler ». Fond : le plan
+// OpenStreetMap, et la photo mondiale de l'utilisateur s'il en a branché une.
 
+import 'leaflet/dist/leaflet.css';
+import * as L from 'leaflet';
+import { OSM, type ImagerySource } from '../geo/imageryTiles.ts';
 import { h } from '../ui/dom.ts';
-import { MERCATOR_MAX_LATITUDE, imagerySource, lonLatToTile, tileToLonLat, type ImagerySource } from '../geo/imageryTiles.ts';
 
-const TILE = 256;
-/** À partir de ce zoom, un clic place le projet ; avant, il rapproche la vue. */
-export const PLACE_ZOOM = 14;
-const MAX_ZOOM = 19;
+/** Sous ce zoom, on voit une région, pas un terrain : le repère se règle avant de confirmer. */
+const PRECISE_ZOOM = 15;
+/** Un clic attend ce délai (ms) : un double-clic zoome sans poser de repère. */
+const CLICK_DELAY = 260;
 
-const wrap = (degrees: number) => ((((degrees + 180) % 360) + 360) % 360) - 180;
-/** Fin d'un geste de molette (ms sans événement) : les tuiles du niveau atteint sont demandées alors. */
-const WHEEL_SETTLE = 200;
-
-/**
- * Les niveaux de zoom d'un événement de molette, selon son `deltaY` (et son unité) : un cran de souris (≈ 100 px) vaut un
- * demi-niveau, les petits pas d'un pavé tactile autant de fractions ; jamais plus d'un niveau par événement.
- */
-export function wheelLevels(deltaY: number, deltaMode = 0): number {
-  const pixels = deltaY * (deltaMode === 1 ? 40 : deltaMode === 2 ? 800 : 1);
-  return Math.max(-1, Math.min(1, -pixels / 200));
-}
+const credit = (source: ImagerySource) => `<a href="${source.creditUrl}" target="_blank" rel="noopener">${source.credit.replace(/</g, '&lt;')}</a>`;
+const layer = (source: ImagerySource) => L.tileLayer(source.template, { maxZoom: 19, maxNativeZoom: source.maxZoom, attribution: credit(source) });
+const pin = (className: string) => L.divIcon({ className, iconSize: [18, 18], iconAnchor: [9, 9] });
 
 export class WorldMap {
-  readonly el: HTMLElement;
-  /** Un clic de près : le lieu choisi (degrés). */
-  onPick: (latitude: number, longitude: number) => void = () => {};
-  private readonly tiles = h('div', { class: 'site-world-tiles' });
-  private readonly marker = h('div', { class: 'site-world-marker', attrs: { hidden: '' } });
-  private readonly hint = h('div', { class: 'site-world-hint' });
-  private readonly source: ImagerySource = imagerySource('osm');
-  private readonly shown = new Map<string, HTMLImageElement>();
-  /** Centre de la vue en coordonnées Mercator normalisées (x libre pour passer l'antiméridien, y de 0 au nord à 1). */
-  private x = 0.5;
-  private y = 0.42;
-  private zoom = 2;
-  private pin: { x: number; y: number } | null = null;
-  private queued = false;
-  /** Centre et zoom des tuiles posées (`render`) : un geste de molette les étire en attendant de s'arrêter. */
-  private drawn: { x: number; y: number; zoom: number } | null = null;
-  private settle: ReturnType<typeof setTimeout> | undefined;
+  readonly el = h('div', { class: 'site-world', attrs: { role: 'application', 'aria-label': 'Carte : cliquez votre terrain pour y placer le projet' } });
+  /** Le lieu confirmé ; `label` : le nom du résultat de recherche s'il vient de là (et que le repère n'a pas bougé). */
+  onPick: (latitude: number, longitude: number, label: string | null) => void = () => {};
+  private readonly map: L.Map;
+  private readonly plan = layer(OSM);
+  private photo: L.TileLayer | null = null;
+  private layers: L.Control.Layers | null = null;
+  private project: L.Marker | null = null;
+  private proposal: L.Marker | null = null;
+  private clickTimer = 0;
 
   constructor() {
-    const zoomButton = (label: string, delta: number, title: string) => {
-      const b = h('button', { text: label, title, attrs: { type: 'button' } });
-      b.addEventListener('click', (event) => { event.stopPropagation(); this.zoomAt(delta, null); });
-      b.addEventListener('pointerdown', (event) => event.stopPropagation());
-      return b;
-    };
-    const credit = h('a', { class: 'site-world-credit', text: this.source.credit, attrs: { href: this.source.creditUrl, target: '_blank', rel: 'noopener' } });
-    credit.addEventListener('pointerdown', (event) => event.stopPropagation());
-    this.el = h('div', { class: 'site-world', attrs: { role: 'application', 'aria-label': 'Carte du monde : cliquez pour zoomer, puis pour placer le projet' } },
-      this.tiles, this.marker, this.hint,
-      h('div', { class: 'site-world-zoom' }, zoomButton('+', 1, 'Zoomer'), zoomButton('−', -1, 'Dézoomer')),
-      h('p', { class: 'site-world-note', text: `Carte Web Mercator : elle s’arrête vers ${Math.floor(MERCATOR_MAX_LATITUDE)}° de latitude ; au-delà, entrez les coordonnées (étape « Lieu »).` }),
-      credit);
-    this.bind();
-    new ResizeObserver(() => this.render()).observe(this.el);
+    this.map = L.map(this.el, { center: [20, 10], zoom: 2, minZoom: 1, worldCopyJump: true, zoomControl: false, attributionControl: false });
+    // Créée hors de la page, la carte se met en « position: relative » : la feuille de style la place (plein cadre).
+    this.el.style.position = '';
+    L.control.zoom({ position: 'topright', zoomInTitle: 'Zoomer', zoomOutTitle: 'Dézoomer' }).addTo(this.map);
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(this.map);
+    L.control.attribution({ prefix: '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>' }).addTo(this.map);
+    this.plan.addTo(this.map);
+    this.map.on('click', (event: L.LeafletMouseEvent) => {
+      window.clearTimeout(this.clickTimer);
+      this.clickTimer = window.setTimeout(() => this.propose(event.latlng.lat, event.latlng.wrap().lng, null), CLICK_DELAY);
+    });
+    this.map.on('dblclick', () => window.clearTimeout(this.clickTimer));
+    // Montrée après avoir été cachée, ou la fenêtre change : la carte relit sa taille.
+    new ResizeObserver(() => this.map.invalidateSize()).observe(this.el);
   }
 
-  /** Centre la carte sur un point, à ce zoom ; le point est marqué s'il est le lieu du projet. */
+  /** Le fond « Photo satellite » proposé en plus du plan (null : aucun). */
+  setPhoto(source: ImagerySource | null): void {
+    if (this.photo) this.map.removeLayer(this.photo);
+    this.layers?.remove();
+    this.photo = source ? layer(source) : null;
+    this.layers = this.photo ? L.control.layers({ Plan: this.plan, 'Photo satellite': this.photo }, undefined, { position: 'topright' }).addTo(this.map) : null;
+    if (!this.map.hasLayer(this.plan)) this.plan.addTo(this.map);
+  }
+
+  /** Centre la carte sur un point, à ce zoom ; `marked` : c'est le lieu actuel du projet (repère fixe). */
   show(latitude: number, longitude: number, zoom: number, marked: boolean): void {
-    [this.x, this.y] = lonLatToTile(longitude, latitude, 0);
-    this.zoom = Math.max(1, Math.min(MAX_ZOOM, zoom));
-    this.pin = marked ? { x: this.x, y: this.y } : null;
-    this.render();
+    this.clearProposal();
+    this.project?.remove();
+    this.project = marked ? L.marker([latitude, longitude], { icon: pin('site-world-project'), interactive: false, keyboard: false }).addTo(this.map) : null;
+    this.map.setView([latitude, longitude], zoom, { animate: false });
   }
 
-  private get worldSize(): number {
-    return TILE * 2 ** this.zoom;
-  }
-
-  /** Point de l'écran (px dans la carte) → Mercator normalisé. */
-  private toWorld(px: number, py: number): { x: number; y: number } {
-    const size = this.worldSize;
-    return { x: this.x + (px - this.el.clientWidth / 2) / size, y: this.y + (py - this.el.clientHeight / 2) / size };
-  }
-
-  private clampY(): void {
-    const half = this.el.clientHeight / 2 / this.worldSize;
-    this.y = half >= 0.5 ? 0.5 : Math.min(1 - half, Math.max(half, this.y));
-  }
-
-  /** `gesture` : pendant un geste de molette, les tuiles ne sont demandées qu'au niveau où il s'arrête (`preview`). */
-  private zoomAt(delta: number, at: { px: number; py: number } | null, gesture = false): void {
-    const next = Math.max(1, Math.min(MAX_ZOOM, this.zoom + delta));
-    if (next === this.zoom) return;
-    const px = at?.px ?? this.el.clientWidth / 2, py = at?.py ?? this.el.clientHeight / 2;
-    const anchor = this.toWorld(px, py);
-    this.zoom = next;
-    // Le point sous le curseur reste sous le curseur.
-    const size = this.worldSize;
-    this.x = anchor.x - (px - this.el.clientWidth / 2) / size;
-    this.y = anchor.y - (py - this.el.clientHeight / 2) / size;
-    if (gesture) this.preview();
-    else this.render();
-  }
-
-  /** Les tuiles déjà posées, déplacées et étirées jusqu'à la vue demandée ; `render` suit quand le geste s'arrête. */
-  private preview(): void {
-    const width = this.el.clientWidth, height = this.el.clientHeight, drawn = this.drawn;
-    if (!drawn || width === 0 || height === 0) return this.render();
-    this.clampY();
-    const size = this.worldSize;
-    Object.assign(this.tiles.style, {
-      transformOrigin: `${width / 2}px ${height / 2}px`,
-      transform: `translate(${(drawn.x - this.x) * size}px, ${(drawn.y - this.y) * size}px) scale(${2 ** (this.zoom - drawn.zoom)})`,
+  /** Pose le repère à confirmer (un clic sur la carte, ou un résultat de recherche, alors nommé par `label`). */
+  propose(latitude: number, longitude: number, label: string | null): void {
+    this.clearProposal();
+    const marker = L.marker([latitude, longitude], { icon: pin('site-world-marker'), draggable: true, autoPan: true, keyboard: true, title: 'Glissez pour ajuster' }).addTo(this.map);
+    this.proposal = marker;
+    let named = label;
+    const confirm = h('button', { class: 'primary', text: 'Placer le projet ici', attrs: { type: 'button' } });
+    const cancel = h('button', { text: 'Annuler', attrs: { type: 'button' } });
+    const text = h('p', { class: 'site-world-popup-text' });
+    const describe = () => {
+      const near = this.map.getZoom() >= PRECISE_ZOOM;
+      text.textContent = `${named ?? 'Point choisi'}${near ? '.' : ' : rapprochez-vous (molette) et glissez le repère sur votre terrain, ou confirmez tel quel.'}`;
+    };
+    confirm.addEventListener('click', () => {
+      const at = marker.getLatLng().wrap();
+      this.clearProposal();
+      this.onPick(at.lat, at.lng, named);
     });
-    this.overlays(width, height);
-    clearTimeout(this.settle);
-    this.settle = setTimeout(() => this.render(), WHEEL_SETTLE);
+    cancel.addEventListener('click', () => this.clearProposal());
+    describe();
+    marker.bindPopup(h('div', { class: 'site-world-popup' }, text, h('div', { class: 'tool-row' }, confirm, cancel)), { closeButton: false, autoClose: false, closeOnClick: false, minWidth: 230, offset: [0, -6] });
+    marker.on('dragend', () => {
+      // Déplacé : ce n'est plus exactement le lieu trouvé par la recherche, son nom sera relu.
+      named = null;
+      describe();
+      marker.openPopup();
+    });
+    this.map.on('zoomend', describe);
+    marker.on('remove', () => this.map.off('zoomend', describe));
+    marker.openPopup();
   }
 
-  private bind(): void {
-    let drag: { px: number; py: number; x: number; y: number; moved: boolean } | null = null;
-    this.el.addEventListener('pointerdown', (event) => {
-      if (event.button !== 0) return;
-      drag = { px: event.clientX, py: event.clientY, x: this.x, y: this.y, moved: false };
-      this.el.setPointerCapture(event.pointerId);
-    });
-    this.el.addEventListener('pointermove', (event) => {
-      if (!drag) return;
-      const dx = event.clientX - drag.px, dy = event.clientY - drag.py;
-      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
-      drag.moved = true;
-      this.el.classList.add('dragging');
-      this.x = drag.x - dx / this.worldSize;
-      this.y = drag.y - dy / this.worldSize;
-      this.schedule();
-    });
-    this.el.addEventListener('pointerup', (event) => {
-      const start = drag;
-      drag = null;
-      this.el.classList.remove('dragging');
-      if (!start || start.moved) return;
-      const rect = this.el.getBoundingClientRect();
-      const px = event.clientX - rect.left, py = event.clientY - rect.top;
-      if (this.zoom < PLACE_ZOOM) {
-        this.zoomAt(Math.min(3, PLACE_ZOOM - this.zoom), { px, py });
-        return;
-      }
-      const point = this.toWorld(px, py);
-      const [longitude, latitude] = tileToLonLat(point.x, point.y, 0);
-      this.pin = point;
-      this.render();
-      this.onPick(latitude, wrap(longitude));
-    });
-    this.el.addEventListener('wheel', (event) => {
-      event.preventDefault();
-      const rect = this.el.getBoundingClientRect();
-      this.zoomAt(wheelLevels(event.deltaY, event.deltaMode), { px: event.clientX - rect.left, py: event.clientY - rect.top }, true);
-    }, { passive: false });
+  /** Va sur un lieu trouvé par la recherche et y pose le repère à confirmer. */
+  goTo(latitude: number, longitude: number, label: string): void {
+    this.map.setView([latitude, longitude], Math.max(this.map.getZoom(), 16), { animate: false });
+    this.propose(latitude, longitude, label);
   }
 
-  private schedule(): void {
-    if (this.queued) return;
-    this.queued = true;
-    requestAnimationFrame(() => {
-      this.queued = false;
-      this.render();
-    });
-  }
-
-  private render(): void {
-    const width = this.el.clientWidth, height = this.el.clientHeight;
-    if (width === 0 || height === 0) return;
-    this.clampY();
-    clearTimeout(this.settle);
-    this.tiles.style.transform = '';
-    this.drawn = { x: this.x, y: this.y, zoom: this.zoom };
-    const z = Math.max(0, Math.min(this.source.maxZoom, Math.round(this.zoom)));
-    const count = 2 ** z;
-    const tile = TILE * 2 ** (this.zoom - z);
-    const left = this.x * TILE * 2 ** this.zoom - width / 2, top = this.y * TILE * 2 ** this.zoom - height / 2;
-    const wanted = new Set<string>();
-    for (let ty = Math.max(0, Math.floor(top / tile)); ty <= Math.min(count - 1, Math.floor((top + height) / tile)); ty++) {
-      for (let tx = Math.floor(left / tile); tx <= Math.floor((left + width) / tile); tx++) {
-        const key = `${z}/${tx}/${ty}`;
-        wanted.add(key);
-        let img = this.shown.get(key);
-        if (!img) {
-          img = h('img', { attrs: { alt: '', draggable: 'false', src: this.source.url(z, ((tx % count) + count) % count, ty) } });
-          this.shown.set(key, img);
-          this.tiles.append(img);
-        }
-        Object.assign(img.style, { left: `${tx * tile - left}px`, top: `${ty * tile - top}px`, width: `${tile + 0.5}px`, height: `${tile + 0.5}px` });
-      }
-    }
-    for (const [key, img] of this.shown) {
-      if (wanted.has(key)) continue;
-      img.remove();
-      this.shown.delete(key);
-    }
-    this.overlays(width, height);
-  }
-
-  /** Le repère du projet et la consigne, pour la vue demandée. */
-  private overlays(width: number, height: number): void {
-    if (this.pin) {
-      // La copie du repère la plus proche du centre (la carte se répète d'est en ouest).
-      const dx = this.pin.x - this.x - Math.round(this.pin.x - this.x);
-      this.marker.style.left = `${width / 2 + dx * TILE * 2 ** this.zoom}px`;
-      this.marker.style.top = `${height / 2 + (this.pin.y - this.y) * TILE * 2 ** this.zoom}px`;
-    }
-    this.marker.hidden = !this.pin;
-    this.hint.textContent = this.zoom < PLACE_ZOOM
-      ? 'Cliquez sur la carte pour zoomer sur une région (ou cherchez une adresse à gauche).'
-      : 'Cliquez sur votre terrain pour y placer le projet.';
+  private clearProposal(): void {
+    window.clearTimeout(this.clickTimer);
+    this.proposal?.remove();
+    this.proposal = null;
   }
 }

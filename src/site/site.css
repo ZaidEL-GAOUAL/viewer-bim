@@ -12,6 +12,8 @@
 }
 
 .site-app .brand { display: inline; }
+.site-app .topbar .bar-group { flex-wrap: wrap; }
+.site-play { flex: 1; }
 .site-name { width: 220px; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 .site-back { color: var(--accent); font-weight: 600; }
 .site-save-state { color: var(--muted); font-size: 12px; white-space: normal; }
@@ -71,32 +73,33 @@
 .site-gradient { height: 10px; border-radius: 3px; }
 .site-scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
 .site-step-body input[type='range'] { flex: 1; }
-.site-step-body input[type='date'] { height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+.site-step-body input[type='date'] { min-width: 140px; height: 28px; padding: 0 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); }
 
-/* Vue : carte du monde */
-.site-world { position: absolute; inset: 0; z-index: 4; overflow: hidden; background: #aad3df; cursor: crosshair; touch-action: none; user-select: none; }
-.site-world.dragging { cursor: grabbing; }
-.site-world-tiles img { position: absolute; max-width: none; pointer-events: none; }
-.site-world-marker { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 3px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: var(--shadow); pointer-events: none; }
-.site-world-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 100px); padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); pointer-events: none; }
-.site-world-zoom { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; }
-.site-world-zoom button { width: 32px; height: 32px; padding: 0; font-size: 18px; box-shadow: var(--shadow); }
-.site-world-note { position: absolute; left: 8px; bottom: 6px; max-width: 60%; margin: 0; padding: 2px 6px; border-radius: 4px; background: rgb(255 255 255 / 0.8); color: #333; font-size: 10px; pointer-events: none; }
-.site-world-credit { position: absolute; right: 6px; bottom: 6px; padding: 2px 6px; border-radius: 4px; background: rgb(255 255 255 / 0.8); color: #333; font-size: 10px; }
-.site-map-back { position: absolute; top: 56px; left: 10px; z-index: 5; }
+/* Vue : carte pour choisir le lieu (Leaflet) */
+.site-world { position: absolute; inset: 0; z-index: 4; background: #aad3df; }
+.site-world.leaflet-container { font: inherit; font-size: 12px; }
+.site-world .leaflet-popup-content-wrapper, .site-world .leaflet-popup-tip { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.site-world .leaflet-popup-content { margin: 10px 12px; }
+.site-world-popup { display: flex; flex-direction: column; gap: 8px; max-width: 240px; }
+.site-world-popup-text { margin: 0; font-size: 13px; }
+.site-world-marker, .site-world-project { border: 3px solid #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 1px 4px rgb(0 0 0 / 0.5); }
+.site-world-marker { cursor: grab; }
+.site-world-project { background: #fff; border-color: var(--accent); }
+.site-map-back { position: absolute; top: 10px; left: 10px; z-index: 5; }
 
 /* Vue : scène du site */
-.site-tabs { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.site-top { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 12px; pointer-events: none; }
+.site-top > * { pointer-events: auto; }
+.site-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .site-tab { box-shadow: var(--shadow); }
 .site-tab[aria-selected='true'] { border-color: var(--accent); background: var(--accent); color: var(--accent-text); font-weight: 600; }
 .site-tab-actions { display: flex; gap: 4px; margin-left: 8px; }
 .site-tab-actions button { height: 24px; padding: 0 6px; font-size: 11px; }
-.site-view-tools { position: absolute; top: 44px; right: 8px; z-index: 3; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.site-view-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; margin-left: auto; }
 .site-view-tools > * { box-shadow: var(--shadow); }
-.site-hint { position: absolute; top: 84px; left: 50%; z-index: 3; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); pointer-events: none; }
 .site-measure, .site-readout { position: absolute; z-index: 3; padding: 2px 7px; border-radius: 10px; background: var(--accent); color: var(--accent-text); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; transform: translate(14px, -120%); }
 .site-readout { transform: translate(14px, -50%); }
-.site-card { position: absolute; z-index: 4; display: flex; flex-direction: column; gap: 6px; width: 270px; max-height: calc(100% - 110px); overflow: auto; }
+.site-card { display: flex; flex-direction: column; gap: 6px; margin: 10px; border-color: var(--accent); box-shadow: none; }
 .site-card .tool-field { grid-template-columns: 110px minmax(0, 1fr); }
 .site-card input[type='text'], .site-card select { min-width: 0; height: 28px; }
 .site-figures { position: absolute; left: 8px; right: 8px; bottom: 26px; z-index: 3; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); font-variant-numeric: tabular-nums; }

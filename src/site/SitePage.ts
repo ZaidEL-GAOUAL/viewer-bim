@@ -12,10 +12,10 @@ import { Vector3 } from 'three';
 import { fold, integer, oneDecimal } from '../data/text.ts';
 import { Sketch } from '../engine/sketch.ts';
 import { runSliced } from '../engine/sliced.ts';
-import { IMAGERY_SOURCES, MERCATOR_MAX_LATITUDE, imagerySource, type ImageryId } from '../geo/imageryTiles.ts';
+import { MERCATOR_MAX_LATITUDE, OSM, checkTemplate, customSatellite, customSource, photoFor, saveCustomSatellite, type ImagerySource } from '../geo/imageryTiles.ts';
 import { button, download, h } from '../ui/dom.ts';
 import type { SamplePoint } from './analysis.ts';
-import { groundAt, heightCounts, loadContext, neighbourBase, toEnu, toGeo } from './context.ts';
+import { groundAt, heightCounts, loadContext, toEnu, toGeo, type LoadedContext } from './context.ts';
 import { proposalGlb, proposalMetadata } from './exportGlb.ts';
 import { GEOCODER_CREDIT, MIN_QUERY_LENGTH, reversePlace, searchPlaces, type Place } from './geocode.ts';
 import { bar, centroid, rectangle, toScene, translate, volumeMesh } from './massing.ts';
@@ -33,6 +33,7 @@ import { WorldMap } from './WorldMap.ts';
 type DrawMode = 'limit' | 'parcel' | 'rectangle' | 'polygon' | 'bar';
 type Selection = { kind: 'volume'; id: string } | { kind: 'neighbour'; index: number } | { kind: 'model'; id: string } | null;
 type AnalysisKind = 'sun-ground' | 'sun-facade' | 'vsc';
+type Background = 'photo' | 'plan' | 'none';
 
 interface AnalysisResult {
   kind: AnalysisKind;
@@ -156,10 +157,19 @@ export class SitePage {
   private readonly search = { busy: false, status: '', error: false, query: '', results: [] as Place[] };
   private neighbourStatus: NeighbourStatus = 'none';
   private neighbourMessage = '';
+  /** La lecture du voisinage en cours, et l'étude (identifiant) pour laquelle elle se fait. */
+  private loading: { studyId: string; controller: AbortController } | null = null;
   private readonly snapshots = new Map<string, ModelSnapshot>();
+  /** La ligne de progression du voisinage, mise à jour sans refaire le rail. */
+  private readonly progressLine = h('p', { class: 'site-progress' });
   /** Une maquette reçue du viewer sans géoréférence : posée dès que le lieu est choisi. */
   private pendingModel: ModelSnapshot | null = null;
-  private imageryId: ImageryId | 'none' = 'osm';
+  /** Le fond voulu ; « photo » devient le plan là où aucune photo n'existe. */
+  private background: Background = 'photo';
+  /** La photo mondiale branchée par l'utilisateur (sa clé), relue quand il la change. */
+  private custom: ImagerySource | null = customSatellite();
+  /** Le résultat de recherche montré sur la carte, en attente de confirmation. */
+  private proposed: Place | null = null;
   /** La carte du monde est montrée par-dessus la scène (écran d'accueil, ou « Choisir sur la carte »). */
   private mapOpen = true;
   /** Premier point d'un rectangle ou d'une barre en cours de tracé (pour les cotes affichées). */
@@ -168,15 +178,12 @@ export class SitePage {
   private readonly cache = new Map<string, AnalysisResult>();
   private shown: AnalysisResult | null = null;
   private running: AbortController | null = null;
-  private loading: AbortController | null = null;
   private drag: { apply: (de: number, dn: number) => void; start: XY; height: number; moved: boolean; x: number; y: number } | null = null;
   private day = presetDays(new Date().getFullYear())[3].day;
   private minutes = 12 * 60;
   private shadows = true;
   private threshold = { sun: 2, vsc: 27 };
   private barWidth = 12;
-  /** Le volet « Réglages des chiffres » reste ouvert d'un rendu à l'autre. */
-  private settingsOpen = false;
 
   private readonly root: HTMLElement;
   private readonly scene: SiteScene;
@@ -184,12 +191,13 @@ export class SitePage {
   private readonly worldMap = new WorldMap();
   private readonly viewport: HTMLElement;
   private readonly rail = h('aside', { class: 'sidebar left site-rail', attrs: { 'aria-label': 'Étapes de l’étude' } });
-  private readonly hintEl = h('div', { class: 'site-hint', attrs: { hidden: '' } });
   private readonly measureEl = h('div', { class: 'site-measure', attrs: { hidden: '' } });
   private readonly readoutEl = h('div', { class: 'site-readout', attrs: { hidden: '' } });
   private readonly tabsEl = h('div', { class: 'site-tabs', attrs: { role: 'tablist', 'aria-label': 'Propositions' } });
   private readonly figuresEl = h('div', { class: 'site-figures', attrs: { 'aria-label': 'Chiffres de la proposition' } });
+  /** La fiche de ce qui est sélectionné, en tête du rail (rien ne couvre la vue). */
   private readonly cardEl = h('div', { class: 'card site-card', attrs: { hidden: '' } });
+  private readonly stepsEl = h('div', { class: 'site-steps' });
   private readonly viewTools = h('div', { class: 'site-view-tools' });
   private readonly creditsEl = h('div', { class: 'site-credits' });
   private readonly mapBack = h('div', { class: 'site-map-back', attrs: { hidden: '' } });
@@ -242,8 +250,10 @@ export class SitePage {
 
     const canvasHost = h('div', { class: 'canvas-host' });
     const overlayRoot = h('div', { class: 'overlay-root' });
-    this.viewport = h('main', { class: 'viewport' }, canvasHost, overlayRoot, this.tabsEl, this.viewTools, this.hintEl, this.measureEl, this.readoutEl,
-      this.cardEl, this.figuresEl, this.creditsEl, this.worldMap.el, this.mapBack, this.toastEl, this.busyEl);
+    // Onglets des propositions et outils de vue sur une même bande qui passe à la ligne (rien ne se chevauche).
+    this.viewport = h('main', { class: 'viewport' }, canvasHost, overlayRoot, h('div', { class: 'site-top' }, this.tabsEl, this.viewTools), this.measureEl, this.readoutEl,
+      this.figuresEl, this.creditsEl, this.worldMap.el, this.mapBack, this.toastEl, this.busyEl);
+    this.rail.append(this.cardEl, this.stepsEl);
     root.className = 'app site-app';
     root.append(topbar, this.rail, this.viewport);
 
@@ -251,16 +261,18 @@ export class SitePage {
     this.sketch = new Sketch(this.scene, overlayRoot, this.viewport);
     this.sketch.onChange = () => this.onSketchLine();
     this.sketch.onPolygon = (points) => this.onSketchPolygon(points.map((p): XY => [p.x, -p.z]));
-    this.scene.afterRender.add(() => this.placeCard());
-    this.worldMap.onPick = (latitude, longitude) => void this.pickOnMap(latitude, longitude);
+    this.worldMap.onPick = (latitude, longitude, label) => void this.pickOnMap(latitude, longitude, label);
+    this.worldMap.setPhoto(this.custom);
     this.bindPointer();
     document.addEventListener('keydown', (event) => this.onKey(event));
     window.addEventListener('beforeunload', (event) => {
       if (this.study && this.unsavedFile) event.preventDefault();
     });
     // Onglet caché ou fermé : l'enregistrement en attente part tout de suite.
+    // Revenu au premier plan : la vue se redessine (le navigateur suspend le dessin d'un onglet caché).
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && this.saveState === 'pending') void this.persist();
+      if (document.visibilityState === 'hidden' && this.saveState === 'pending' && this.study) void this.persist(this.study);
+      else this.scene.invalidate();
     });
     this.buildSun();
     this.worldMap.show(20, 10, 2, false);
@@ -337,12 +349,14 @@ export class SitePage {
     this.saveState = 'pending';
     this.renderSaveState();
     window.clearTimeout(this.saveTimer);
-    this.saveTimer = window.setTimeout(() => void this.persist(), 600);
+    // L'étude de ce moment-là : partie entre-temps (retour à l'accueil), elle est gardée quand même.
+    const study = this.study;
+    if (study) this.saveTimer = window.setTimeout(() => void this.persist(study), 600);
   }
 
-  private async persist(): Promise<void> {
+  /** Garde l'étude dans ce navigateur (la courante par défaut). */
+  private async persist(study: Study | null = this.study): Promise<void> {
     window.clearTimeout(this.saveTimer);
-    const study = this.study;
     if (!study || !this.store.available) return;
     const ok = await this.store.save(study);
     if (this.study !== study) return;
@@ -413,13 +427,17 @@ export class SitePage {
     await this.persist();
     this.stopPlaying();
     this.running?.abort();
-    this.loading?.abort();
+    // Une lecture du voisinage en cours continue : son résultat est gardé avec l'étude (voir loadNeighbourhood).
     this.setMode(null);
     for (const id of this.snapshots.keys()) this.scene.removeModel(id);
     this.snapshots.clear();
+    const origin = this.study?.site.origin;
+    if (origin) this.worldMap.show(origin.latitude, origin.longitude, 12, false);
     this.study = null;
     this.selection = null;
+    this.neighbourStatus = 'none';
     this.mapOpen = true;
+    this.proposed = null;
     this.search.results = [];
     this.search.status = '';
     this.recent = await this.store.list();
@@ -430,7 +448,6 @@ export class SitePage {
 
   private async load(study: Study): Promise<void> {
     this.running?.abort();
-    this.loading?.abort();
     this.stopPlaying();
     for (const id of this.snapshots.keys()) this.scene.removeModel(id);
     this.snapshots.clear();
@@ -442,10 +459,13 @@ export class SitePage {
     this.contextRevision++;
     this.unsavedFile = false;
     this.saveState = 'saved';
-    this.neighbourStatus = study.context.fetchedAt ? 'loaded' : 'none';
-    this.neighbourMessage = '';
-    this.imageryId = study.site.country === 'fr' ? 'ign-ortho' : 'osm';
+    // La lecture de son voisinage peut être encore en cours (l'étude a été quittée puis rouverte) : on la suit.
+    const reading = this.loading?.studyId === study.id;
+    this.neighbourStatus = reading ? 'loading' : study.context.fetchedAt ? 'loaded' : 'none';
+    if (!reading) this.neighbourMessage = '';
+    this.progressLine.textContent = this.neighbourMessage || 'Lecture du voisinage…';
     this.mapOpen = false;
+    this.proposed = null;
     this.setMode(null);
     this.nameInput.value = study.name;
     this.scene.setGround(study);
@@ -457,7 +477,7 @@ export class SitePage {
     this.refresh();
     // Un voisinage jamais lu (lieu tout juste choisi, ou lecture interrompue) se charge seul ; un voisinage déjà lu
     // n'est jamais relu à l'ouverture.
-    if (!study.context.fetchedAt) void this.loadNeighbourhood(DEFAULT_RADIUS, true);
+    if (!study.context.fetchedAt && !reading) void this.loadNeighbourhood(DEFAULT_RADIUS, true);
     // La géométrie des maquettes posées est dans ce navigateur, pas dans le fichier.
     for (const placed of study.models) {
       const snapshot = await this.store.model(placed.id);
@@ -511,9 +531,8 @@ export class SitePage {
     const study = this.study!;
     const drawn = study.site.limit.length >= 3 || study.proposals.some((p) => p.volumes.length > 0);
     if (drawn && !window.confirm(`Déplacer le projet à « ${place.name} » ? La limite et les volumes gardent leur place par rapport au point du projet ; le voisinage est rechargé.`)) return;
-    this.loading?.abort();
+    this.loading?.controller.abort();
     this.placeAt(study, place);
-    this.imageryId = study.site.country === 'fr' ? 'ign-ortho' : this.imageryId === 'none' ? 'none' : 'osm';
     this.contextRevision++;
     this.selection = null;
     this.mapOpen = false;
@@ -540,7 +559,8 @@ export class SitePage {
     this.renderRail();
     try {
       const results = await searchPlaces(text);
-      Object.assign(this.search, { results, status: results.length > 0 ? 'Choisissez le bon lieu :' : `Aucun lieu trouvé pour « ${text} ». Essayez une autre orthographe ou une ville proche, ou cliquez sur la carte.`, error: results.length === 0 });
+      Object.assign(this.search, { results, status: results.length > 1 ? 'Choisissez le bon lieu, puis confirmez sur la carte :' : results.length === 1 ? 'Trouvé : confirmez sur la carte (« Placer le projet ici »), après avoir glissé le repère si besoin.' : `Aucun lieu trouvé pour « ${text} ». Essayez une autre orthographe ou une ville proche, ou cliquez sur la carte.`, error: results.length === 0 });
+      if (results.length === 1) this.showOnMap(results[0]);
     } catch (error) {
       Object.assign(this.search, { query: '', status: `Recherche impossible : ${errorText(error)}. Cliquez sur la carte, ou entrez des coordonnées.`, error: true });
     } finally {
@@ -549,8 +569,24 @@ export class SitePage {
     }
   }
 
-  /** Un clic sur la carte du monde : le nom du lieu est demandé au service (une demande), puis le lieu est choisi. */
-  private async pickOnMap(latitude: number, longitude: number): Promise<void> {
+  /** Un résultat de recherche, montré sur la carte avec son repère à confirmer. */
+  private showOnMap(place: Place): void {
+    this.proposed = place;
+    this.mapOpen = true;
+    this.render();
+    const origin = this.study?.site.origin;
+    if (origin) this.worldMap.show(origin.latitude, origin.longitude, 16, true);
+    this.worldMap.goTo(place.latitude, place.longitude, place.name);
+  }
+
+  /**
+   * Le lieu confirmé sur la carte. `label` : celui d'un résultat de recherche (repère non déplacé), dont le nom et le pays
+   * sont repris ; sinon le nom du lieu est demandé au service (une demande).
+   */
+  private async pickOnMap(latitude: number, longitude: number, label: string | null): Promise<void> {
+    const found = label !== null ? this.proposed : null;
+    this.proposed = null;
+    if (found) return this.choosePlace({ ...found, latitude, longitude });
     const fallback: Place = { label: coordinates(latitude, longitude), name: `Site ${coordinates(latitude, longitude)}`, latitude, longitude, country: null };
     this.busy('Recherche du nom du lieu…');
     let place = fallback;
@@ -624,8 +660,21 @@ export class SitePage {
   // ------------------------------------------------------------------- rail
 
   private renderRail(): void {
+    // Un champ du rail en cours de saisie (coordonnées, adresse de tuiles…) n'est pas effacé par un rendu venu d'ailleurs
+    // (un chargement qui se termine) : le rail se refait quand on le quitte.
+    const typing = document.activeElement;
+    if (typing instanceof HTMLInputElement && typing !== this.searchInput && typing.type !== 'checkbox' && typing.type !== 'range' && this.stepsEl.contains(typing)) {
+      typing.addEventListener('blur', () => this.renderRail(), { once: true });
+      return;
+    }
+    const open = new Set([...this.stepsEl.querySelectorAll('details[open] > summary')].map((summary) => summary.textContent));
+    this.fillRail();
+    for (const summary of this.stepsEl.querySelectorAll('details > summary')) if (open.has(summary.textContent)) (summary.parentElement as HTMLDetailsElement).open = true;
+  }
+
+  private fillRail(): void {
     if (!this.study) {
-      fill(this.rail, this.startPanel());
+      fill(this.stepsEl, this.startPanel());
       return;
     }
     const state = this.stepState;
@@ -633,7 +682,7 @@ export class SitePage {
       const active = step.id === this.step;
       const done = isDone(step.id, state);
       const loading = step.id === 'voisinage' && state.neighbours === 'loading';
-      const status = loading ? 'chargement…' : done ? 'fait' : missingFor(step.id, state) ? 'à venir' : '';
+      const status = loading ? 'chargement…' : done ? 'fait' : step.id === 'voisinage' && state.neighbours === 'failed' ? 'échec' : missingFor(step.id, state) ? 'à venir' : '';
       const head = h('button', { class: 'site-step-head', attrs: { type: 'button', 'aria-expanded': String(active) } },
         h('span', { class: `site-step-number${done ? ' done' : ''}`, text: done ? '✓' : String(i + 1) }),
         h('span', { class: 'site-step-title', text: step.title }),
@@ -643,7 +692,7 @@ export class SitePage {
       if (active) section.append(h('div', { class: 'site-step-body' }, para(step.instruction, 'site-instruction'), ...this.stepBody(step.id)));
       return section;
     });
-    fill(this.rail, ...items);
+    fill(this.stepsEl, ...items);
   }
 
   private goTo(step: StepId): void {
@@ -670,7 +719,7 @@ export class SitePage {
   /** Le champ de recherche et ses résultats (accueil et étape « Lieu »). */
   private searchBlock(): HTMLElement {
     const results = this.search.results.map((place) => {
-      const item = button('', () => void this.choosePlace(place), { class: 'site-result', title: place.label });
+      const item = button('', () => this.showOnMap(place), { class: 'site-result', title: `${place.label} — voir sur la carte` });
       item.replaceChildren(h('span', { class: 'site-result-name', text: place.name }), h('span', { class: 'site-result-label', text: place.label }));
       return item;
     });
@@ -763,8 +812,8 @@ export class SitePage {
       this.searchBlock(),
       h('div', { class: 'tool-row' }, button('Choisir sur la carte', () => {
         this.mapOpen = true;
-        this.worldMap.show(site.origin.latitude, site.origin.longitude, 16, true);
         this.render();
+        this.worldMap.show(site.origin.latitude, site.origin.longitude, 16, true);
       }, { title: 'Ouvre la carte sur le lieu actuel : cliquez le terrain exact' })),
       para(zoneText, 'site-note'),
       h('details', {}, h('summary', { text: 'Corriger l’heure du site' }), field('Décalage (h)', offsetInput), note('Heures par rapport au temps universel, heure d’été comprise (ex. 5,5 pour UTC+5:30).')),
@@ -784,14 +833,15 @@ export class SitePage {
         : button('Tracer la limite', () => this.setMode('limit'), { class: 'primary' });
     return [
       limit.length >= 3 ? h('p', { class: 'site-figure-line' }, 'Terrain : ', h('strong', { text: this.areaText(polygonArea(limit)) }), ` · périmètre ${integer.format(Math.round(perimeter(limit)))} m`) : null,
-      this.mode === 'limit' ? para('Cliquez les coins du terrain sur la carte ; la surface s’affiche pendant le tracé. Cliquez le premier point pour fermer. Échap : annuler.', 'site-note warning') : null,
-      this.mode === 'parcel' ? para('Cliquez une parcelle sur la carte : sa limite est lue au cadastre.', 'site-note warning') : null,
+      this.mode === 'limit' ? para('Cliquez les coins du terrain ; la surface s’affiche pendant le tracé. Pour fermer : le premier point, ou Entrée. Retour arrière : retirer le dernier point. Maj : tracé droit. Échap : annuler.', 'site-note warning') : null,
+      this.mode === 'parcel' ? para('Cliquez une parcelle sur la carte : sa limite est lue au cadastre. Échap : annuler.', 'site-note warning') : null,
       h('div', { class: 'tool-row' }, primary,
         drawing ? button('Annuler le tracé', () => this.setMode(null)) : null,
         !drawing && limit.length >= 3 ? button('Retracer la limite', () => this.setMode('limit')) : null,
         !drawing && limit.length >= 3 ? button('Effacer', () => { study.site.limit = []; this.changed(); this.refresh(); this.checkAnalysis(); }) : null),
       france && !drawing ? h('div', { class: 'tool-row' }, button('Choisir la parcelle (cadastre)', () => this.setMode('parcel'), { title: 'France : cliquez une parcelle, sa limite est lue au cadastre (IGN, API Carto)' })) : null,
       france ? note(PARCEL_CREDIT) : null,
+      ...this.backgroundBlock(),
     ];
   }
 
@@ -807,14 +857,14 @@ export class SitePage {
     const status = this.neighbourStatus;
     const legend = h('p', { class: 'site-uses' }, h('span', { class: 'site-use' }, swatch(ASSUMED_CSS), 'hauteur supposée (8 m) : à vérifier'), h('span', { class: 'site-use' }, swatch('#d9d4cb'), 'hauteur connue'));
     return [
-      status === 'loading' ? h('p', { class: 'site-progress' }, this.neighbourMessage || 'Lecture du voisinage…') : null,
+      status === 'loading' ? this.progressLine : null,
       status === 'failed' ? para(this.neighbourMessage, 'site-note warning') : null,
       context.fetchedAt
         ? para(`${integer.format(context.buildings.length)} bâtiments dans un rayon de ${integer.format(context.radius)} m : ${integer.format(counts.measured)} hauteurs mesurées, ${integer.format(counts.tagged)} renseignées dans OpenStreetMap, ${integer.format(counts.assumed)} supposées${edited ? `, ${integer.format(edited)} corrigées par vous` : ''}. Relief : ${context.terrain ? `grille de ${context.terrain.step} m` : 'aucun (sol plat)'}.`)
         : status !== 'loading' ? para('Rien de chargé : sol plat, pas de voisins.', 'site-note') : null,
       context.fetchedAt ? legend : null,
       h('div', { class: 'tool-row' },
-        status === 'loading' ? button('Arrêter', () => this.loading?.abort())
+        status === 'loading' ? button('Arrêter', () => this.loading?.controller.abort())
           : status === 'failed' || !context.fetchedAt ? button(status === 'failed' ? 'Réessayer' : 'Charger le voisinage', () => void this.loadNeighbourhood(Number(radius.value), false), { class: 'primary' })
             : button('Continuer : dessiner les volumes', () => this.goTo('volumes'), { class: 'primary' })),
       context.fetchedAt && status !== 'loading' ? h('div', { class: 'tool-row' }, radius, button('Recharger avec un autre rayon', () => void this.loadNeighbourhood(Number(radius.value), false))) : null,
@@ -824,50 +874,80 @@ export class SitePage {
     ];
   }
 
+  /**
+   * Lit le voisinage de l'étude ouverte. La lecture survit à un retour à l'accueil : son résultat va à l'étude du même
+   * identifiant si elle est rouverte entre-temps, sinon à celle gardée dans ce navigateur (rien n'est relu pour rien).
+   */
   private async loadNeighbourhood(radius: number, auto: boolean): Promise<void> {
     const study = this.study;
     if (!study) return;
     if (!auto && study.context.fetchedAt && study.context.buildings.length > 0 && !window.confirm('Recharger le voisinage remplace les bâtiments chargés et vos corrections de hauteur. Continuer ?')) return;
-    this.loading?.abort();
-    const controller = new AbortController();
-    this.loading = controller;
+    this.loading?.controller.abort();
+    const job = { studyId: study.id, controller: new AbortController() };
+    const { signal } = job.controller;
+    this.loading = job;
     this.neighbourStatus = 'loading';
     this.neighbourMessage = `Lecture du voisinage dans un rayon de ${radius} m…`;
+    this.progressLine.textContent = this.neighbourMessage;
     this.renderRail();
+    const shown = () => this.loading === job && this.study?.id === job.studyId;
     try {
-      const { context, altitude, notes } = await loadContext(study.site.origin, Math.min(600, Math.max(100, radius)), {
-        signal: controller.signal,
+      const loaded = await loadContext({ ...study.site.origin }, Math.min(600, Math.max(100, radius)), {
+        signal,
         onProgress: (message) => {
+          if (this.loading !== job) return;
           this.neighbourMessage = message;
-          if (this.loading === controller) this.renderRail();
+          if (shown()) this.progressLine.textContent = message;
         },
       });
-      if (controller.signal.aborted || this.study !== study) return;
-      study.context = context;
-      if (altitude !== null) study.site.origin.altitude = altitude;
-      // L'altitude de l'origine vient d'être lue : une maquette posée par sa géoréférence se recale en hauteur.
-      for (const model of study.models) {
-        const snapshot = this.snapshots.get(model.id);
-        if (model.georeferenced && snapshot) Object.assign(model, placementFor(snapshot, study).placement);
-      }
-      this.contextRevision++;
+      // Arrêtée alors que la lecture finissait (tuiles du relief déjà là) : traitée comme un arrêt, jamais laissée « en cours ».
+      if (signal.aborted) throw signal.reason;
       this.loading = null;
-      this.neighbourStatus = 'loaded';
-      if (this.selection?.kind === 'neighbour') this.selection = null;
-      this.scene.setGround(study);
-      this.applyImagery();
-      this.changed();
-      this.refresh();
-      this.checkAnalysis();
-      const counts = heightCounts(context.buildings);
-      this.toast([`Voisinage chargé : ${integer.format(context.buildings.length)} bâtiments, dont ${integer.format(counts.assumed)} de hauteur supposée.`, ...notes].join(' '), notes.length > 0);
+      const current = this.study?.id === job.studyId ? this.study : null;
+      if (current) this.applyContext(current, loaded);
+      else await this.keepContext(job.studyId, loaded);
     } catch (error) {
-      if (this.loading === controller) this.loading = null;
-      if (this.study !== study) return;
-      this.neighbourStatus = study.context.fetchedAt ? 'loaded' : controller.signal.aborted ? 'none' : 'failed';
-      this.neighbourMessage = controller.signal.aborted ? '' : `Le voisinage n’a pas pu être chargé : ${errorText(error)}`;
+      if (this.loading === job) this.loading = null;
+      const current = this.study;
+      // Remplacée par une autre lecture, ou pour une étude qui n'est plus ouverte : rien à montrer.
+      if (!current || current.id !== job.studyId || (signal.aborted && this.loading)) return;
+      this.neighbourStatus = current.context.fetchedAt ? 'loaded' : signal.aborted ? 'none' : 'failed';
+      this.neighbourMessage = signal.aborted ? '' : `Le voisinage n’a pas pu être chargé : ${errorText(error)}`;
       this.renderRail();
     }
+  }
+
+  /** Le voisinage lu, posé dans l'étude ouverte : vue, chiffres, analyses et rail suivent. */
+  private applyContext(study: Study, { context, altitude, notes }: LoadedContext): void {
+    study.context = context;
+    if (altitude !== null) study.site.origin.altitude = altitude;
+    // L'altitude de l'origine vient d'être lue : une maquette posée par sa géoréférence se recale en hauteur.
+    for (const model of study.models) {
+      const snapshot = this.snapshots.get(model.id);
+      if (model.georeferenced && snapshot) Object.assign(model, placementFor(snapshot, study).placement);
+    }
+    this.contextRevision++;
+    this.neighbourStatus = 'loaded';
+    this.neighbourMessage = '';
+    if (this.selection?.kind === 'neighbour') this.selection = null;
+    this.scene.setGround(study);
+    this.applyImagery();
+    this.changed();
+    this.refresh();
+    this.checkAnalysis();
+    const counts = heightCounts(context.buildings);
+    this.toast([`Voisinage chargé : ${integer.format(context.buildings.length)} bâtiments, dont ${integer.format(counts.assumed)} de hauteur supposée.`, ...notes].join(' '), notes.length > 0);
+  }
+
+  /** Le voisinage d'une étude quittée pendant sa lecture : écrit dans l'étude gardée, pour sa prochaine ouverture. */
+  private async keepContext(studyId: string, { context, altitude }: LoadedContext): Promise<void> {
+    const stored = await this.store.open(studyId).catch(() => null);
+    if (!stored) return;
+    stored.context = context;
+    if (altitude !== null) stored.site.origin.altitude = altitude;
+    await this.store.save(stored);
+    // Rouverte pendant l'écriture : elle reprend le voisinage tout juste lu.
+    if (this.study?.id === studyId && this.study.context.fetchedAt !== context.fetchedAt) this.applyContext(this.study, { context, altitude, notes: [] });
   }
 
   private neighboursChanged(): void {
@@ -977,9 +1057,9 @@ export class SitePage {
       return row;
     });
     const hints: Partial<Record<DrawMode, string>> = {
-      rectangle: 'Cliquez deux coins opposés ; les cotes s’affichent pendant le tracé.',
-      polygon: 'Cliquez les sommets, puis le premier point pour fermer.',
-      bar: `Cliquez le début puis la fin de l’axe ; largeur ${oneDecimal.format(this.barWidth)} m.`,
+      rectangle: 'Cliquez deux coins opposés ; les cotes s’affichent pendant le tracé. Échap : annuler.',
+      polygon: 'Cliquez les sommets ; pour fermer : le premier point, ou Entrée. Retour arrière : retirer le dernier point. Échap : annuler.',
+      bar: `Cliquez le début puis la fin de l’axe ; largeur ${oneDecimal.format(this.barWidth)} m. Maj : tracé droit. Échap : annuler.`,
     };
     return [
       h('div', { class: 'tool-row' },
@@ -1040,6 +1120,8 @@ export class SitePage {
   private select(selection: Selection): void {
     this.selection = selection;
     this.refresh();
+    // La fiche est en tête du rail : on la montre.
+    if (selection) this.rail.scrollTop = 0;
   }
 
   /** Après une modification d'un champ de la fiche : la vue, les chiffres et les listes suivent ; la fiche reste. */
@@ -1052,9 +1134,9 @@ export class SitePage {
     this.checkAnalysis();
   }
 
-  // ------------------------------------------------------ fiche flottante
+  // ------------------------------------------------------------- fiche
 
-  /** La fiche de ce qui est sélectionné (volume, voisin, maquette), posée à côté de lui dans la vue. */
+  /** La fiche de ce qui est sélectionné (volume, voisin, maquette), en tête du rail. */
   private renderCard(): void {
     const study = this.study;
     const selection = this.selection;
@@ -1084,14 +1166,18 @@ export class SitePage {
         this.edited();
       });
       const area = polygonArea(volume.footprint);
+      // Le résumé suit les champs sans refaire la fiche : le curseur reste dans le champ suivant.
+      const summary = note('');
+      const sum = () => { summary.textContent = `Emprise ${this.areaText(area)} · plancher ${this.areaText(area * volume.floors)} · hauteur ${oneDecimal.format(volume.floors * volume.floorHeight)} m. Glissez le volume pour le déplacer.`; };
+      sum();
       fill(this.cardEl, head(volume.name),
         field('Nom', name),
-        field('Niveaux', numberInput(volume.floors, (value) => { volume.floors = value; this.edited(); this.renderCard(); }, { min: 1, max: MAX_FLOORS, step: 1, integer: true })),
-        field('Hauteur d’étage (m)', numberInput(volume.floorHeight, (value) => { volume.floorHeight = value; this.edited(); this.renderCard(); }, { min: MIN_FLOOR_HEIGHT, max: MAX_FLOOR_HEIGHT, step: 0.1 })),
+        field('Niveaux', numberInput(volume.floors, (value) => { volume.floors = value; this.edited(); sum(); }, { min: 1, max: MAX_FLOORS, step: 1, integer: true })),
+        field('Hauteur d’étage (m)', numberInput(volume.floorHeight, (value) => { volume.floorHeight = value; this.edited(); sum(); }, { min: MIN_FLOOR_HEIGHT, max: MAX_FLOOR_HEIGHT, step: 0.1 })),
         field('Usage', use),
         field('Rez-de-chaussée', ground),
         field('Niveau bas (m)', numberInput(volume.baseLevel, (value) => { volume.baseLevel = value; this.edited(); }, { min: -500, max: 2000, step: 0.1 })),
-        note(`Emprise ${this.areaText(area)} · plancher ${this.areaText(area * volume.floors)} · hauteur ${oneDecimal.format(volume.floors * volume.floorHeight)} m. Glissez le volume pour le déplacer.`),
+        summary,
         h('div', { class: 'tool-row' },
           button('Poser au sol', () => { volume.baseLevel = round1(groundAt(study, ...centroid(volume.footprint))); this.edited(); this.renderCard(); }, { title: 'Niveau bas = sol sous le centre du volume' }),
           button('Dupliquer', () => this.duplicateVolume(volume)),
@@ -1137,37 +1223,6 @@ export class SitePage {
           button('Retirer', () => this.removeModel(model))));
     }
     this.cardEl.hidden = false;
-    this.placeCard();
-  }
-
-  /** Le point (scène) au-dessus duquel la fiche se pose. */
-  private anchor(): Vector3 | null {
-    const study = this.study, selection = this.selection;
-    if (!study || !selection) return null;
-    if (selection.kind === 'volume') {
-      const volume = this.selectedVolume;
-      return volume ? new Vector3(...toScene(...centroid(volume.footprint), volume.baseLevel + volume.floors * volume.floorHeight)) : null;
-    }
-    if (selection.kind === 'neighbour') {
-      const building = study.context.buildings[selection.index];
-      return building ? new Vector3(...toScene(...centroid(building.footprint), neighbourBase(study, building.footprint) + building.height)) : null;
-    }
-    const model = this.selectedModel, snapshot = model && this.snapshots.get(model.id);
-    if (!model || !snapshot) return null;
-    const [minX, , minZ, maxX, maxY, maxZ] = snapshot.box;
-    const a = (model.rotation * Math.PI) / 180, cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
-    return new Vector3(cx * Math.cos(a) + cz * Math.sin(a) + model.east, maxY + model.up, -cx * Math.sin(a) + cz * Math.cos(a) - model.north);
-  }
-
-  private placeCard(): void {
-    if (this.cardEl.hidden) return;
-    const point = this.anchor();
-    const width = this.viewport.clientWidth, height = this.viewport.clientHeight;
-    const cardWidth = this.cardEl.offsetWidth, cardHeight = this.cardEl.offsetHeight;
-    const screen = { x: width - cardWidth - 12, y: 60 };
-    if (point && this.scene.toScreen(point, screen)) screen.x += 24;
-    this.cardEl.style.left = `${Math.max(8, Math.min(width - cardWidth - 8, screen.x))}px`;
-    this.cardEl.style.top = `${Math.max(48, Math.min(height - cardHeight - 56, screen.y - cardHeight / 2))}px`;
   }
 
   // ---------------------------------------------------------------- esquisse
@@ -1182,18 +1237,11 @@ export class SitePage {
       const limit = this.study?.site.limit ?? [];
       this.sketch.shapes = limit.length >= 3 && mode !== 'limit' ? [{ points: limit.map(([e, n]) => new Vector3(...toScene(e, n, 0))), label: 'Limite' }] : [];
       this.sketch.start(mode === 'rectangle' || mode === 'bar' ? 'lines' : 'polygon', 0);
+      // Entrée ferme le contour, Retour arrière retire le dernier point (Échap est géré par la page : il annule).
+      this.sketch.keyboard = true;
     }
     // Tracer une limite se fait mieux vu du dessus, sur l'imagerie.
     if ((mode === 'limit' || mode === 'parcel') && this.scene.controls.getPolarAngle() > 0.35) this.scene.topView(180);
-    const hints: Record<DrawMode, string> = {
-      limit: 'Limite du terrain : cliquez ses coins, puis le premier point pour fermer. Maj : tracé droit. Échap : annuler.',
-      parcel: 'Cliquez une parcelle sur la carte. Échap : annuler.',
-      rectangle: 'Rectangle : cliquez deux coins opposés. Échap : annuler.',
-      polygon: 'Polygone : cliquez les sommets, puis le premier point pour fermer. Maj : tracé droit. Échap : annuler.',
-      bar: `Barre de ${oneDecimal.format(this.barWidth)} m : cliquez le début puis la fin de son axe. Maj : tracé droit. Échap : annuler.`,
-    };
-    this.hintEl.textContent = mode ? hints[mode] : '';
-    this.hintEl.hidden = !mode;
     if (this.study) this.renderRail();
   }
 
@@ -1282,7 +1330,7 @@ export class SitePage {
     if (event.key === 'Escape') {
       if (this.mode) this.setMode(null);
       else if (this.selection) this.select(null);
-    } else if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedVolume) {
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && !this.mode && this.selectedVolume) {
       event.preventDefault();
       this.deleteVolume(this.selectedVolume);
     }
@@ -1525,8 +1573,6 @@ export class SitePage {
         note('Logements estimés = surface de plancher des usages cochés × rendement ÷ surface moyenne d’un logement.'),
         usesList,
         addUse));
-    details.open = this.settingsOpen;
-    details.addEventListener('toggle', () => { this.settingsOpen = details.open; });
     box.append(details);
     return box;
   }
@@ -1577,7 +1623,7 @@ export class SitePage {
     presets.addEventListener('change', () => { if (presets.value) setDay(presets.value); presets.value = ''; });
     time.addEventListener('input', () => { this.stopPlaying(); this.minutes = Number(time.value); this.updateSun(); });
     shadows.addEventListener('change', () => { this.shadows = shadows.checked; this.updateSun(); });
-    this.playButton = button('▶ Jouer les ombres de la journée', () => this.togglePlay(), { class: 'primary', title: 'Fait avancer l’heure du lever au coucher du soleil' });
+    this.playButton = button('▶ Jouer les ombres de la journée', () => this.togglePlay(), { class: 'primary site-play', title: 'Fait avancer l’heure du lever au coucher du soleil' });
     this.sunBox.append(
       note('Les ombres des volumes, des voisins, des maquettes et du relief, à l’heure du site.'),
       h('div', { class: 'tool-row' }, date, presets),
@@ -1787,29 +1833,87 @@ export class SitePage {
 
   // --------------------------------------------------- vue, sources, export
 
+  /** La photo du lieu : celle du service national du pays, sinon la photo mondiale de l'utilisateur ; null s'il n'y en a pas. */
+  private get photo(): ImagerySource | null {
+    return photoFor(this.study?.site.country, this.custom);
+  }
+
+  /** Le fond posé sur le sol : la photo si elle est voulue et existe ici, sinon le plan ; null : sans fond. */
+  private get backgroundSource(): ImagerySource | null {
+    return this.background === 'none' ? null : this.background === 'photo' ? this.photo ?? OSM : OSM;
+  }
+
   /** Le fond de carte choisi, drapé sur le sol de l'étude. */
   private applyImagery(): void {
-    const id = this.imageryId;
-    if (this.study) this.scene.setImagery(this.study, id === 'none' ? null : imagerySource(id));
+    if (this.study) this.scene.setImagery(this.study, this.backgroundSource);
+  }
+
+  /** « Fond de carte » (étape Terrain) : la photo du lieu, ou pourquoi il n'y en a pas ; la photo mondiale de l'utilisateur. */
+  private backgroundBlock(): HTMLElement[] {
+    const photo = this.photo, custom = this.custom;
+    const template = h('input', { attrs: { type: 'url', placeholder: 'https://…/{z}/{y}/{x}?token=…', 'aria-label': 'Adresse de tuiles de votre fournisseur', value: custom?.template ?? '' } });
+    const credit = h('input', { attrs: { type: 'text', placeholder: 'Esri, Maxar, Earthstar Geographics', 'aria-label': 'Crédit à afficher', value: custom?.credit ?? '' } });
+    const use = () => {
+      const checked = checkTemplate(template.value);
+      if ('error' in checked) return this.toast(checked.error, true);
+      if (!credit.value.trim()) return this.toast('Indiquez le crédit que votre fournisseur demande d’afficher.', true);
+      if (!saveCustomSatellite({ template: checked.template, credit: credit.value.trim() })) this.toast('Ce navigateur ne garde rien : la photo ne vaut que jusqu’à la fermeture de la page.', true);
+      this.setCustom(customSatellite() ?? customSource(checked.template, credit.value));
+    };
+    const details = h('details', {},
+      h('summary', { text: 'Photo satellite mondiale' }),
+      h('div', { class: 'site-stack' },
+        field('Adresse de tuiles', template),
+        field('Crédit', credit),
+        h('div', { class: 'tool-row' }, button('Utiliser cette photo', use), custom ? button('Retirer', () => { saveCustomSatellite(null); this.setCustom(customSatellite()); }) : null),
+        note('Gratuit : créez un compte ArcGIS Location Platform (2 millions de tuiles par mois offertes), puis une clé d’API limitée à l’adresse de ce site, et collez https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=VOTRE_CLÉ avec le crédit « Esri, Maxar, Earthstar Geographics ».'),
+        note('La clé est lisible par quiconque ouvre la page (elle part avec chaque tuile) : c’est pourquoi elle doit être limitée à l’adresse du site ; elle reste dans ce navigateur.')));
+    return [
+      photo
+        ? para(`Fond : photo satellite, ${photo.credit}.`, 'site-note')
+        : para(`Pas de photo satellite libre ${this.study?.site.country ? 'dans ce pays' : 'ici'} : le fond est le plan OpenStreetMap. Pour une photo partout, branchez la vôtre ci-dessous.`, 'site-note'),
+      details,
+    ];
+  }
+
+  /** Nouvelle photo mondiale de l'utilisateur (ou plus aucune) : la carte, le sol et les crédits suivent. */
+  private setCustom(source: ImagerySource | null): void {
+    this.custom = source;
+    this.worldMap.setPhoto(source);
+    if (source) this.background = 'photo';
+    this.applyImagery();
+    this.render();
+  }
+
+  /** Recentre la vue sur le terrain (sa limite, sinon le point du projet), vue du dessus ou 3D comme avant. */
+  private recenter(): void {
+    const limit = this.study?.site.limit ?? [];
+    const center: XY = limit.length >= 3 ? centroid(limit) : [0, 0];
+    const reach = limit.length >= 3 ? Math.max(50, ...limit.map(([e, n]) => Math.hypot(e - center[0], n - center[1]))) : 130;
+    if (this.scene.isTopView) this.scene.topView(1.4 * reach, center);
+    else this.scene.frame(2.2 * reach, center);
   }
 
   private renderViewTools(): void {
     const study = this.study;
     this.viewTools.hidden = !study || this.mapOpen;
     if (!study) return;
+    const photo = this.photo;
     const background = h('select', { attrs: { 'aria-label': 'Fond de carte', title: 'Fond de carte posé sur le sol (décor : les analyses n’en dépendent pas)' } },
-      ...IMAGERY_SOURCES.filter((source) => !source.franceOnly || study.site.country === 'fr').map((source) => h('option', { text: source.label, attrs: { value: source.id } })),
+      photo ? h('option', { text: 'Photo satellite', attrs: { value: 'photo' } }) : null,
+      h('option', { text: 'Plan', attrs: { value: 'plan' } }),
       h('option', { text: 'Sans fond', attrs: { value: 'none' } }));
-    background.value = this.imageryId;
+    background.value = this.background === 'photo' && !photo ? 'plan' : this.background;
     background.addEventListener('change', () => {
-      this.imageryId = background.value as ImageryId | 'none';
+      this.background = background.value as Background;
       this.applyImagery();
       this.renderCredits();
     });
     const radius = Math.max(150, study.context.radius || DEFAULT_RADIUS);
     fill(this.viewTools,
       button('Vue du dessus', () => this.scene.topView(Math.min(radius, 220)), { title: 'Plan, nord en haut' }),
-      button('Vue 3D', () => this.scene.frame(radius * 0.8), { title: 'Vue en perspective sur le site' }),
+      button('Vue 3D', () => this.scene.frame(radius * 0.8), { title: 'Vue en perspective sur le site (clic droit et glisser, ou Ctrl + glisser : tourner)' }),
+      button('Recentrer', () => this.recenter(), { title: 'Recentrer la vue sur le terrain' }),
       background);
   }
 
@@ -1817,7 +1921,7 @@ export class SitePage {
     const study = this.study;
     this.creditsEl.hidden = !study || this.mapOpen;
     if (!study) return;
-    const source = this.imageryId === 'none' ? null : imagerySource(this.imageryId);
+    const source = this.backgroundSource;
     fill(this.creditsEl,
       source ? h('a', { text: `Fond : ${source.credit}`, attrs: { href: source.creditUrl, target: '_blank', rel: 'noopener' } }) : null,
       ...study.context.credits.map((credit) => h('span', { text: credit })));

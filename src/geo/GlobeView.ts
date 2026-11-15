@@ -9,18 +9,21 @@ import type { Model } from '../engine/Model.ts';
 import type { Viewer } from '../engine/Viewer.ts';
 import { enuToLocal, enuVectorToLocal, localToEnu, type Georeference } from './georeference.ts';
 import { GlobeModel, type GlobeModelStatus } from './GlobeModel.ts';
+import { customSatellite } from './imageryTiles.ts';
 import { fetchOsmBuildings, outlineCentre, type OsmBuilding } from './osmBuildings.ts';
 import { createTerrariumTerrainProvider } from './terrain.ts';
 import { loadGeoid, type Geoid } from './geoid.ts';
 
 type Cesium = typeof import('cesium');
 
-export type ImageryKind = 'osm' | 'ign-ortho' | 'ign-plan';
+export type ImageryKind = 'osm' | 'ign-ortho' | 'ign-plan' | 'satellite';
 
+/** Les fonds du globe ; la photo mondiale de l'utilisateur (sa clé, branchée dans l'étude de site ou au build) s'il en a une. */
 export const IMAGERY: { id: ImageryKind; label: string; hint: string }[] = [
   { id: 'osm', label: 'Plan (OpenStreetMap)', hint: 'Monde entier, gratuit. © les contributeurs d’OpenStreetMap.' },
   { id: 'ign-ortho', label: 'Photo aérienne (IGN)', hint: 'France, gratuit. © IGN, Géoplateforme.' },
   { id: 'ign-plan', label: 'Plan IGN', hint: 'France, gratuit. © IGN, Géoplateforme.' },
+  ...((custom) => (custom ? [{ id: 'satellite' as const, label: 'Photo satellite (votre fournisseur)', hint: `Monde entier, avec votre clé. ${custom.credit}` }] : []))(customSatellite()),
 ];
 
 export type TerrainKind = 'flat' | 'terrarium' | 'ion';
@@ -620,7 +623,11 @@ export class GlobeView {
 
   private layerFor(kind: ImageryKind): import('cesium').ImageryLayer {
     const cesium = this.cesium!;
-    if (kind === 'osm') {
+    const custom = kind === 'satellite' ? customSatellite() : null;
+    if (custom) {
+      return new cesium.ImageryLayer(new cesium.UrlTemplateImageryProvider({ url: custom.template.replace('{-y}', '{reverseY}'), maximumLevel: custom.maxZoom, credit: custom.credit }));
+    }
+    if (kind === 'osm' || kind === 'satellite') {
       // Les tuiles OSM s'arrêtent au niveau 19 : au-delà, le serveur répond une erreur.
       return new cesium.ImageryLayer(new cesium.OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/', maximumLevel: 19, credit: '© les contributeurs d’OpenStreetMap' }));
     }

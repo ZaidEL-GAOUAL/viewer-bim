@@ -99,7 +99,8 @@ export async function fetchOsmBuildings(bbox: Bbox, signal?: AbortSignal, urls: 
         return parseOverpassBuildings(await response.json());
       } catch (error) {
         if (signal?.aborted) throw error;
-        lastError = error instanceof Error ? error : new Error(String(error));
+        // Une erreur réseau du navigateur (« Failed to fetch ») dite en clair.
+        lastError = error instanceof TypeError ? new Error('le service OpenStreetMap (Overpass) est injoignable (pas de réseau ?)') : error instanceof Error ? error : new Error(String(error));
       }
     }
   }

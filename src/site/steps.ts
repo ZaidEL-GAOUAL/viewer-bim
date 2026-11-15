@@ -20,7 +20,7 @@ export interface Step {
 }
 
 export const STEPS: readonly Step[] = [
-  { id: 'lieu', title: 'Lieu', instruction: 'Cherchez l’adresse ou le lieu du projet, ou cliquez sur la carte.' },
+  { id: 'lieu', title: 'Lieu', instruction: 'Cherchez l’adresse ou le lieu du projet, ou choisissez-le sur la carte.' },
   { id: 'terrain', title: 'Terrain', instruction: 'Tracez la limite de votre terrain : cliquez ses coins sur la carte, puis le premier point pour fermer.' },
   { id: 'voisinage', title: 'Voisinage', instruction: 'Les bâtiments voisins et le relief se chargent tout seuls ; cliquez un bâtiment pour corriger sa hauteur.' },
   { id: 'volumes', title: 'Volumes', instruction: 'Dessinez vos bâtiments sur le terrain, puis réglez leurs niveaux et leur usage.' },

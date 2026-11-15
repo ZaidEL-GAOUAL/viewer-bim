@@ -34,8 +34,8 @@ import {
   type Object3D,
   type Texture,
 } from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { MERCATOR_MAX_LATITUDE, lonLatToTile, tileToLonLat, type ImagerySource } from '../geo/imageryTiles.ts';
+import { MapControls } from 'three/addons/controls/MapControls.js';
+import { MERCATOR_MAX_LATITUDE, OSM, blankTile, lonLatToTile, tileToLonLat, tileUrl, type ImagerySource } from '../geo/imageryTiles.ts';
 import { groundAt, neighbourBase, toEnu, toGeo } from './context.ts';
 import { addPrism, toScene, volumeMesh } from './massing.ts';
 import type { ModelSnapshot, Placement } from './placedModel.ts';
@@ -58,11 +58,24 @@ const TILE_GRID = 8;
 /** Textures des tuiles déjà lues, gardées le temps de la session (la règle des serveurs de tuiles : pas de relecture). */
 const tileTextures = new Map<string, Promise<Texture | null>>();
 const tileLoader = new TextureLoader();
+const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
 
+/** La texture d'une tuile ; null si elle manque ou si elle est vide (hors du pays d'un service national). */
 function tileTexture(url: string, anisotropy: number): Promise<Texture | null> {
   let texture = tileTextures.get(url);
   if (!texture) {
     texture = tileLoader.loadAsync(url).then((t) => {
+      const image = t.image as HTMLImageElement;
+      if (probe) {
+        probe.canvas.width = image.width;
+        probe.canvas.height = image.height;
+        probe.clearRect(0, 0, image.width, image.height);
+        probe.drawImage(image, 0, 0);
+        if (blankTile(probe.getImageData(0, 0, image.width, image.height).data)) {
+          t.dispose();
+          return null;
+        }
+      }
       t.colorSpace = SRGBColorSpace;
       t.anisotropy = anisotropy;
       return t;
@@ -86,7 +99,8 @@ export class SiteScene {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(45, 1, 1, 6000);
-  readonly controls: OrbitControls;
+  /** Navigation de carte : glisser déplace, clic droit (ou Ctrl / Maj + glisser) tourne, molette zoome vers le curseur. */
+  readonly controls: MapControls;
   readonly afterRender = new Set<() => void>();
   /** Pas de maquette BIM ici : l'esquisse n'accroche qu'aux points qu'elle a posés. */
   readonly model = null;
@@ -119,10 +133,12 @@ export class SiteScene {
     container.append(this.renderer.domElement);
     this.scene.background = new Color(window.matchMedia('(prefers-color-scheme: dark)').matches ? 0x23282e : 0xe7eaee);
     this.camera.position.set(-160, 200, 260);
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls = new MapControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.18;
     this.controls.zoomToCursor = true;
+    this.controls.minDistance = 5;
+    this.controls.maxDistance = 3000;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.02;
     this.controls.addEventListener('change', this.invalidate);
     this.sun.castShadow = true;
@@ -172,12 +188,18 @@ export class SiteScene {
     for (const callback of this.afterRender) callback();
   };
 
-  /** Cadre la vue sur un disque de `radius` m autour de l'origine. */
-  frame(radius: number): void {
-    this.controls.target.set(0, 0, 0);
-    this.camera.position.set(-0.6 * radius, 0.8 * radius, 1.0 * radius);
+  /** Cadre la vue sur un disque de `radius` m autour de `center` (est, nord ; l'origine par défaut). */
+  frame(radius: number, center: XY = [0, 0]): void {
+    const [x, , z] = toScene(center[0], center[1], 0);
+    this.controls.target.set(x, 0, z);
+    this.camera.position.set(x - 0.6 * radius, 0.8 * radius, z + 1.0 * radius);
     this.controls.update();
     this.invalidate();
+  }
+
+  /** Vrai si la vue regarde (presque) d'aplomb. */
+  get isTopView(): boolean {
+    return this.controls.getPolarAngle() < 0.35;
   }
 
   /** Vue du dessus, nord en haut, sur un disque de `radius` m autour de `center` (est, nord). */
@@ -295,9 +317,12 @@ export class SiteScene {
         const mesh = new Mesh(geometry, material);
         mesh.receiveShadow = true;
         this.imagery.add(mesh);
-        const url = source.url(z, ((tx % count) + count) % count, ty);
+        const x = ((tx % count) + count) % count;
+        const url = tileUrl(source, z, x, ty), fallback = source === OSM ? null : tileUrl(OSM, Math.min(z, OSM.maxZoom), x, ty);
         used.add(url);
-        void tileTexture(url, anisotropy).then((texture) => {
+        if (fallback) used.add(fallback);
+        // Une tuile de photo absente ou vide (bord du pays couvert) : le plan à sa place.
+        void tileTexture(url, anisotropy).then((texture) => texture ?? (fallback ? tileTexture(fallback, anisotropy) : null)).then((texture) => {
           if (!texture || mesh.parent !== this.imagery) return;
           material.map = texture;
           material.color.set(0xffffff);
