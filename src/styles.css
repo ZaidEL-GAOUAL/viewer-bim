@@ -1612,5 +1612,7 @@ button[aria-pressed='true'] {
 
 /* Le planning ne prend de place que déplié : on l'ouvre depuis « Planifier », son bouton le replie. */
 .shell > .schedule-panel:has(> .schedule-body[hidden]) { display: none; }
-.dock-page.in-tool > .dock-intro { display: none; }
 .dock .views-list { max-height: none; overflow: visible; }
+/* Un outil ouvert occupe seul le panneau : le reste du groupe revient avec le retour. */
+.dock-page.in-tool > :not(.card) { display: none; }
+.dock .card > .card-title { display: none; }
