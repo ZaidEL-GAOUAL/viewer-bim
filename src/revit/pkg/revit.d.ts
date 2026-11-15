@@ -39,6 +39,8 @@ export interface RevitOutput {
         seconds: number;
         sources: { revit: number; partial: number; rebuilt: number; unknown: number };
         withoutGeometry: number;
+        /** Éléments sans « Classe IFC » (catégorie sans équivalent IFC, ou sans catégorie). Absent des bilans d'avant novembre 2026. */
+        withoutIfcClass?: number;
         warnings: string[];
         /** Durée de chaque étape de la lecture, dans l'ordre (diagnostic). */
         stages: { name: string; seconds: number }[];

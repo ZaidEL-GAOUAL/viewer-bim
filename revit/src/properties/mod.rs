@@ -42,6 +42,8 @@ pub struct Properties {
     /// Le nom affiché de chaque élément, dans l'ordre de `ids` : le libellé de sa fiche, qui est aussi
     /// celui du JSON (le viewer le lit des deux côtés et ils doivent être identiques).
     pub labels: Vec<String>,
+    /// Éléments dont la fiche n'a pas de « Classe IFC » (catégorie sans équivalent, ou sans catégorie) : pour le bilan.
+    pub without_ifc_class: usize,
 }
 
 impl Properties {
@@ -122,8 +124,9 @@ pub fn build(file: &mut rvt::RevitFile, context: &mut Context, ids: &[u64], keys
     let step = Stopwatch::start();
     let (head, elements, tail) = write(keys, &fiches, georeference.as_ref(), &sections);
     context.stage("propriétés : JSON", step.seconds());
+    let without_ifc_class = fiches.iter().filter(|fiche| !fiche.head.iter().any(|(name, _)| *name == fiche::IFC_CLASS)).count();
     let labels = fiches.into_iter().map(|fiche| fiche.label).collect();
-    Ok(Properties { head, elements, tail, labels })
+    Ok(Properties { head, elements, tail, labels, without_ifc_class })
 }
 
 /// Le GlobalId IFC d'un élément, si sa clé en est un (à défaut, la clé est `rvt-<ElementId>`).
@@ -143,12 +146,14 @@ fn native_fiches(file: &mut rvt::RevitFile, context: &mut Context, ids: &[u64], 
     let collected = native::collect(file, &mut context.retained, ids)?;
     // Les propriétaires d'ElemTable et la famille du document viennent du préambule, déjà lu et gardé : aucune lecture de plus.
     let owners = crate::native::families::Owners::of(file);
+    let levels = levels_json(&collected, |id| owners.get(id));
     let document_family = crate::native::preamble(file).ok().and_then(|preamble| preamble.owner_family.as_ref().ok().copied());
     let step = Stopwatch::start();
     let resolver = Resolver::with_owners(&collected, move |id| owners.get(id), document_family);
     let fiches: Vec<fiche::Fiche> = ids.iter().enumerate().map(|(i, id)| resolver.fiche(*id as i64, guid_of(keys, i, *id))).collect();
     let imports = resolver.imports(ids);
-    let sections = sections(context.retained.views(), ids, keys, &fiches, &imports);
+    let mut sections = sections(context.retained.views(), ids, keys, &fiches, &imports);
+    sections.levels = levels;
     // Les phases, filtres et vues que possède une famille dont on ne sait pas si elle est chargée restent dans les sections : on le dit.
     context.warnings.extend(crate::views::unread_warning(context.retained.views().unread()));
     Ok((fiches, georeference, sections, step.seconds()))
@@ -163,6 +168,7 @@ fn sections(digest: &crate::views::Digest, ids: &[u64], keys: &[String], fiches:
     Sections {
         phases: crate::views::phases_json(digest, fiche::PHASE_CREATED, fiche::PHASE_DEMOLISHED),
         views: crate::views::views_json(digest, &crate::views::Elements { keys: &keys_by_id, categories: &categories, category_property: fiche::CATEGORY, imports: &imports.1, import_keys: &import_keys }),
+        levels: None,
     }
 }
 
@@ -171,6 +177,54 @@ fn sections(digest: &crate::views::Digest, ids: &[u64], keys: &[String], fiches:
 struct Sections {
     phases: Option<String>,
     views: Option<String>,
+    levels: Option<String>,
+}
+
+/// La section `levels` du contrat : les niveaux du projet, `{ name, elevation }`, l'altitude en mètres dans le repère du modèle (celui de la
+/// géométrie et des plages de vue des plans, voir `native::level_elevation`), triés par altitude. `None` sans niveau (une famille).
+///
+/// - Seuls les niveaux du projet comptent : un `Level` sans propriétaire d'ElemTable (`owner_of` rend -1). Les autres sont des copies (ceux
+///   que possède la définition d'un groupe, `ElementGroupType`) ou des pièces d'une famille (avant Revit 2015, chaque famille chargée écrit
+///   ses niveaux parmi ceux du projet ; un `.rfa` a son « Ref. Level », possédé par sa propre famille).
+/// - Deux niveaux à la même altitude (au millimètre) n'en font qu'un, nommé des deux noms (« A / B ») ; deux niveaux de même nom n'en font
+///   qu'un, le plus bas. Les deux cas ne se voient dans aucun fichier d'essai une fois les copies écartées.
+fn levels_json(collected: &native::Collected, owner_of: impl Fn(u64) -> Option<i64>) -> Option<String> {
+    let mut found: Vec<(f64, i64, &str)> = collected
+        .records
+        .iter()
+        .filter(|(id, raw)| raw.class == "Level" && u64::try_from(**id).ok().and_then(&owner_of) == Some(-1))
+        .filter_map(|(id, raw)| Some((raw.elevation.filter(|z| z.is_finite())? * crate::catalog::units::FOOT, *id, raw.name.as_deref().filter(|name| !name.trim().is_empty())?)))
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    let mut levels: Vec<(f64, String)> = Vec::new();
+    for (elevation, _, name) in found {
+        if levels.iter().any(|(_, names)| names.split(" / ").any(|known| known == name)) {
+            continue;
+        }
+        match levels.last_mut() {
+            Some((last, names)) if (elevation - *last).abs() < 5e-4 => {
+                names.push_str(" / ");
+                names.push_str(name);
+            }
+            _ => levels.push((elevation, name.to_string())),
+        }
+    }
+    if levels.is_empty() {
+        return None;
+    }
+    let mut out = String::from("[");
+    for (i, (elevation, name)) in levels.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str("{\"name\":");
+        push_str(&mut out, name);
+        // Neuf chiffres significatifs, comme le géoréférencement ; un reste de calcul (−0, 1e-16) s'écrit 0.
+        let elevation = if elevation.abs() < 1e-12 { 0.0 } else { json::round_significant(*elevation, 9) };
+        out.push_str(&format!(",\"elevation\":{elevation}}}"));
+    }
+    out.push(']');
+    Some(out)
 }
 
 /// Les paramètres intégrés (identifiants négatifs) que portent les éléments `ids` et leurs types, avec leur
@@ -267,6 +321,10 @@ fn write(keys: &[String], fiches: &[fiche::Fiche], georeference: Option<&geo::Ge
         push_str(&mut out, &source);
         out.push('}');
     }
+    if let Some(levels) = &sections.levels {
+        out.push_str(",\"levels\":");
+        out.push_str(levels);
+    }
     if let Some(phases) = &sections.phases {
         out.push_str(",\"phases\":");
         out.push_str(phases);
@@ -292,5 +350,32 @@ mod tests {
         assert!(head.contains("\"elevation\":1523.45679,"), "{head}");
         assert!(head.contains("\"latitude\":45.1234568,"), "{head}");
         assert!(head.contains("\"origin\":[652345.679,"), "{head}");
+    }
+
+    #[test]
+    fn les_niveaux_du_projet_s_ecrivent_tries_en_metres_sans_copies_ni_doublons() {
+        let level = |name: &str, feet: Option<f64>| native::Raw { class: "Level".to_string(), name: Some(name.to_string()), elevation: feet, ..native::Raw::default() };
+        let mut collected = native::Collected::default();
+        collected.records.insert(311, level("RDC", Some(0.984_251_968_503_937)));
+        collected.records.insert(694, level("R+1", Some(9.842_519_685_039_37)));
+        collected.records.insert(355_523, level("Terrain", Some(0.0)));
+        // La copie d'un niveau dans la définition d'un groupe (`ElementGroupType`), et le niveau d'une famille chargée : écartés.
+        collected.records.insert(786_763, level("Toiture", Some(30.0)));
+        collected.records.insert(147_295, level("Ground floor", Some(-3.0)));
+        // Même altitude qu'un autre (au millimètre) : un seul niveau, des deux noms ; même nom qu'un plus bas : écarté.
+        collected.records.insert(900, level("Dalle RDC", Some(0.984_251_968_503_937 + 1e-5)));
+        collected.records.insert(901, level("R+1", Some(40.0)));
+        // Sans altitude lisible, ou sans nom : écarté.
+        collected.records.insert(902, level("Sans plan", None));
+        collected.records.insert(903, level("  ", Some(50.0)));
+        let owners = |id: u64| Some(match id {
+            786_763 => 786_761,
+            147_295 => 147_271,
+            _ => -1,
+        });
+        let json: serde_json::Value = serde_json::from_str(&levels_json(&collected, owners).expect("niveaux")).expect("JSON");
+        assert_eq!(json, serde_json::json!([{"name": "Terrain", "elevation": 0}, {"name": "RDC / Dalle RDC", "elevation": 0.3}, {"name": "R+1", "elevation": 3}]));
+        // Aucun niveau du projet : pas de section.
+        assert_eq!(levels_json(&native::Collected::default(), |_| Some(-1)), None);
     }
 }

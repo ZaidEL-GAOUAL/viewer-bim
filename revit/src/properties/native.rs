@@ -109,6 +109,8 @@ pub struct Raw {
     /// La catégorie d'un symbole d'import (`MasterImportSymbol.m_categoryId`) : l'élément `CategoryElem` qui porte le nom du fichier importé
     /// (positif), ou une catégorie de Revit (négatif : « Styles d'objet d'importation »). Voir `fiche::Resolver::import_naming`.
     pub import_category: Option<i64>,
+    /// L'altitude d'un `Level`, en pieds, dans le repère du projet (voir [`level_elevation`]).
+    pub elevation: Option<f64>,
 }
 
 /// Tout ce qui a été lu, par identifiant d'élément.
@@ -224,7 +226,10 @@ fn decode(id: u64, graph: &ObjectGraph, definitions: &Definitions) -> Option<Raw
         "MasterImportSymbol" => raw.import_category = root.fields.get("m_categoryId").and_then(element_id).filter(|id| *id != -1 && *id != 0),
         // La catégorie d'un import : un élément dont le nom est celui du fichier importé (« Imported Categories » de Revit).
         "CategoryElem" => raw.name = object("Category").and_then(|o| text(o.fields.get("m_name"))),
-        "Level" => raw.name = text(root.fields.get("m_text")),
+        "Level" => {
+            raw.name = text(root.fields.get("m_text"));
+            raw.elevation = level_elevation(graph);
+        }
         "ProjectPhase" => raw.name = text(root.fields.get("m_name")),
         "MaterialElem" => raw.name = object("Material").and_then(|o| text(o.fields.get("m_name"))),
         "Family" => {
@@ -301,6 +306,30 @@ fn add_native_fields(raw: &mut Raw, fields: Option<&serde_json::Map<String, Valu
             add(-1001596, Storage::Integer, Value::Bool(on)); // WALL_STRUCTURAL_SIGNIFICANT
         }
     }
+}
+
+/// L'altitude d'un niveau, en pieds, dans le repère du projet : l'origine du plan horizontal (`Plane`) que désigne `Level.m_pSurface`.
+///
+/// Mesuré sur les 42 fichiers d'essai qui ont des niveaux (`docs/lecture-revit.md`, « Niveaux ») : chaque `Level` a ce plan, horizontal (ses deux
+/// axes à 1e-14 près dans le plan XY), et son Z est l'altitude que Revit donne au niveau : pour chacun des ~200 plans d'étage dont la coupe est
+/// rapportée au niveau du plan, `m_cutPlaneElev` − décalage de coupe = ce Z, à 1e-9 pied près. C'est donc le repère des plages de vue et de la
+/// géométrie (le point interne de Revit), non le point de base du projet ni le point de topographie. `None` si le plan manque ou n'est pas horizontal.
+fn level_elevation(graph: &ObjectGraph) -> Option<f64> {
+    let field = graph.objects.first()?.fields.get("m_pSurface")?;
+    let plane = graph.objects.get(rvt::research::native_saved_mesh::pointer(graph, 0, field).ok()??)?;
+    if plane.class_name != "Plane" {
+        return None;
+    }
+    let vector = |name: &str| -> Option<[f64; 3]> {
+        let array = plane.fields.get(name)?.as_array()?;
+        let values: Vec<f64> = array.iter().map(Value::as_f64).collect::<Option<_>>()?;
+        <[f64; 3]>::try_from(values).ok().filter(|v| v.iter().all(|x| x.is_finite()))
+    };
+    let (x, y, origin) = (vector("m_xVec")?, vector("m_yVec")?, vector("m_origin")?);
+    // La normale (x × y) est verticale : le plan est horizontal.
+    let normal_z = x[0] * y[1] - x[1] * y[0];
+    let length = ((x[1] * y[2] - x[2] * y[1]).powi(2) + (x[2] * y[0] - x[0] * y[2]).powi(2) + normal_z.powi(2)).sqrt();
+    (length > 1e-9 && (normal_z.abs() / length - 1.0).abs() < 1e-6).then_some(origin[2])
 }
 
 /// Les éléments que désigne un enregistrement : les champs qui suivent un type, un niveau ou une famille,

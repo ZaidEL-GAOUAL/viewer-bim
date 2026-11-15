@@ -57,6 +57,13 @@ export function deviceTriangleBudget(): number {
   return triangleBudgetFor(deviceMemoryGB());
 }
 
+/**
+ * Le « Grouper par » que la lecture propose à l'ouverture (section `grouping` des métadonnées) : la catégorie Revit, sous le nom
+ * que le lecteur lui donne dans chaque fiche (`CATEGORY`, revit/src/properties/fiche.rs). La « Classe IFC », moins parlante pour
+ * un utilisateur de Revit, aurait sinon la préférence (moins de valeurs distinctes, voir `suggestGrouping`).
+ */
+export const REVIT_GROUPING: readonly string[] = ['Catégorie'];
+
 /** Le fichier dépasse ce que le navigateur peut lire : le message s'adresse à l'utilisateur. */
 export class RevitTooLargeError extends Error {}
 
@@ -131,6 +138,12 @@ class WorkerFailure extends Error {
   }
 }
 
+/** Code de `sources` (sortie du lecteur) d'un élément dont la forme n'a pas été lue : il est dessiné par sa boîte englobante. */
+const SOURCE_UNKNOWN = 3;
+
+/** Les éléments dessinés par leur seule boîte (`RawModel.boxOnly`), d'après la source de géométrie que le lecteur donne à chacun. */
+const boxOnlyOf = (sources: Uint8Array | undefined): Uint8Array | undefined => sources?.map((source) => (source === SOURCE_UNKNOWN ? 1 : 0));
+
 /** Les tableaux d'un morceau de la sortie du lecteur, tels quels, en modèle brut pour `buildModel`. */
 export function rawFromChunk(chunk: RevitChunk): RawModel {
   return {
@@ -143,6 +156,7 @@ export function rawFromChunk(chunk: RevitChunk): RawModel {
     indices: chunk.indices,
     primitives: chunk.primitives,
     materials: chunk.materials,
+    boxOnly: boxOnlyOf(chunk.sources),
   };
 }
 
@@ -171,6 +185,7 @@ export function rawFromOutput(output: RevitOutput): RawModel {
     indices: output.indices,
     primitives: output.primitives,
     materials: output.materials,
+    boxOnly: boxOnlyOf(output.sources),
   };
 }
 
@@ -261,13 +276,16 @@ async function readOnce(file: File, onStatus: (message: string) => void, signal:
  *
  * `onChunk` reçoit les morceaux à mesure qu'ils arrivent (voir `RevitChunkListener`) : le modèle peut être construit
  * et affiché pendant la lecture. Ils ne sont alors pas gardés dans le résultat.
+ *
+ * `triangleBudget` : les triangles que la lecture peut produire ; par défaut tout le budget de l'appareil, moins pour une
+ * maquette ajoutée à d'autres (ce qui reste après elles). Au-delà, le lecteur montre les éléments suivants par leur boîte.
  */
-export async function readRevit(file: File, onStatus: (message: string) => void, signal?: AbortSignal, onChunk?: RevitChunkListener): Promise<RevitRead> {
+export async function readRevit(file: File, onStatus: (message: string) => void, signal?: AbortSignal, onChunk?: RevitChunkListener, triangleBudget = deviceTriangleBudget()): Promise<RevitRead> {
   // Plus de limite de taille : le fichier n'entre pas dans la mémoire du lecteur, et le budget de triangles borne le
   // modèle. Le lecteur refuse lui-même, en « mémoire insuffisante », un fichier de plus de 4 millions d'éléments
   // indexés, ou de plus de 150 Mo s'il faut le reconstruire par l'export IFC (revit/src/lib.rs).
   signal?.throwIfAborted();
-  const options: RevitReadOptions = { triangleBudget: deviceTriangleBudget() };
+  const options: RevitReadOptions = { triangleBudget };
 
   // Chaque lecture (la première, la relecture prudente) remet ses morceaux du début : `first` le dit à l'appelant.
   const listener = (): ((raw: RawModel) => void) | undefined => {

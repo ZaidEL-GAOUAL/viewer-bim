@@ -101,7 +101,7 @@ n'existe pas en WebAssembly.
 | `indices` | `Uint32Array`, coins des triangles, locaux au premier sommet de leur primitive. |
 | `primitives` | `Uint32Array`, six entiers par primitive : élément, premier sommet, nombre de sommets, premier indice, nombre d'indices, matériau. |
 | `materials` | `Uint8Array`, sept octets par matériau : r, g, b, a (sRGB), transparent (0 ou 1), double face (0 ou 1), priorité de profondeur (0 ordinaire, 1 surcouche, 2 hôte : qui l'emporte quand des faces de deux éléments sont dans le même plan, voir § 3). Ce tableau est interne entre le module et le viewer, pas le contrat de métadonnées. |
-| `metadata` | Texte JSON, exactement le format de [contrat-metadonnees.md](contrat-metadonnees.md) (version 1, `readOnly`, `elements`, et si le fichier les donne `georeference`, `phases` et `views`). |
+| `metadata` | Texte JSON, exactement le format de [contrat-metadonnees.md](contrat-metadonnees.md) (version 1, `readOnly`, `elements`, et si le fichier les donne `georeference`, `levels`, `phases` et `views`). |
 | `report` | Bilan de la lecture, voir ci-dessous. |
 
 Règles que le lecteur respecte et que `buildModel` vérifie avant de lire hors des tampons :
@@ -110,7 +110,8 @@ indice reste inférieur au nombre de sommets de sa primitive, et `metadata.eleme
 chaque clé, avec `label` égal au nom. Un élément sans primitive reste un élément, avec une boîte vide.
 
 Le rapport (`report`) contient `release` (année de Revit, ou `null`), `experimental`, `elements`,
-`triangles`, `seconds`, `sources` (`revit`, `partial`, `rebuilt`, `unknown`), `withoutGeometry`,
+`triangles`, `seconds`, `sources` (`revit`, `partial`, `rebuilt`, `unknown`), `withoutGeometry`, `withoutIfcClass` (éléments
+dessinés sans « Classe IFC », § 4 ; la carte le dit en une phrase, sans passer en avertissement),
 `warnings` (phrases en français) et `stages` (la durée de chaque étape de la lecture, dans l'ordre,
 pour le diagnostic : voir § 7). Le viewer en fait la carte « Fichier Revit lu », par exemple :
 
@@ -453,7 +454,7 @@ projet affichées et exportées restent justes.
 
 Le JSON suit le contrat habituel : un objet par élément, indexé par la clé.
 
-En tête de fiche : `Catégorie` (nom français), `Famille`, `Type`, `Niveau`, `Identifiant Revit`
+En tête de fiche : `Catégorie` (nom français), `Classe IFC` (voir « Classe IFC » ci-dessous), `Famille`, `Type`, `Niveau`, `Identifiant Revit`
 (l'ElementId, un nombre), `GUID IFC`, `Phase de création`, `Matériaux` (liste de noms) et
 `Source de la géométrie`. Viennent ensuite un objet imbriqué par groupe de paramètres de Revit
 (`Contraintes`, `Cotes`, `Données d'identification`, `Phase de construction`, `Autre`…), qui contient
@@ -511,6 +512,37 @@ en unités SI (voir « Unités » ci-dessous) ; l'unité entre dans le nom du pa
 contrainte (m)`, `Surface (m²)`, `Volume (m³)`, `Angle (°)`, `Débit (L/s)`) et la valeur est arrondie à
 douze chiffres significatifs (le bruit des conversions est au seizième ; un nombre saisi, un coût ou une coordonnée
 ne perd rien). Un paramètre absent du catalogue s'appelle `Paramètre Revit <identifiant>`.
+
+### Classe IFC
+
+`Classe IFC` est la classe IFC4 sous laquelle l'export IFC de Revit écrirait l'élément : c'est la propriété que lisent le préréglage
+« Quantités de base IFC » et les facettes d'entité d'un IDS, les mêmes que pour un fichier IFC, sans rien de propre à Revit côté viewer. Elle
+vient, dans l'ordre (`properties/fiche.rs`, `Resolver::ifc_class`) :
+
+1. du paramètre « Exporter en IFC en tant que » **de l'élément** (`IFC_EXPORT_ELEMENT_AS`, -1019014, intégré depuis Revit 2025), à défaut du
+   paramètre partagé `IfcExportAs` que l'export IFC de Revit lit dans les fichiers plus anciens, s'il nomme une classe IFC : « Ifc… » en toute
+   casse, sans le type prédéfini qui peut le suivre (« IfcSlab.ROOF »), écrit à l'orthographe de la table quand elle la connaît (« ifcSlab » →
+   « IfcSlab »). Une autre valeur (« DontExport », vide) est ignorée. Le paramètre du **type** (« IfcDoorType » dans `wadduwa.rvt`) ne compte pas :
+   il nomme la classe du type ;
+2. de la table `revit/src/catalog/ifc_classes.tsv` (des **données**, aucune condition dans le code) : la classe native du type d'abord (un type de
+   mur-rideau, `NewCurtainWallType`, donne `IfcCurtainWall` à un élément de catégorie « Murs »), puis la catégorie (`OST_Walls` → `IfcWall`…).
+
+Son origine est écrite dans le groupe « Paramètres IFC », propriété `Origine de la classe IFC` (« Paramètre « Exporter en IFC en tant que » de
+l'élément », « Déduite de la catégorie « Murs » (correspondance par défaut de l'export IFC de Revit) »). Elle n'est pas verrouillée : elle se
+modifie dans le viewer comme les autres propriétés. Un élément dont la catégorie n'a pas d'équivalent dans la table (topographie, imports CAD,
+sols de masse, surfaces divisées, « Site ») n'a pas de `Classe IFC` : le bilan les compte (`withoutIfcClass`).
+
+**D'où vient la table.** Chaque ligne dit sa source : `t` vue dans l'export IFC que Revit 2026 a fait lui-même de `RE1-Architecture.rvt`
+(Drshelden/IFC-ECS, MIT ; IFC2X3, élément par élément par le GlobalId, 72 sur 72, les classes ramenées à leur nom IFC4 : `IfcWallStandardCase` →
+`IfcWall`, `IfcFurnishingElement` → `IfcFurniture`, `IfcFlowTerminal` d'un appareil sanitaire → `IfcSanitaryTerminal`) ; `r` la table de rvt-rs
+(`ifc::category_map`), qu'elle confronte pour ses lignes documentées à l'export IFC4 de Revit de 2024_Core_Interior ; `d` la correspondance par
+défaut de Revit (« IFC Export Classes », `exportlayers-ifc-IAI.txt`), **recopiée sans fichier témoin** : `OST_CurtaSystem`, les lisses hautes et
+mains courantes, les gaines et tuyaux souples, chemins de câbles, conduits et leurs raccords, sprinklers. Le fichier `exportlayers-ifc-IAI.txt`
+lui-même n'a pas pu être relu pour cette table (pas de réseau) : les lignes `d` sont à confirmer sur un export de Revit.
+
+Mesuré sur les 16 079 éléments dessinés des 55 fichiers lisibles (`wadduwa.rvt` compris) : tous ont une `Classe IFC` sauf 47, 25 topographies, 8 sols
+de masse, 5 surfaces divisées, 4 éléments « Site » et les 5 imports CAD de `wadduwa.rvt`. 22 sols de 2024_Core_Interior la tiennent de leur paramètre (20 `IfcShadingDevice`, 2 « ifcSlab »
+écrits `IfcSlab`), 113 murs-rideaux de leur type. `tests/ifc_classes.rs` vérifie RE1-Architecture contre l'export de Revit, Core Interior et le bilan.
 
 ### Unités
 
@@ -595,8 +627,8 @@ lecture française de l'identifiant pour les autres.
 géométrie ». Tout le reste se modifie dans le viewer ; les modifications vont dans un JSON à part
 (contrat, § 2 bis), jamais dans le `.rvt`. Le bloc `georeference` est écrit quand
 rvt-rs donne l'emplacement du site (voir `src/geo/georeference.ts` pour sa forme) ; la carte du viewer
-s'en sert. Les blocs `phases` et `views` (§ 4 bis, plans d'étage compris) viennent des mêmes enregistrements que la géométrie décode déjà
-(`properties::Retained`, module `revit/src/views/`) : aucune passe de plus sur le fichier.
+s'en sert. Les blocs `levels`, `phases` et `views` (§ 4 bis : niveaux, plans d'étage et de plafond, coupes et façades compris) viennent des mêmes
+enregistrements que la géométrie décode déjà (`properties::Retained`, module `revit/src/views/`) : aucune passe de plus sur le fichier.
 
 ### Position sur Terre
 
@@ -624,7 +656,30 @@ fichier, avec nord vrai ou `IfcMapConversion`) n'existe pour un fichier d'essai 
 non trivial : le signe de la rotation repose sur le sens de `m_Trf` ci-dessus
 (`tests/properties.rs`, `le_sens_de_la_transformation_d_un_emplacement`).
 
-## 4 bis. Phases, vues 3D et plans d'étage enregistrés
+## 4 bis. Niveaux, phases, vues 3D, plans, coupes et façades enregistrés
+
+### Niveaux
+
+Un niveau est un enregistrement `Level` : son nom est `m_text`, son altitude est le Z de l'origine du plan horizontal (`Plane`) que désigne
+`m_pSurface` (`properties/native.rs`, `level_elevation`). Il s'écrit dans la section `levels` du contrat (`[{ "name", "elevation" }]`, mètres,
+triés par altitude ; [contrat-metadonnees.md](contrat-metadonnees.md), § 2 octies), ce qui donne aux fichiers Revit les plans par niveau, la coupe
+« au niveau » et le découpage aux niveaux.
+
+- **Le champ et son repère.** Recensement des `Level` des 55 fichiers lisibles (`examples/views.rs --dump Level`, `viewer-bim-travail/specks/census/levels`) :
+  chaque niveau a ce plan, horizontal (ses axes à 1e-14 près dans le plan XY). Son Z est dans le repère des plages de vue des plans et de la géométrie
+  (le point interne de Revit, ni le point de base du projet ni le point de topographie) : pour les 211 plans (d'étage et de plafond) dont la coupe est
+  rapportée au niveau du plan (`PlanViewRange2`, entrée 0 = `m_genElemId`), `m_cutPlaneElev` − décalage de coupe = ce Z, sans un seul écart ; et le pied
+  des murs dont la contrainte inférieure est ce niveau est à son altitude plus le décalage inférieur, au millimètre (2024_Core_Interior 359 murs sur
+  360, DynamoSample 41 sur 42, rac_advanced_sample_project 167 sur 180, RE1-Architecture 8 sur 8, drone-hangar 35 sur 35, SampleModel 58 sur 60, le
+  fichier privé 121 sur 122 ; les autres sont attachés par le pied à un sol ou portent un profilé).
+- **Les niveaux du projet seulement.** Seul un `Level` sans propriétaire d'ElemTable compte. Les autres sont des copies : ceux que possède la définition
+  d'un groupe (`ElementGroupType` : 59 dans 2024_Core_Interior, pour 15 niveaux ; 4 copies de « RF » dans le fichier privé), ou ceux d'une famille
+  (avant 2015, chaque famille chargée écrit ses niveaux parmi ceux du projet : 38 dans DynamoSample_2014, qui rend les 6 niveaux de DynamoSample_2023 ;
+  le « Ref. Level » d'un `.rfa`, possédé par sa famille : une famille n'écrit pas de `levels`).
+- **Doublons.** Deux niveaux à la même altitude (au millimètre) n'en font qu'un, nommé des deux noms (« A / B ») ; deux niveaux de même nom n'en font
+  qu'un, le plus bas. Aucun fichier d'essai n'en a, une fois les copies écartées.
+- Mesuré : 41 projets sur 55 fichiers écrivent des niveaux (les 14 autres sont des familles) ; `tests/sections.rs` vérifie les six niveaux des DynamoSample
+  (−0,8 m à 6,0 m), leur accord avec les plans et le pied des murs sur sept fichiers, et les six niveaux du fichier privé (F.G.L, GF, 1F, 2F, RF, URF).
 
 ### Phases
 
@@ -661,9 +716,8 @@ vérifient donc que par des essais sur des données écrites à la main (`tests/
 
 Une vue 3D est un enregistrement `DBView3d` (le nom, `m_viewName`) lié à un `Viewer3d` (la caméra) et, par lui, à un `ModelClipBox`
 (la boîte de coupe). Le lecteur retient les vues 3D qui ne sont pas des gabarits (`m_isTemplate`) et qui ont une caméra : la vue
-par défaut `{3D}` en fait partie, les vues « Façade », « Coupe en perspective »… nommées par l'utilisateur aussi. Les vues de coupe,
-d'élévation, de nomenclature et de feuille ne sont pas des vues 3D et ne sont pas lues ; les plans d'étage se lisent à part (« Plans d'étage »,
-ci-dessous).
+par défaut `{3D}` en fait partie, les vues « Façade », « Coupe en perspective »… nommées par l'utilisateur aussi. Les vues de nomenclature, de
+dessin et de feuille ne sont pas lues ; les plans d'étage et de plafond, les coupes et les façades se lisent à part (ci-dessous).
 
 - **Caméra.** `m_origin` est l'œil (pieds) ; `m_vertDir` le haut ; `m_viewDir` le sens **inverse** du regard (vérifié : pour « Cuisine »,
   l'œil est dans la maison et regarde +X alors que `m_viewDir` vaut −X) ; la droite est regard × haut, comme dans l'API de Revit.
@@ -704,7 +758,7 @@ par le même changement d'axes.
 
 **Ce qui est ignoré** : les remplacements graphiques par catégorie, par élément et par filtre de vue (`GraphicOverrides`, `FilterOverrides`), le
 niveau de détail, le style visuel (`m_modelDisplayMode`), les ombres et l'arrière-plan, la profondeur de découpe, les liens Revit et les
-sous-projets (worksets), les options de conception, et les vues qui ne sont ni des vues 3D ni des plans d'étage.
+sous-projets (worksets), les options de conception, et les vues de nomenclature, de dessin et de feuille.
 
 Mesuré sur les fichiers d'essai. Avant 2015, les vues 3D et les phases de chaque famille chargée (« {3D} », « View 1 », ses phases et
 ses filtres de phase) sont écrites parmi celles du projet, possédées par leur `Family` : elles sont écartées comme ses éléments (§ 6), et
@@ -773,10 +827,61 @@ profondeur de vue et sa coupe, comme Revit (`wadduwa.rvt` : le plan « GF » mon
   le plan de structure d'un même niveau).
 - **Avant 2015.** Le plan, son `Viewer` (possédé par lui) et son `DBViewType` sont enregistrés avec leur propriétaire d'ElemTable, et `Digest::settle` écarte ceux d'une famille chargée comme les vues 3D : `DynamoSample_2014.rvt`
   et `DynamoSample_2023.rvt` rendent les mêmes 3 plans, `drone-hangar-building-2014.rvt` ses 7 (sur 65 plans vus de dessus enregistrés).
-- **Ce qui n'est pas lu** (le viewer ne dessine que des triangles, sans traits ni motifs) : les plans de plafond (`m_planViewType` 2) ; les calques sous-jacents (`m_idUnderlayLevel`, `m_underlayOrientation`…) ; les zones de plan
+- **Ce qui n'est pas lu** (le viewer ne dessine que des triangles, sans traits ni motifs) : les calques sous-jacents (`m_idUnderlayLevel`, `m_underlayOrientation`…) ; les zones de plan
   (`m_planRegionIds`, qui changent la plage de vue sur un rectangle) ; la visibilité des sous-catégories ; les styles et épaisseurs de ligne, les remplacements graphiques et les filtres de vue ; les motifs de coupe et de surface ;
   les lignes « au-delà » (ce qui est sous la profondeur de vue, vu en traits) ; les annotations (étiquettes, cotes, textes, repères, pièces et surfaces) ; le gabarit de vue (le plan en a déjà enregistré les valeurs, comme une vue 3D) ; l'échelle et
   le niveau de détail ; le haut de la plage de vue (`m_topClipElev`) ; et, pour un plan de surface, ses limites et ses remplissages. Un élément que la coupe traverse est coupé par la boîte de coupe, non dessiné avec le motif de coupe de Revit.
+
+### Plans de plafond
+
+Un plan de plafond est un `DBViewPlan` dont `m_planViewType` vaut 2 (type « Ceiling Plan » dans les fichiers d'essai, « A-Working RCP » une fois). Il a les champs
+d'un plan d'étage, recadrage et masquages compris, et s'écrit dans `views[]` avec `"kind": "ceiling"`, après les plans d'étage (contrat, § 2 sexies).
+
+- **Ce que les fichiers d'essai contiennent.** 184 enregistrements hors gabarits ; 59 écrits sur les 55 fichiers, une fois écartés ceux des familles chargées d'avant 2015
+  (même règle que les plans) et deux du fichier privé (ci-dessous).
+- **Repère.** Le même qu'un plan d'étage (`m_viewDir` (0, 0, 1), `m_horzDir` (1, 0, 0), `m_vertDir` (0, 1, 0) sur les 43 plans de plafond de 2015 et après) : Revit montre un plan
+  de plafond vu de dessus, orienté comme le plan d'étage, en miroir de ce qu'on voit d'en dessous. La caméra s'écrit donc comme celle d'un plan (vers le bas) ; c'est le
+  viewer qui la retourne (contrat, « Plans de plafond »).
+- **Plage.** Un plan de plafond montre ce qui est **au-dessus** de sa coupe, jusqu'à sa profondeur : `range.bottom` est `m_cutPlaneElev`, `range.top` la profondeur
+  (`views::ViewRange::ceiling_depth_feet`), la règle des plans d'étage tournée vers le haut, le haut de la plage (`m_topClipElev`, entrée 1) remplaçant le bas : même niveau
+  que le haut, `m_topClipElev` − décalage du haut + décalage de la profondeur ; niveau « illimité » ou haut illimité, pas de limite ; un autre niveau, le haut (prudent).
+  Mesuré sur les 43 de 2015 et après : la profondeur est toujours sur le niveau du haut avec le même décalage (la profondeur est le haut), et le haut est le niveau du dessus
+  (`m_topClipElev` = l'altitude du `Level` de l'entrée 1 plus son décalage) ou illimité. Les altitudes résolues par Revit s'accordent avec les niveaux et les décalages pour
+  la coupe et le bas des 43, et pour le haut de 41 : les deux autres (fichier privé, « F.G.L » et « 2F ») ont leur haut réglé sur un niveau plus bas que leur coupe, et Revit
+  a enregistré pour haut la coupe elle-même. Un plan de plafond dont le haut n'est pas au-dessus de la coupe ne montre rien : il n'est pas écrit.
+- **Ce qui n'est pas repris** : comme pour les plans d'étage. Dans le viewer, l'image est vue d'en dessous et renversée gauche-droite comme dans Revit (projection
+  parallèle en miroir, `Viewer.setMirrored`) : elle se superpose au plan d'étage du même niveau (vérifié sur `RoomsAndExits.rvt`, « Level 1 »).
+
+### Coupes et façades
+
+Une coupe, un détail ou une façade est un enregistrement `DBViewSection` (`views::SectionView`) : `m_sectionViewType` 0 une coupe (types « Building Section », « Wall Section »,
+« Section 1 »), 3 un détail rappelé d'une coupe (type « Detail »), 2 une façade (sans `DBViewType` : `m_dbViewTypeId` −1) ; 1 sont les vues « Front », « Back », « Left »,
+« Right »… des familles, que les projets d'avant 2015 écrivent parmi les leurs (592, jamais écrites). Son cadre est un `Section` (coupe, détail) ou un `InteriorElevArrow`
+(façade), de même `m_boundedSpace` qu'un `Viewer`. Elle s'écrit dans `views[]` avec `"kind": "section"` (coupes et détails) ou `"elevation"`, après les plans de plafond.
+
+- **Recensement** (`examples/views.rs --dump DBViewSection Section InteriorElevArrow`, `viewer-bim-travail/specks/census/sections`) : 801 vues hors gabarits, dont 133 façades
+  et 76 coupes et détails. Écrites : les 133 façades et 44 coupes ; les autres sont des copies dans les définitions de groupes (18, `m_unplacedOwnerId` : le type de groupe,
+  comme pour les éléments que la géométrie écarte ; leur propriétaire d'ElemTable est un `ElementGroupType`), des coupes à décrochement (7 de plus) ou des coupes de familles
+  chargées d'avant 2015 (7, même règle que les plans).
+- **Repère et regard, vérifiés.** Le cadre est dans le repère de la vue : `m_basis` = (`m_horzDir`, `m_vertDir`, −`m_viewDir`), `m_orig` = `m_origin` (801 sur 801) ; le
+  haut est toujours vertical, le regard (−`m_viewDir`, comme une vue 3D) horizontal. Les 112 façades nommées « North », « South », « East », « West » regardent vers le sud,
+  le nord, l'ouest et l'est du projet (`tests/sections.rs`).
+- **Plan de coupe, vérifié de deux façons.** Les décalages de l'axe du regard sont (lointain, proche) ; la coupe est au **proche**. Le `GenericPlaneCutter` de la vue a un
+  seul `Plane`, perpendiculaire au regard, exactement à ce décalage de `m_origin` (196 sur 196 : 0 pour une façade et une coupe, 23,449 ou 20,787 pieds pour un détail
+  pris sur le second tronçon d'une coupe à décrochement) ; pour une façade, les extrémités de sa ligne de coupe (`m_frontCut`) sont à ce décalage et aux décalages droite et
+  gauche du cadre (133 sur 133). La lecture exige les deux témoins d'accord. Une coupe à décrochement dont le cadre couvre plusieurs tronçons n'a pas de
+  `GenericPlaneCutter` (plusieurs plans, un par tronçon) : elle ne se représente pas par une boîte, et **n'est pas écrite** (« Building Section » des DynamoSample,
+  « Section Through Main Stair » de rac_advanced_sample_project).
+- **Cadre.** Recadrée (`m_boundActive` vrai des deux côtés des deux axes, comme un plan) : `camera.size` est le cadre et `camera.position` son centre sur le plan de coupe,
+  la boîte en a les côtés ; sinon la caméra est l'origine ramenée sur le plan de coupe, et les côtés de la boîte sont à 10 km. Les cadres des quatre façades de
+  rac_advanced_sample_project et de la façade du fichier committé enferment tous leurs murs (tout le modèle pour le fichier committé).
+- **Boîte.** Axes (droite, regard, verticale), tournée autour de la verticale (`camera::section_box`), de la face proche (le plan de coupe) à 10 km au-delà.
+- **La découpe lointaine n'est pas lue.** Son décalage est le premier de l'axe du regard (là où sont les plans lointains des coupes à décrochement), mais rien dans les fichiers
+  ne confirme que son drapeau (`m_boundActive`, côté lointain) dise qu'elle découpe : la façade du fichier committé a ce drapeau, et tout son modèle est 1,2 m au-delà ; lue
+  ainsi, elle ne montrerait rien. `m_backClipping` (−1, 0 ou 2) ne s'accorde pas avec ce drapeau. La vue montre donc tout ce qui est derrière son plan de coupe : au
+  plus ce que Revit montre en plus.
+- **Ce qui n'est pas repris** : la découpe lointaine, les coupes à décrochement, les régions de cadrage non rectangulaires (`m_nonRectangularCropAreaCurvesLoops`, vides
+  dans les fichiers d'essai), le tracé au-delà, les motifs de coupe, les annotations ; comme pour un plan, les masquages et la phase sont repris.
 
 ## 5. Identifiant des éléments
 
@@ -1253,7 +1358,8 @@ changent d'une année à l'autre) ; `cargo test --release --test legacy` vérifi
 `DynamoSample_2023.rvt`, la couverture de chaque fichier ancien et les familles ; `cargo test --release --test workshared`
 celle des copies locales de modèles partagés avec leur central (§ 6). `cargo test --release --test views` vérifie les phases (ordre, filtres,
 remplacements, phase d'identifiant 0) et les vues (caméra qui regarde le bâtiment, boîtes de coupe dans les étendues du modèle, clés des
-éléments masqués), `cargo test --release --test plans` les plans d'étage (plage de vue, caméra et nord vrai, recadrage, DWG masqués par plan de `wadduwa.rvt`, mêmes plans avant et après 2015) ;
+éléments masqués), `cargo test --release --test plans` les plans d'étage (plage de vue, caméra et nord vrai, recadrage, DWG masqués par plan de `wadduwa.rvt`, mêmes plans avant et après 2015),
+`cargo test --release --test sections` les niveaux (contre les plans et le pied des murs), les plans de plafond, les coupes et les façades, `cargo test --release --test ifc_classes` la « Classe IFC » ;
 `cargo run --release --example views -- fichier` montre les sections `phases` et `views` d'un fichier,
 `--classes`, `--dump` et `--id` les enregistrements bruts, `--scan` les phases de création et de démolition de tous les éléments.
 
@@ -1297,14 +1403,18 @@ Limites actuelles.
 - Une forme reconstruite ou une boîte englobante n'est pas la forme exacte de Revit. La propriété
   « Source de la géométrie » dit lesquelles. Un nœud graphique ou une surface que le lecteur ne
   comprend pas encore donne une forme partielle.
-- Plans d'étage (§ 4 bis) : le modèle, vu de dessus, entre la profondeur de vue et la coupe, sans ce que Revit dessine en traits ou en motifs : plans de plafond, calques sous-jacents, zones de
+- Plans d'étage (§ 4 bis) : le modèle, vu de dessus, entre la profondeur de vue et la coupe, sans ce que Revit dessine en traits ou en motifs : calques sous-jacents, zones de
   plan, sous-catégories (le calque d'un DWG), styles de ligne, motifs de coupe, lignes « au-delà », annotations, et le haut de la plage de vue ; un plan de surface est lu comme un plan
   d'étage, sans ses limites ni ses remplissages. Une profondeur sur un autre niveau que le bas de la plage est prise au bas de la plage (prudent).
-- Un seul état du modèle par défaut : celui de la vue 3D complète. Les phases, les vues 3D et les plans d'étage enregistrés se reprennent (§ 4 bis) ; les
+- Plans de plafond (§ 4 bis) : vus d'en dessous, renversés comme dans Revit. Coupes et façades : sans leur
+  découpe lointaine (son drapeau n'a pas pu être confirmé sur les fichiers), et les coupes à décrochement ne sont pas écrites.
+- `Classe IFC` (§ 4) : les lignes `d` de la table viennent de la correspondance par défaut de Revit sans fichier témoin ; la topographie, les imports CAD, les sols de masse,
+  les surfaces divisées et « Site » n'en ont pas.
+- Un seul état du modèle par défaut : celui de la vue 3D complète. Les phases, les vues 3D, les plans d'étage et de plafond, les coupes et les façades enregistrés se reprennent (§ 4 bis) ; les
   filtres de vue, les remplacements graphiques par catégorie ou par élément, le niveau de détail, le style visuel et les nomenclatures ne
   sont pas reconstitués. Un remplacement graphique de phase est une couleur et une opacité, pas les traits ni les motifs de Revit.
 
 Feuille de route, sans ordre de priorité : plusieurs workers pour mailler un fichier de plusieurs centaines de mégaoctets
 en moins d'une minute (§ 7), les enregistrements géants décodés sans construire tout leur graphe (dans rvt-rs), la file
-des définitions en deux lectures plutôt qu'en attente, remplacements graphiques par catégorie et filtres de vue, vues de
-coupe et de façade enregistrées, plans de plafond.
+des définitions en deux lectures plutôt qu'en attente, remplacements graphiques par catégorie et filtres de vue, découpe
+lointaine des coupes et des façades (une fois son drapeau confirmé sur une capture de Revit), coupes à décrochement.

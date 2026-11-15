@@ -24,6 +24,15 @@ pub const MATERIALS: &str = "Matériaux";
 pub const REVIT_CLASS: &str = "Classe Revit";
 pub const GEOMETRY_SOURCE: &str = "Source de la géométrie";
 pub const OTHER_GROUP: &str = "Autre";
+/// La classe IFC de l'élément, au nom que lisent le préréglage des quantités IFC et les facettes d'entité d'un IDS ; d'où elle vient est dit
+/// dans le groupe des paramètres IFC (`IFC_CLASS_ORIGIN`).
+pub const IFC_CLASS: &str = "Classe IFC";
+const IFC_CLASS_ORIGIN: &str = "Origine de la classe IFC";
+const IFC_GROUP: &str = "Paramètres IFC";
+/// `IFC_EXPORT_ELEMENT_AS` (« Exporter en IFC en tant que »), paramètre intégré depuis Revit 2025 ; avant, l'export IFC de Revit lit le paramètre
+/// partagé de même rôle, `IfcExportAs` (les deux portent la même valeur sur les 22 éléments de 2024_Core_Interior qui en ont une).
+const IFC_EXPORT_ELEMENT_AS: i64 = -1019014;
+const IFC_EXPORT_AS_SHARED: &str = "IfcExportAs";
 
 // Paramètres intégrés que la fiche présente autrement (en tête) ou qui ne sont que de la plomberie.
 const ELEM_TYPE_PARAM: i64 = -1002050;
@@ -403,6 +412,26 @@ impl<'a> Resolver<'a> {
         raw.params.iter().find(|p| p.id == id).and_then(|p| p.value.as_i64()).filter(|id| *id >= 0).and_then(|id| self.name_of(id))
     }
 
+    /// La classe IFC de l'élément et d'où elle vient : son propre paramètre « Exporter en IFC en tant que » (`IFC_EXPORT_ELEMENT_AS`, à défaut
+    /// le paramètre partagé `IfcExportAs`) s'il nomme une classe IFC, sinon la table par défaut (`catalog::ifc_class` : la classe du type, puis
+    /// la catégorie). La valeur d'un paramètre de l'élément qui n'est pas une classe IFC (« DontExport », un texte vide) est ignorée ; le
+    /// paramètre du type ne compte pas (il nomme la classe du type, « IfcDoorType »). `None` si rien ne s'applique.
+    fn ifc_class(&self, raw: &Raw, category: Option<&catalog::Category>, type_raw: Option<&Raw>) -> Option<(String, String)> {
+        let own = raw.params.iter().find(|p| p.id == IFC_EXPORT_ELEMENT_AS).into_iter().chain(raw.params.iter().find(|p| p.caption.as_deref() == Some(IFC_EXPORT_AS_SHARED)));
+        for param in own {
+            if let Some(class) = param.value.as_str().and_then(ifc_class_name) {
+                return Some((class, format!("Paramètre « {} » de l'élément", self.parameter_name(param))));
+            }
+        }
+        let type_class = type_raw.map(|t| t.class.as_str());
+        let class = catalog::ifc_class(category, type_class)?.to_string();
+        let origin = match type_class.filter(|class| catalog::ifc_class(None, Some(class)).is_some()) {
+            Some(type_class) => format!("Déduite du type « {} » (correspondance par défaut de l'export IFC de Revit)", catalog::system_family(type_class).unwrap_or(type_class)),
+            None => format!("Déduite de la catégorie « {} » (correspondance par défaut de l'export IFC de Revit)", category.map_or("", |c| c.label)),
+        };
+        Some((class, origin))
+    }
+
     /// La fiche de l'élément `id`.
     pub fn fiche(&self, id: i64, guid: Option<&str>) -> Fiche {
         let Some(raw) = self.record(id) else { return Fiche::bare(id, guid) };
@@ -419,6 +448,10 @@ impl<'a> Resolver<'a> {
             head.push((CATEGORY, Val::Text(category.label.to_string())));
         } else if let Some(name) = &import_category {
             head.push((CATEGORY, Val::Text(name.clone())));
+        }
+        let ifc = self.ifc_class(raw, category, type_raw);
+        if let Some((class, _)) = &ifc {
+            head.push((IFC_CLASS, Val::Text(class.clone())));
         }
         if let Some(name) = &family_name {
             head.push((FAMILY, Val::Text(name.clone())));
@@ -518,6 +551,12 @@ impl<'a> Resolver<'a> {
         }
         if !materials.is_empty() {
             head.push((MATERIALS, Val::List(materials)));
+        }
+        if let Some((_, origin)) = ifc {
+            match groups.iter_mut().find(|(group, _)| group == IFC_GROUP) {
+                Some((_, entries)) => entries.push((IFC_CLASS_ORIGIN.to_string(), Val::Text(origin))),
+                None => groups.push((IFC_GROUP.to_string(), vec![(IFC_CLASS_ORIGIN.to_string(), Val::Text(origin))])),
+            }
         }
 
         groups.sort_by_key(|(name, _)| {
@@ -733,6 +772,19 @@ fn function_text(function: i64) -> Option<&'static str> {
         5 => "Gaine technique",
         _ => return None,
     })
+}
+
+/// Le nom de classe IFC qu'écrit un paramètre « Exporter en IFC en tant que » : « Ifc… » (toute casse), sans le type prédéfini qui peut le suivre
+/// (« IfcSlab.ROOF »), à l'orthographe de la table quand elle connaît la classe (« ifcSlab » → « IfcSlab », valeur relevée dans
+/// 2024_Core_Interior), sinon avec la lettre qui suit « Ifc » en capitale. `None` pour tout autre texte (« DontExport », vide).
+fn ifc_class_name(value: &str) -> Option<String> {
+    let name = value.trim().split('.').next()?.trim();
+    let rest = name.get(..3).filter(|prefix| prefix.eq_ignore_ascii_case("ifc")).map(|_| &name[3..])?;
+    let first = rest.chars().next().filter(char::is_ascii_alphabetic)?;
+    if !rest.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+    Some(catalog::ifc_class_spelling(name).map_or_else(|| format!("Ifc{}{}", first.to_ascii_uppercase(), &rest[1..]), str::to_string))
 }
 
 /// Ce que dit la spec d'un paramètre décimal : celle de sa définition dans le fichier (paramètres de famille,
@@ -1192,7 +1244,8 @@ mod tests {
         assert_eq!(naming_of_100(loaded, &[(100, 300)], None), (some("Mur spécial"), some("Generic - 200mm"), "Mur spécial : Generic - 200mm".to_string()));
         // Les paramètres du type du mur ne se joignent pas à la fiche du profilé (ils sont ceux de la fiche du mur).
         let sweep_fiche = fiche_of(100, sweep_and_wall(true, wall()), &[(100, 300)], None);
-        assert!(sweep_fiche.groups.is_empty(), "{:?}", sweep_fiche.groups);
+        // Seule l'origine de sa classe IFC, déduite de sa catégorie (« Murs »), est dans un groupe.
+        assert!(sweep_fiche.groups.iter().all(|(group, entries)| group == IFC_GROUP && entries.len() == 1), "{:?}", sweep_fiche.groups);
         let wall_fiche = fiche_of(300, sweep_and_wall(true, wall()), &[(100, 300)], None);
         assert!(!wall_fiche.groups.is_empty());
         // La catégorie est toujours celle du mur.
@@ -1242,7 +1295,7 @@ mod tests {
         // Une forme sur place n'a pas de type de famille : la fiche n'en joint pas les paramètres.
         let mut with_params = in_place_form("ExtrusionElem");
         with_params[2].1.params.push(double(-1001000, None, 0.5));
-        assert!(fiche_of(100, with_params, &owners, Some(-1)).groups.is_empty());
+        assert!(fiche_of(100, with_params, &owners, Some(-1)).groups.iter().all(|(group, entries)| group == IFC_GROUP && entries.len() == 1));
     }
 
     #[test]
@@ -1399,5 +1452,44 @@ mod tests {
         assert_eq!(categories, HashMap::from([(500, "MAN-GF.dwg".to_string())]));
         // La même résolution que la fiche : la valeur de « Catégorie » de l'import 100 est ce libellé.
         assert_eq!(head_text(&resolver.fiche(100, None), CATEGORY), some("MAN-GF.dwg"));
+    }
+
+    // ------------------------------------------------------------------------------------------------ classe IFC
+
+    fn text_param(id: i64, caption: Option<&str>, value: &str) -> Param {
+        Param { id, storage: Storage::Text, value: serde_json::Value::from(value), caption: caption.map(str::to_string), spec: None, group: None, from_type: false }
+    }
+
+    /// (Classe IFC, origine écrite dans « Paramètres IFC ») de l'élément 100.
+    fn ifc_of_100(records: Vec<(i64, Raw)>) -> (Option<String>, Option<String>) {
+        let fiche = fiche_of(100, records, &[], Some(-1));
+        let origin = fiche.groups.iter().find(|(group, _)| group == IFC_GROUP).and_then(|(_, entries)| entries.iter().find(|(name, _)| name == IFC_CLASS_ORIGIN)).and_then(|(_, value)| if let Val::Text(text) = value { Some(text.clone()) } else { None });
+        (head_text(&fiche, IFC_CLASS), origin)
+    }
+
+    #[test]
+    fn la_classe_ifc_vient_du_parametre_de_l_element_puis_du_type_puis_de_la_categorie() {
+        let wall = |params: Vec<Param>, type_class: &str| vec![(100, Raw { params, ..element("SWall", Some(200)) }), (200, type_record(type_class, "Générique"))];
+        // La catégorie : un mur de base est un IfcWall, et l'origine le dit.
+        let (class, origin) = ifc_of_100(wall(vec![], "BasicWallType"));
+        assert_eq!(class, some("IfcWall"));
+        assert!(origin.as_deref().is_some_and(|text| text.starts_with("Déduite de la catégorie « Murs »")), "{origin:?}");
+        // Le type : un mur-rideau est un IfcCurtainWall.
+        let (class, origin) = ifc_of_100(wall(vec![], "NewCurtainWallType"));
+        assert_eq!(class, some("IfcCurtainWall"));
+        assert!(origin.as_deref().is_some_and(|text| text.starts_with("Déduite du type « Mur-rideau »")), "{origin:?}");
+        // Le paramètre intégré de l'élément l'emporte ; puis le paramètre partagé `IfcExportAs`, dont la casse est corrigée (« ifcSlab »).
+        let (class, origin) = ifc_of_100(wall(vec![text_param(IFC_EXPORT_ELEMENT_AS, None, "IfcShadingDevice"), text_param(900_001, Some("IfcExportAs"), "IfcSlab")], "BasicWallType"));
+        assert_eq!(class, some("IfcShadingDevice"));
+        assert_eq!(origin, some("Paramètre « Exporter en IFC en tant que » de l'élément"));
+        assert_eq!(ifc_of_100(wall(vec![text_param(900_001, Some("IfcExportAs"), "ifcSlab")], "BasicWallType")).0, some("IfcSlab"));
+        // « DontExport », un texte vide, ou un nom qui n'est pas une classe : ignorés, la catégorie reprend.
+        for value in ["DontExport", "", "Ifc", "Ifc Mur"] {
+            assert_eq!(ifc_of_100(wall(vec![text_param(IFC_EXPORT_ELEMENT_AS, None, value)], "BasicWallType")).0, some("IfcWall"), "{value:?}");
+        }
+        // Un type prédéfini qui suit la classe n'en fait pas partie.
+        assert_eq!(ifc_of_100(wall(vec![text_param(IFC_EXPORT_ELEMENT_AS, None, "IFCSLAB.ROOF")], "BasicWallType")).0, some("IfcSlab"));
+        // Une catégorie sans équivalent (la topographie) : ni classe, ni origine.
+        assert_eq!(ifc_of_100(vec![(100, record("SiteSurface"))]), (None, None));
     }
 }

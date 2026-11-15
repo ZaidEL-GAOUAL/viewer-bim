@@ -1,8 +1,8 @@
 //! Les sections `phases` et `views` du JSON de métadonnées (voir `docs/contrat-metadonnees.md`, § « Phases » et
 //! « Vues enregistrées »).
 
-use super::camera::{Camera, SectionBox, camera, plan_camera, section_box};
-use super::{Digest, STATUS_NAMES, ViewRecord};
+use super::camera::{Camera, SectionBox, camera, plan_camera, section_box, section_camera};
+use super::{Digest, STATUS_NAMES, SectionKind, ViewRecord};
 use crate::catalog;
 use crate::catalog::units::FOOT;
 use crate::properties::json::{push_str, round_significant};
@@ -201,12 +201,20 @@ fn write_visibility(out: &mut String, view: &ViewRecord, digest: &Digest, elemen
 }
 
 /// La section `views` : une entrée par vue 3D de Revit qu'on peut ouvrir, triées par nom (la vue par défaut `{3D}`
-/// d'abord), puis une par plan d'étage (`"kind":"plan"`), triés par hauteur de coupe, puis par nom, puis par identifiant. `None` sans vue.
+/// d'abord), puis une par plan d'étage (`"kind":"plan"`), triés par hauteur de coupe, puis par nom, puis par identifiant, puis les plans de plafond
+/// (`"kind":"ceiling"`) dans le même ordre, puis les façades (`"kind":"elevation"`) et les coupes (`"kind":"section"`), par nom et identifiant.
+/// `None` sans vue.
 ///
 /// Un plan s'écrit avec sa caméra (parallèle, vers le bas), sa plage de vue en mètres (`range` : `top` est le plan de coupe, `bottom` la
 /// profondeur de vue, absente quand elle est illimitée), la boîte de son recadrage s'il est actif (`sectionBox` : x et z du recadrage, y de
 /// la plage ; sans profondeur, `-10000`), et ce qu'il cache. Un plan sans coupe finie, sans `Viewer`, dont la caméra ou le recadrage ne se lit pas,
 /// ou dont la profondeur est au-dessus de la coupe, n'est pas écrit : rien n'est inventé.
+///
+/// Un plan de plafond s'écrit comme un plan, la caméra de son fichier comprise (vue de dessus), mais sa plage va vers le haut : `range.bottom` est sa
+/// coupe, `range.top` sa profondeur de vue (absente quand elle est illimitée ; la boîte monte alors à `10000`).
+///
+/// Une coupe ou une façade s'écrit avec sa caméra (parallèle, face à son plan de coupe) et sa boîte (`sectionBox`, tournée autour de la verticale,
+/// dont la face proche est le plan de coupe), voir `camera::section_camera`. Une coupe à décrochement, ou dont le cadre ne se lit pas, n'est pas écrite.
 pub fn views_json(digest: &Digest, elements: &Elements<'_>) -> Option<String> {
     let mut views: Vec<_> = digest.views().collect();
     views.sort_by_key(|(view, _, _)| (!view.name.starts_with('{'), view.name.to_lowercase(), view.id));
@@ -228,14 +236,17 @@ pub fn views_json(digest: &Digest, elements: &Elements<'_>) -> Option<String> {
         out.push('}');
     }
 
-    // Les plans d'étage : par hauteur de coupe (au millimètre, que l'écriture garde), puis par nom, puis par identifiant.
+    // Les plans d'étage, puis les plans de plafond : par hauteur de coupe (au millimètre, que l'écriture garde), puis par nom, puis par identifiant.
     let mut plans: Vec<_> = digest.plans().filter_map(|(plan, crop, type_name)| Some((plan, plan.range.cut_feet()?, crop, type_name))).collect();
-    plans.sort_by_key(|(plan, cut, _, _)| ((cut * FOOT * 1000.0).round() as i64, plan.view.name.to_lowercase(), plan.view.id));
+    plans.sort_by_key(|(plan, cut, _, _)| (plan.ceiling, (cut * FOOT * 1000.0).round() as i64, plan.view.name.to_lowercase(), plan.view.id));
     for (plan, cut, crop, type_name) in plans {
         let Some((camera, section)) = plan_camera(&plan.view, crop, cut) else { continue };
-        let top = cut * FOOT;
-        let bottom = plan.range.depth_feet().map(|feet| feet * FOOT);
-        if bottom.is_some_and(|bottom| bottom > top) {
+        // Un plan d'étage montre de sa profondeur (en bas) à sa coupe ; un plan de plafond, de sa coupe à sa profondeur (en haut).
+        let (bottom, top) = if plan.ceiling { (Some(cut * FOOT), plan.range.ceiling_depth_feet().map(|feet| feet * FOOT)) } else { (plan.range.depth_feet().map(|feet| feet * FOOT), Some(cut * FOOT)) };
+        // Un plan de plafond dont le haut n'est pas au-dessus de sa coupe ne montre rien : Revit ramène à la coupe un haut réglé plus bas qu'elle.
+        if let (Some(bottom), Some(top)) = (bottom, top)
+            && (bottom > top || (plan.ceiling && top - bottom < 1e-6))
+        {
             continue;
         }
         if count > 0 {
@@ -244,33 +255,59 @@ pub fn views_json(digest: &Digest, elements: &Elements<'_>) -> Option<String> {
         count += 1;
         out.push_str("{\"name\":");
         push_str(&mut out, &plan.view.name);
-        out.push_str(",\"kind\":\"plan\"");
+        out.push_str(if plan.ceiling { ",\"kind\":\"ceiling\"" } else { ",\"kind\":\"plan\"" });
         if let Some(name) = type_name {
             out.push_str(",\"type\":");
             push_str(&mut out, name);
         }
         write_camera(&mut out, &camera);
         out.push_str(",\"range\":{");
-        if let Some(bottom) = bottom {
-            out.push_str("\"bottom\":");
-            number(&mut out, bottom);
-            out.push(',');
+        let bounds: Vec<(&str, f64)> = [("bottom", bottom), ("top", top)].into_iter().filter_map(|(name, value)| Some((name, value?))).collect();
+        for (i, (name, value)) in bounds.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            let _ = write!(out, "\"{name}\":");
+            number(&mut out, *value);
         }
-        out.push_str("\"top\":");
-        number(&mut out, top);
         out.push('}');
         if let Some(mut found) = section {
-            // Le recadrage ne dit rien de la hauteur : c'est la plage du plan (sans profondeur, bien en dessous du modèle).
-            found.min[1] = bottom.unwrap_or(UNBOUNDED_BOTTOM);
-            found.max[1] = top;
+            // Le recadrage ne dit rien de la hauteur : c'est la plage du plan (sans limite, bien au-delà du modèle).
+            found.min[1] = bottom.unwrap_or(-UNBOUNDED);
+            found.max[1] = top.unwrap_or(UNBOUNDED);
             write_section_box(&mut out, &found);
         }
         write_visibility(&mut out, &plan.view, digest, elements);
+        out.push('}');
+    }
+
+    // Les façades, puis les coupes : par nom, puis par identifiant.
+    let mut sections: Vec<_> = digest.sections().filter_map(|(section, frame, type_name)| Some((section, section_camera(&section.view, frame, section.cut?)?, type_name))).collect();
+    sections.sort_by_key(|(section, _, _)| (section.kind == SectionKind::Section, section.view.name.to_lowercase(), section.view.id));
+    for (section, (camera, found), type_name) in sections {
+        if count > 0 {
+            out.push(',');
+        }
+        count += 1;
+        out.push_str("{\"name\":");
+        push_str(&mut out, &section.view.name);
+        out.push_str(match section.kind {
+            SectionKind::Section => ",\"kind\":\"section\"",
+            SectionKind::Elevation => ",\"kind\":\"elevation\"",
+        });
+        if let Some(name) = type_name {
+            out.push_str(",\"type\":");
+            push_str(&mut out, name);
+        }
+        write_camera(&mut out, &camera);
+        write_section_box(&mut out, &found);
+        write_visibility(&mut out, &section.view, digest, elements);
         out.push('}');
     }
     out.push(']');
     (count > 0).then_some(out)
 }
 
-/// Le bas de la boîte de coupe d'un plan recadré dont la profondeur de vue est illimitée, en mètres (le JSON n'écrit pas d'infini).
-const UNBOUNDED_BOTTOM: f64 = -1e4;
+/// Une étendue sans limite d'une boîte de coupe, en mètres : le bas d'un plan sans profondeur de vue, le haut d'un plan de plafond sans
+/// profondeur (le JSON n'écrit pas d'infini). La même que `camera::UNBOUNDED_FEET`, en pieds.
+const UNBOUNDED: f64 = 1e4;

@@ -7,7 +7,7 @@ const count = (n: number, one: string, many: string) => `${integer.format(n)} ${
 
 /** Le retour de la lecture d'un .rvt ou d'un .rfa, en phrases pour la carte de conversion ; `warning` colore la carte. */
 export function describeRevitReport(report: RevitReport): { text: string; warning: boolean } {
-  const { release, experimental, elements, seconds, sources, withoutGeometry, warnings } = report;
+  const { release, experimental, elements, seconds, sources, withoutGeometry, withoutIfcClass = 0, warnings } = report;
   const lines: string[] = [];
 
   const parts: string[] = [];
@@ -23,6 +23,10 @@ export function describeRevitReport(report: RevitReport): { text: string; warnin
   if (approximate > 0) lines.push('Regroupez par « Source de la géométrie » pour les retrouver.');
   if (withoutGeometry > 0) {
     lines.push(`${count(withoutGeometry, 'élément sans géométrie n’est pas dessiné', 'éléments sans géométrie ne sont pas dessinés')}.`);
+  }
+  // Une information, pas un avertissement : la topographie ou un import CAD n'ont pas d'équivalent IFC, sans que la lecture y perde rien.
+  if (withoutIfcClass > 0) {
+    lines.push(`${count(withoutIfcClass, 'élément n’a pas de « Classe IFC » (catégorie sans équivalent IFC)', 'éléments n’ont pas de « Classe IFC » (catégorie sans équivalent IFC)')} : regroupez par « Catégorie » pour les retrouver.`);
   }
   lines.push(...warnings);
   // « Expérimental » : la lecture native n'a pas suffi (version de Revit inconnue ou non lue, formes reconstruites à la place).

@@ -231,6 +231,57 @@ pub fn plan_camera(view: &ViewRecord, crop: &Bounded, cut: f64) -> Option<(Camer
     Some((Camera { position, direction: [0.0, -1.0, 0.0], up, perspective: false, fov: None, size }, section))
 }
 
+/// Une étendue sans limite d'une boîte de coupe (côté non recadré, profondeur lointaine sans découpe) : 10 km, en pieds. Le JSON n'a pas d'infini ;
+/// c'est aussi le bas d'un plan sans profondeur (`write::UNBOUNDED_BOTTOM`).
+const UNBOUNDED_FEET: f64 = 1e4 / FOOT;
+
+/// Le cadre d'une coupe ou d'une façade dans le repère du viewer : sa caméra et sa boîte (voir `SectionView`). `frame` est le `m_boundedSpace` de son
+/// `Section` ou de son `InteriorElevArrow`, `cut` la distance du plan de coupe à l'origine de la vue (`SectionView::cut`). `None` si la vue ne se
+/// représente pas : regard qui n'est pas horizontal ou haut qui n'est pas vertical (la boîte du viewer ne tourne qu'autour de la verticale), cadre
+/// qui n'est pas dans le repère de la vue, ou plan de coupe qui n'est pas au décalage proche du cadre (les deux témoins du fichier se contredisent).
+///
+/// - La caméra est parallèle, regarde le plan de coupe (−`m_viewDir`), son haut est `m_vertDir`. Recadrée (les quatre côtés actifs) : `size` est le
+///   rectangle du cadre (largeur le long de `m_horzDir`, hauteur le long de `m_vertDir`) et la position son centre, sur le plan de coupe. Sinon : ni
+///   taille, la position est l'origine de la vue ramenée sur le plan de coupe, et le viewer cadre la maquette.
+/// - La boîte : du plan de coupe à `UNBOUNDED_FEET` au-delà, et sur les côtés le cadre s'il est recadré (sinon `UNBOUNDED_FEET` de part et
+///   d'autre). Ses axes sont (droite, regard, verticale) : `section_box` la rend avec sa rotation autour de la verticale.
+/// - **La découpe lointaine n'est pas lue.** Son décalage est le premier de l'axe du regard (c'est là que sont les plans lointains des coupes à
+///   décrochement), mais rien dans les fichiers d'essai ne confirme que `m_boundActive` de ce côté dise qu'elle découpe : la façade du fichier
+///   committé (« Elevation 1 - a ») a ce drapeau, et tout son modèle est 1,2 m au-delà ; lue ainsi, elle ne montrerait rien. La vue montre donc
+///   tout ce qui est derrière son plan de coupe, au plus ce que Revit montre en plus.
+pub fn section_camera(view: &ViewRecord, frame: &Bounded, cut: f64) -> Option<(Camera, SectionBox)> {
+    let look = unit([-view.back[0], -view.back[1], -view.back[2]])?;
+    let right = unit(view.right)?;
+    let up = unit(view.up)?;
+    if (up[2] - 1.0).abs() > 1e-6 || look[2].abs() > 1e-6 || right[2].abs() > 1e-6 {
+        return None;
+    }
+    let same = |a: V3, b: V3| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-6);
+    let [u, v, w] = frame.basis;
+    if !same(u, right) || !same(v, up) || !same(w, look) || !same(frame.origin, view.eye) {
+        return None;
+    }
+    let [x, y, z] = frame.offsets;
+    let near = z[1];
+    if (near - cut).abs() > 1e-6 || near.abs() >= 1e6 {
+        return None;
+    }
+    let bounded = |pair: [f64; 2]| pair[0] > pair[1] && pair[0].abs() < 1e6 && pair[1].abs() < 1e6;
+    let cropped = frame.on && frame.active[0].iter().chain(&frame.active[1]).all(|active| *active);
+    if cropped && !(bounded(x) && bounded(y)) {
+        return None;
+    }
+    let open = [UNBOUNDED_FEET, -UNBOUNDED_FEET];
+    let (x, y) = if cropped { (x, y) } else { (open, open) };
+    let depth = [near + UNBOUNDED_FEET, near];
+    let space = Bounded { basis: [right, look, [0.0, 0.0, 1.0]], origin: view.eye, offsets: [x, depth, y], active: [[true; 2]; 3], on: true };
+    let section = section_box(&space)?;
+    let mid = |pair: [f64; 2]| (pair[0] + pair[1]) / 2.0;
+    let centre = if cropped { add(add(add(view.eye, scale(right, mid(x))), scale(up, mid(y))), scale(look, near)) } else { add(view.eye, scale(look, near)) };
+    let size = cropped.then(|| [(x[0] - x[1]) * FOOT, (y[0] - y[1]) * FOOT]);
+    Some((Camera { position: point(centre), direction: direction(look), up: [0.0, 1.0, 0.0], perspective: false, fov: None, size }, section))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

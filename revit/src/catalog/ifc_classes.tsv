@@ -1,0 +1,76 @@
+# Classe IFC par défaut des éléments Revit : la propriété « Classe IFC » des fiches (properties::fiche), quand l'élément n'a pas son propre
+# paramètre « Exporter en IFC en tant que » (IFC_EXPORT_ELEMENT_AS, ou le paramètre partagé IfcExportAs). Noms de classes du schéma IFC4.
+# Une clé OST_… est une catégorie de Revit ; une autre clé est la classe native du type de l'élément, qui l'emporte sur sa catégorie.
+# Une catégorie absente n'a pas d'équivalent ici : ses éléments n'ont pas de « Classe IFC », et le bilan de la lecture les compte.
+#
+# Source de chaque ligne :
+#   t  vue dans l'export IFC que Revit 2026 a fait lui-même d'un fichier d'essai (RE1-Architecture, Drshelden/IFC-ECS, MIT : IFC2X3, la classe
+#      IFC2X3 ramenée à son nom IFC4 : IfcWallStandardCase → IfcWall, IfcFurnishingElement → IfcFurniture, IfcFlowTerminal d'un appareil
+#      sanitaire → IfcSanitaryTerminal), élément par élément, par le GlobalId (72 éléments sur 72) ;
+#   r  table de rvt-rs (ifc::category_map, Apache-2.0), qui la confronte, pour les lignes qu'elle documente, à l'export IFC4 de Revit de
+#      2024_Core_Interior et de Snowdon Towers ;
+#   d  correspondance par défaut de l'export IFC de Revit (« IFC Export Classes », exportlayers-ifc-IAI.txt d'Autodesk), recopiée sans fichier
+#      témoin : à confirmer sur un export de Revit.
+#
+# clé	classe IFC	source
+OST_Walls	IfcWall	t
+NewCurtainWallType	IfcCurtainWall	t
+OST_CurtaSystem	IfcCurtainWall	d
+OST_CurtainWallPanels	IfcPlate	t
+OST_CurtainWallMullions	IfcMember	t
+OST_Doors	IfcDoor	t
+OST_Windows	IfcWindow	r
+OST_Floors	IfcSlab	t
+OST_BuildingPad	IfcSlab	r
+OST_Roofs	IfcRoof	r
+OST_Ceilings	IfcCovering	t
+OST_Columns	IfcColumn	r
+OST_StructuralColumns	IfcColumn	r
+OST_StructuralFraming	IfcBeam	r
+OST_StructuralFoundation	IfcFooting	r
+OST_Rebar	IfcReinforcingBar	r
+OST_Stairs	IfcStair	r
+OST_StairsRuns	IfcStairFlight	r
+OST_StairsLandings	IfcSlab	r
+OST_StairsSupports	IfcMember	r
+OST_StairsRailing	IfcRailing	t
+OST_RailingTopRail	IfcRailing	d
+OST_RailingHandRail	IfcRailing	d
+OST_Ramps	IfcRamp	r
+OST_Furniture	IfcFurniture	t
+OST_Casework	IfcFurniture	t
+OST_FurnitureSystems	IfcFurniture	r
+OST_GenericModel	IfcBuildingElementProxy	r
+OST_SpecialityEquipment	IfcBuildingElementProxy	t
+OST_Mass	IfcBuildingElementProxy	r
+OST_Planting	IfcBuildingElementProxy	r
+OST_Parking	IfcBuildingElementProxy	r
+OST_Entourage	IfcBuildingElementProxy	r
+OST_Hardscape	IfcBuildingElementProxy	r
+OST_EdgeSlab	IfcBuildingElementProxy	r
+OST_Cornices	IfcBuildingElementProxy	r
+OST_Rooms	IfcSpace	r
+OST_Areas	IfcSpace	r
+OST_MEPSpaces	IfcSpace	r
+OST_LightingFixtures	IfcLightFixture	r
+OST_LightingDevices	IfcBuildingElementProxy	r
+OST_ElectricalEquipment	IfcBuildingElementProxy	r
+OST_ElectricalFixtures	IfcBuildingElementProxy	r
+OST_MechanicalEquipment	IfcBuildingElementProxy	r
+OST_FireAlarmDevices	IfcAlarm	r
+OST_DataDevices	IfcElectricAppliance	r
+OST_FoodServiceEquipment	IfcElectricAppliance	r
+OST_PlumbingFixtures	IfcSanitaryTerminal	t
+OST_Sprinklers	IfcFireSuppressionTerminal	d
+OST_DuctCurves	IfcDuctSegment	r
+OST_FlexDuctCurves	IfcDuctSegment	d
+OST_DuctFitting	IfcDuctFitting	r
+OST_DuctTerminal	IfcAirTerminal	r
+OST_PipeCurves	IfcPipeSegment	r
+OST_FlexPipeCurves	IfcPipeSegment	d
+OST_PipeFitting	IfcPipeFitting	r
+OST_CableTray	IfcCableCarrierSegment	d
+OST_CableTrayFitting	IfcCableCarrierFitting	d
+OST_Conduit	IfcCableCarrierSegment	d
+OST_ConduitFitting	IfcCableCarrierFitting	d
+OST_VerticalCirculation	IfcTransportElement	r

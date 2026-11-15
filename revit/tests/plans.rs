@@ -122,9 +122,12 @@ fn check_plans(read: &Read, file: &str) {
             assert!(categories.contains(value), "{file} / {name} : la catégorie masquée « {value} » n'est portée par aucun élément");
         }
     }
-    // Les vues 3D passent d'abord : « {3D} » en tête, puis les autres ; les plans ensuite, par hauteur de coupe croissante.
-    let kinds: Vec<bool> = read.views().iter().map(|view| view["kind"] == "plan").collect();
-    assert!(kinds.windows(2).all(|pair| !pair[0] || pair[1]), "{file} : une vue 3D après un plan");
+    // Les vues 3D passent d'abord : « {3D} » en tête, puis les autres ; les plans ensuite, d'un seul tenant, par hauteur de coupe croissante (les plans de
+    // plafond, les façades et les coupes suivent : `tests/sections.rs`).
+    let is_3d: Vec<bool> = read.views().iter().map(|view| view.get("kind").is_none()).collect();
+    assert!(is_3d.windows(2).all(|pair| pair[0] || !pair[1]), "{file} : une vue 3D après un plan");
+    let plans: Vec<usize> = read.views().iter().enumerate().filter(|(_, view)| view["kind"] == "plan").map(|(i, _)| i).collect();
+    assert!(plans.windows(2).all(|pair| pair[1] == pair[0] + 1), "{file} : plans d'étage dispersés {plans:?}");
     let tops: Vec<f64> = read.plans().iter().map(|plan| (number(&plan["range"]["top"]) * 1000.0).round()).collect();
     assert!(tops.windows(2).all(|pair| pair[0] <= pair[1]), "{file} : plans non triés par hauteur de coupe : {tops:?}");
 }

@@ -738,12 +738,23 @@ test('les phases et les vues du lecteur WebAssembly se lisent comme le contrat l
   // Vues : la vue par défaut {3D} est parallèle, et sa caméra se convertit pour le repère recentré du modèle. Suivent les deux
   // plans d'étage du niveau « Level 1 » (plan de structure, de −1,8 à 0,3 m, puis plan d'étage, de 0 à 1,2 m), vus de dessus.
   const views = metadata.views ?? [];
-  assert.deepEqual(views.map((view) => [view.name, view.kind, view.type ?? null]), [['{3D}', '3d', null], ['Level 1', 'plan', 'Structural Plan'], ['Level 1', 'plan', 'Floor Plan']]);
-  for (const plan of views.slice(1)) {
+  assert.deepEqual(views.map((view) => [view.name, view.kind, view.type ?? null]), [
+    ['{3D}', '3d', null], ['Level 1', 'plan', 'Structural Plan'], ['Level 1', 'plan', 'Floor Plan'], ['Level 1', 'ceiling', 'Ceiling Plan'], ['Elevation 1 - a', 'elevation', null],
+  ]);
+  const plans = views.filter((view) => view.kind === 'plan');
+  for (const plan of plans) {
     assert.deepEqual(plan.camera.direction, [0, -1, 0], `${plan.type} : vu de dessus`);
     assert.equal(plan.camera.projection, 'orthographic');
   }
-  assert.deepEqual(views.slice(1).map((plan) => [plan.range?.bottom, plan.range?.top].map((y) => y === undefined ? y : Math.round(y * 100) / 100)), [[-1.8, 0.3], [0, 1.2]]);
+  assert.deepEqual(plans.map((plan) => [plan.range?.bottom, plan.range?.top].map((y) => y === undefined ? y : Math.round(y * 100) / 100)), [[-1.8, 0.3], [0, 1.2]]);
+  // Le plan de plafond monte de sa coupe (2,3 m au-dessus de « Level 1 ») sans limite ; la façade regarde vers le nord du projet (−Z), dans sa boîte.
+  const [ceiling, elevation] = views.slice(3);
+  assert.deepEqual(ceiling.range, { bottom: 2.3 });
+  assert.deepEqual(elevation.camera.direction, [0, 0, -1]);
+  assert.ok(elevation.sectionBox);
+  // Le niveau du fichier, et la « Classe IFC » de chaque élément.
+  assert.deepEqual(metadata.levels, [{ name: 'Level 1', elevation: 0 }]);
+  assert.ok(model.keys.every((_, i) => typeof ownValue(props(i), 'Classe IFC') === 'string'), 'chaque élément a une classe IFC');
   const [view] = views;
   assert.equal(view.camera.projection, 'orthographic');
   assert.equal(view.phase, 'New Construction');
@@ -796,4 +807,19 @@ test('sans rappel, les morceaux gardés reçoivent les libellés de la fin à la
   assert.equal(read.metadata, whole.metadata);
   const model = buildModel(read.raw, select());
   assert.deepEqual(model.names, whole.names);
+});
+
+test('le lecteur propose de grouper par catégorie Revit (section `grouping`) : l’arbre la prend avant ce que les valeurs suggéreraient', async () => {
+  const { REVIT_GROUPING } = await import('../src/revit/readRevit.ts');
+  const { buildStore, chooseMetadata } = await import('../src/data/sidecar.ts');
+  initSync({ module: readFileSync(new URL('../src/revit/pkg/revit_bg.wasm', import.meta.url)) });
+  const output = readRevitWasm(new Uint8Array(readFileSync(new URL('../public/samples/revit-demo.rvt', import.meta.url))));
+  const metadata = parseMetadata(JSON.parse(output.metadata));
+  metadata.grouping ??= [...REVIT_GROUPING];
+  const store = buildStore(output.keys, [], metadata);
+  assert.ok(REVIT_GROUPING.every((path) => store.paths.includes(path)), 'chaque fiche porte la catégorie sous ce nom');
+  // Un JSON complet déposé avec le .rvt garde la proposition du fichier ; « JSON ↓ » la réécrit, relue telle quelle.
+  const dropped = parseMetadata({ elements: Object.fromEntries(output.keys.map((key) => [key, {}])) });
+  assert.deepEqual(chooseMetadata(metadata, [dropped], output.keys).metadata?.grouping, ['Catégorie']);
+  assert.deepEqual(parseMetadata({ grouping: ['Catégorie', 7, ''], elements: { a: {} } }).grouping, ['Catégorie']);
 });

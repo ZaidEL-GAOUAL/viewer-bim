@@ -129,6 +129,9 @@ pub struct Report {
     pub sources: SourceCounts,
     /// Éléments trouvés mais sans rien à dessiner.
     pub without_geometry: usize,
+    /// Éléments dessinés sans « Classe IFC » : leur catégorie n'a pas d'équivalent dans la table de `catalog/ifc_classes.tsv` (topographie,
+    /// imports CAD…), ou ils n'ont pas de catégorie.
+    pub without_ifc_class: usize,
     /// Messages en français, destinés à l'utilisateur.
     pub warnings: Vec<String>,
     /// Durée de chaque étape de la lecture, dans l'ordre (diagnostic : voir `revit/examples/measure.rs`).
@@ -368,6 +371,7 @@ pub fn read_streaming(reader: Box<dyn native::ReadSeek>, options: &Options, sink
 
     context.stage("géométrie : assemblage", seconds_pack);
     let metadata = properties.metadata();
+    let without_ifc_class = properties.without_ifc_class;
     let names = properties.labels;
 
     // « Expérimental » : la lecture native n'a pas suffi (lecture échouée et reconstruite par l'export IFC de rvt-rs), ou le format du
@@ -381,6 +385,7 @@ pub fn read_streaming(reader: Box<dyn native::ReadSeek>, options: &Options, sink
         seconds: clock.seconds(),
         sources: counts,
         without_geometry,
+        without_ifc_class,
         warnings: context.warnings,
         stages: context.stages,
     };

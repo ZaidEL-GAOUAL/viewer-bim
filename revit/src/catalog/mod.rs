@@ -14,6 +14,7 @@ use std::sync::OnceLock;
 const PARAMETERS: &str = include_str!("parameters.tsv");
 const GROUPS: &str = include_str!("groups.tsv");
 const CATEGORIES: &str = include_str!("categories.tsv");
+const IFC_CLASSES: &str = include_str!("ifc_classes.tsv");
 
 /// Ce que mesure une valeur décimale, dans l'unité interne de Revit (pieds, radians).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,6 +319,24 @@ pub fn system_family(type_class: &str) -> Option<&'static str> {
     })
 }
 
+/// La table `ifc_classes.tsv` : clé (nom OST_ d'une catégorie, ou classe native d'un type) → classe IFC.
+fn ifc_classes() -> &'static HashMap<&'static str, &'static str> {
+    static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    TABLE.get_or_init(|| rows(IFC_CLASSES).filter_map(|row| Some((*row.first()?, *row.get(1)?))).collect())
+}
+
+/// La classe IFC par défaut d'un élément (« Classe IFC » de sa fiche quand il n'a pas la sienne) : celle de la classe native de son type
+/// (`type_class`), à défaut celle de sa catégorie (`category`, une BuiltInCategory). `None` si ni l'une ni l'autre n'est dans la table.
+pub fn ifc_class(category: Option<&Category>, type_class: Option<&str>) -> Option<&'static str> {
+    let table = ifc_classes();
+    type_class.and_then(|class| table.get(class)).or_else(|| table.get(category?.ost)).copied()
+}
+
+/// L'orthographe d'une classe IFC que la table connaît, quelle que soit la casse (« IFCSLAB », « ifcSlab » → « IfcSlab ») ; `None` sinon.
+pub fn ifc_class_spelling(name: &str) -> Option<&'static str> {
+    ifc_classes().values().find(|class| class.eq_ignore_ascii_case(name)).copied()
+}
+
 /// Nombre d'entrées du catalogue (identifiants de paramètres, groupes, catégories) : pour les bilans.
 pub fn sizes() -> (usize, usize, usize) {
     let tables = tables();
@@ -620,5 +639,33 @@ mod tests {
         assert_eq!(label("OST_CurtaSystem"), system_family("CurtaSystemAttr").unwrap().replacen("Système", "Systèmes", 1));
         // Le même mot que les types de composants déjà nommés.
         assert_eq!(system_family("StairsAttributes"), system_family("StairsType"));
+    }
+
+    #[test]
+    fn la_table_des_classes_ifc_ne_nomme_que_des_categories_et_des_classes_ifc_connues() {
+        for row in rows(IFC_CLASSES) {
+            let (key, class, source) = (row[0], row[1], row[2]);
+            assert!(key.starts_with("OST_") == category_by_ost(key).is_some(), "{key} : catégorie inconnue du catalogue");
+            assert!(class.starts_with("Ifc") && class[3..].chars().next().is_some_and(char::is_uppercase) && class.chars().all(|c| c.is_ascii_alphanumeric()), "{key} : {class}");
+            assert!(matches!(source, "t" | "r" | "d"), "{key} : source {source}");
+        }
+        // Une clé par ligne : une catégorie n'a qu'une classe.
+        let keys: Vec<&str> = rows(IFC_CLASSES).map(|row| row[0]).collect();
+        assert_eq!(keys.len(), ifc_classes().len());
+    }
+
+    #[test]
+    fn la_classe_du_type_l_emporte_sur_celle_de_la_categorie() {
+        let walls = category_by_ost("OST_Walls");
+        assert_eq!(ifc_class(walls, Some("BasicWallType")), Some("IfcWall"));
+        // Un mur-rideau est un mur (catégorie), mais Revit l'exporte en IfcCurtainWall (RE1-Architecture).
+        assert_eq!(ifc_class(walls, Some("NewCurtainWallType")), Some("IfcCurtainWall"));
+        assert_eq!(ifc_class(category_by_ost("OST_Floors"), None), Some("IfcSlab"));
+        // Une catégorie sans équivalent, ou pas de catégorie : rien.
+        assert_eq!(ifc_class(category_by_ost("OST_Topography"), None), None);
+        assert_eq!(ifc_class(None, None), None);
+        assert_eq!(ifc_class_spelling("IFCSLAB"), Some("IfcSlab"));
+        assert_eq!(ifc_class_spelling("ifcCurtainWall"), Some("IfcCurtainWall"));
+        assert_eq!(ifc_class_spelling("IfcShadingDevice"), None);
     }
 }

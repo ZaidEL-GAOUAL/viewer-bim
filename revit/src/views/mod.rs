@@ -16,10 +16,13 @@
 //! - `DBView3d` : une vue 3D (nom, repère de la caméra, élément `Viewer3d`, phase et filtre de phase dans ses jeux de
 //!   paramètres, éléments masqués, catégories masquées). `Viewer3d` : la caméra (perspective ou parallèle, fenêtre de
 //!   recadrage) et sa boîte de coupe ; `ModelClipBox` : la boîte de coupe elle-même.
-//! - `DBViewPlan` : un plan d'étage (`m_planViewType` 1 : vu de dessus ; les plans de plafond, 2, ne sont pas lus), avec les mêmes
+//! - `DBViewPlan` : un plan d'étage (`m_planViewType` 1 : vu de dessus) ou un plan de plafond (`m_planViewType` 2), avec les mêmes
 //!   champs qu'une vue 3D et sa plage de vue (`PlanViewRange2`, à défaut `PlanViewRange`, et les trois hauteurs absolues que Revit
 //!   en tire). `Viewer` : son recadrage ; `DBViewType` (ou `DBViewTypeAreaPlan` pour un plan de surface, dont le `m_planViewType` est aussi 1) : le nom de
-//!   son type (« Floor Plan », « Structural Plan », « Gross Building »…). Voir [`ViewRange`].
+//!   son type (« Floor Plan », « Structural Plan », « Ceiling Plan », « Gross Building »…). Voir [`ViewRange`].
+//! - `DBViewSection` : une coupe (`m_sectionViewType` 0, ou 3 pour un détail, rappel d'une coupe) ou une façade (2), avec les champs d'une vue
+//!   et son plan de coupe (`GenericPlaneCutter`) ; son cadre est un `Section` (coupe) ou un `InteriorElevArrow` (façade), de même
+//!   `m_boundedSpace` qu'un `Viewer`. Voir [`SectionView`].
 //!
 //! Le module ne lit rien dans le fichier : `properties::Retained::observe` lui passe chaque enregistrement que la
 //! géométrie décode déjà (aucune passe de plus), et `properties::build` lui demande les sections `phases` et `views` du
@@ -43,9 +46,13 @@ use rvt::research::native_saved_mesh::pointer;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-/// Les classes d'enregistrements dont ce module se sert.
+/// Les classes d'enregistrements dont ce module se sert. `Section` et `InteriorElevArrow` sont les cadres (`m_boundedSpace`, comme `Viewer`)
+/// d'une coupe et d'une façade (`DBViewSection`).
 pub fn is_view_class(class: &str) -> bool {
-    matches!(class, "ProjectPhase" | "AllProjectPhases" | "PhaseFilterElem" | "DBView3d" | "Viewer3d" | "ModelClipBox" | "DBViewPlan" | "Viewer" | "DBViewType" | "DBViewTypeAreaPlan")
+    matches!(
+        class,
+        "ProjectPhase" | "AllProjectPhases" | "PhaseFilterElem" | "DBView3d" | "Viewer3d" | "ModelClipBox" | "DBViewPlan" | "Viewer" | "DBViewType" | "DBViewTypeAreaPlan" | "DBViewSection" | "Section" | "InteriorElevArrow"
+    )
 }
 
 /// Paramètres intégrés d'une vue : sa phase et son filtre de phase (`VIEW_PHASE`, `VIEW_PHASE_FILTER`).
@@ -120,6 +127,8 @@ pub struct ViewRange {
     pub cut: f64,
     /// `m_bottomClipElev` : le bas de la plage de vue.
     pub bottom_clip: f64,
+    /// `m_topClipElev` : le haut de la plage de vue (ce jusqu'où un plan de plafond regarde, voir [`ViewRange::ceiling_depth_feet`]).
+    pub top_clip: f64,
     /// Les cinq niveaux (identifiant d'élément, -1 illimité) ou positions de niveau (`PlanViewRange.m_levelPos`).
     pub levels: Option<[i64; 5]>,
     /// Les cinq décalages, en pieds.
@@ -160,19 +169,78 @@ impl ViewRange {
         }
         Some(self.bottom_clip)
     }
+
+    /// La profondeur de vue d'un plan de plafond, en pieds : le haut de ce qu'il montre au-dessus de sa coupe ; `None` sans limite. La même règle
+    /// que [`ViewRange::depth_feet`], vers le haut : un plan de plafond regarde de sa coupe à sa profondeur, et c'est le **haut** de la plage
+    /// (`m_topClipElev`, entrée 1 des niveaux et des décalages) qui la borne.
+    ///
+    /// Mesuré sur les 43 plans de plafond des fichiers d'essai de 2015 et après : la profondeur (entrée 3) est toujours sur le même niveau que le haut
+    /// avec le même décalage (la profondeur est le haut) ; le haut est l'altitude du niveau au-dessus (`m_topClipElev` = l'altitude du `Level` que
+    /// désigne l'entrée 1, plus son décalage), ou « illimité » sans niveau au-dessus (±999 999 999,99, niveau relatif -2 ou -1).
+    pub fn ceiling_depth_feet(&self) -> Option<f64> {
+        if is_unlimited(self.top_clip) {
+            return None;
+        }
+        if let (Some(levels), Some(offsets)) = (self.levels, self.offsets) {
+            if levels[3] == -1 {
+                return None;
+            }
+            if levels[1] == levels[3] {
+                let depth = self.top_clip - offsets[1] + offsets[3];
+                return (!is_unlimited(depth)).then_some(depth);
+            }
+        }
+        Some(self.top_clip)
+    }
 }
 
-/// Un plan d'étage (`DBViewPlan` dont `m_planViewType` est 1 et qui n'est pas un gabarit).
+/// Un plan d'étage ou un plan de plafond (`DBViewPlan` dont `m_planViewType` est 1 ou 2, et qui n'est pas un gabarit).
 #[derive(Debug, Clone)]
 pub struct Plan {
     /// Ce qu'un plan a de commun avec une vue 3D : nom, repère, `Viewer`, phase, éléments et catégories masqués.
     pub view: ViewRecord,
+    /// Un plan de plafond (`m_planViewType` 2, type « Ceiling Plan » dans les fichiers d'essai) : il montre ce qui est **au-dessus** de sa coupe,
+    /// jusqu'à sa profondeur (`ViewRange::ceiling_depth_feet`). Son repère est pourtant celui d'un plan d'étage (`m_viewDir` (0, 0, 1),
+    /// `m_horzDir` (1, 0, 0), `m_vertDir` (0, 1, 0) sur les 43 mesurés) : Revit le montre vu de dessus, en miroir de ce qu'on verrait d'en dessous.
+    pub ceiling: bool,
     /// L'élément `DBViewType` du plan (son nom est celui du type : « Floor Plan »), -1 sans type.
     pub type_id: i64,
     /// `m_bUseTrueNorth` : le plan est orienté sur le nord vrai. `m_vertDir` porte déjà cette rotation (voir `camera::plan_camera`) : le
     /// drapeau n'est qu'une information.
     pub true_north: bool,
     pub range: ViewRange,
+}
+
+/// Ce qu'est une `DBViewSection` (`m_sectionViewType`) : 0 une coupe, 2 une façade, 3 un détail (une coupe rappelée d'une autre, type
+/// « Detail »). 1 (les vues « Front », « Back », « Left », « Right »… des familles, que les projets d'avant 2015 écrivent parmi les leurs) n'est pas lu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SectionKind {
+    Section,
+    Elevation,
+}
+
+/// Une coupe ou une façade (`DBViewSection` qui n'est pas un gabarit).
+///
+/// Mesuré sur les 196 coupes, détails et façades des fichiers d'essai qui ont un plan de coupe (`examples/views.rs --dump DBViewSection Section
+/// InteriorElevArrow`, `viewer-bim-travail/specks/census/sections`) :
+/// - le repère de la vue est celui de son cadre : `m_boundedSpace.m_basis` = (`m_horzDir`, `m_vertDir`, −`m_viewDir`) et `m_orig` = `m_origin`
+///   (801 vues sur 801, gabarits et vues de familles compris) ; le haut est toujours vertical, le regard (−`m_viewDir`) horizontal ;
+/// - le regard est bien −`m_viewDir`, comme pour une vue 3D : les 112 façades nommées « North », « South », « East », « West » regardent vers le sud,
+///   le nord, l'ouest et l'est du projet ;
+/// - les décalages de l'axe du regard sont (lointain, proche) : la coupe est au décalage **proche**. Le `GenericPlaneCutter` de la vue a un seul
+///   `Plane`, perpendiculaire au regard, exactement à ce décalage de `m_origin` (196 sur 196 : 0 pour une façade et une coupe ordinaire, 23,449
+///   pieds pour le détail d'une coupe à décrochement pris sur son second tronçon) ; pour une façade, `m_frontCut` (les extrémités de la ligne de
+///   coupe) est à ce même décalage et aux décalages droite et gauche du cadre (133 sur 133) ;
+/// - une coupe à décrochement dont le cadre couvre plusieurs tronçons n'a pas de `GenericPlaneCutter` (13 vues, plusieurs plans) : elle ne se
+///   représente pas par une boîte, et n'est pas écrite.
+#[derive(Debug, Clone)]
+pub struct SectionView {
+    pub view: ViewRecord,
+    pub kind: SectionKind,
+    /// L'élément `DBViewType` (« Building Section », « Wall Section », « Detail »), -1 sans type (les façades n'en ont pas).
+    pub type_id: i64,
+    /// La distance de `m_origin` au plan de coupe le long du regard, en pieds : celle du plan du `GenericPlaneCutter`. `None` sans ce plan unique.
+    pub cut: Option<f64>,
 }
 
 /// La caméra d'une vue 3D : `Viewer3d`.
@@ -223,11 +291,13 @@ pub struct Digest {
     views: BTreeMap<i64, ViewRecord>,
     viewers: BTreeMap<i64, Viewer>,
     boxes: BTreeMap<i64, Bounded>,
-    /// Les plans d'étage (gabarits, plans de plafond et autres sens de regard écartés dès la lecture).
+    /// Les plans d'étage et de plafond (gabarits et autres sortes de plans écartés dès la lecture).
     plans: BTreeMap<i64, Plan>,
-    /// Le recadrage de chaque `Viewer` lu (les plans, mais aussi les coupes, façades et détails : `settle` ne garde que ceux des plans).
+    /// Les coupes et les façades (gabarits et vues de familles écartés dès la lecture).
+    sections: BTreeMap<i64, SectionView>,
+    /// Le cadre de chaque `Viewer`, `Section` et `InteriorElevArrow` lu (`m_boundedSpace`) : `settle` ne garde que ceux des plans et des coupes retenus.
     plan_viewers: BTreeMap<i64, Bounded>,
-    /// Le nom de chaque `DBViewType` lu (`SymbolInfo.m_name`) : `settle` ne garde que ceux des plans.
+    /// Le nom de chaque `DBViewType` lu (`SymbolInfo.m_name`) : `settle` ne garde que ceux des plans et des coupes.
     view_types: BTreeMap<i64, String>,
     /// Le propriétaire d'ElemTable de chaque enregistrement de phase, de filtre, de vue, de plan, de caméra ou de boîte de coupe lu : de
     /// quoi savoir, une fois toute la lecture faite, lesquels sont des pièces d'une famille chargée (`settle`). Un identifiant par
@@ -354,7 +424,12 @@ impl Digest {
                     self.plans.insert(id, plan);
                 }
             }
-            "Viewer" => {
+            "DBViewSection" => {
+                if let Some(section) = section_record(id, graph) {
+                    self.sections.insert(id, section);
+                }
+            }
+            "Viewer" | "Section" | "InteriorElevArrow" => {
                 if let Some(space) = fields.get("m_boundedSpace").and_then(bounded) {
                     self.plan_viewers.insert(id, space);
                 }
@@ -401,13 +476,18 @@ impl Digest {
             self.viewers.retain(|id, _| !dropped.contains(id));
             self.boxes.retain(|id, _| !dropped.contains(id));
             self.plans.retain(|id, _| !dropped.contains(id));
+            self.sections.retain(|id, _| !dropped.contains(id));
             self.owners.retain(|id, _| !dropped.contains(id));
         }
-        // Les `Viewer` et les `DBViewType` n'ont de sens que par un plan : ceux des coupes, des façades et des plans écartés ne se gardent pas.
-        let (viewers, types): (BTreeSet<i64>, BTreeSet<i64>) = (self.plans.values().map(|plan| plan.view.viewer).collect(), self.plans.values().map(|plan| plan.type_id).collect());
+        // Les cadres et les `DBViewType` n'ont de sens que par un plan ou une coupe : ceux des vues écartées ne se gardent pas.
+        let viewers: BTreeSet<i64> = self.plans.values().map(|plan| plan.view.viewer).chain(self.sections.values().map(|section| section.view.viewer)).collect();
+        let types: BTreeSet<i64> = self.plans.values().map(|plan| plan.type_id).chain(self.sections.values().map(|section| section.type_id)).collect();
         self.plan_viewers.retain(|id, _| viewers.contains(id));
         self.view_types.retain(|id, _| types.contains(id));
-        self.unread = unread.iter().filter(|id| self.phases.contains_key(id) || self.filters.contains_key(id) || self.views.contains_key(id) || self.plans.contains_key(id) || self.tables.iter().any(|table| table.id == **id)).count();
+        self.unread = unread
+            .iter()
+            .filter(|id| self.phases.contains_key(id) || self.filters.contains_key(id) || self.views.contains_key(id) || self.plans.contains_key(id) || self.sections.contains_key(id) || self.tables.iter().any(|table| table.id == **id))
+            .count();
     }
 
     /// Phases, filtres de phase et vues gardés que possède une `Family` dont on ne sait pas si elle est chargée (voir `settle`).
@@ -464,7 +544,7 @@ impl Digest {
         })
     }
 
-    /// Les plans d'étage qu'on peut ouvrir (ceux dont le `Viewer` est lu), avec leur recadrage et le nom de leur type, par identifiant.
+    /// Les plans d'étage et de plafond qu'on peut ouvrir (ceux dont le `Viewer` est lu), avec leur recadrage et le nom de leur type, par identifiant.
     pub fn plans(&self) -> impl Iterator<Item = (&Plan, &Bounded, Option<&str>)> {
         self.plans.values().filter_map(|plan| {
             let crop = self.plan_viewers.get(&plan.view.viewer)?;
@@ -472,9 +552,17 @@ impl Digest {
         })
     }
 
+    /// Les coupes et les façades dont le cadre est lu, avec ce cadre et le nom de leur type, par identifiant.
+    pub fn sections(&self) -> impl Iterator<Item = (&SectionView, &Bounded, Option<&str>)> {
+        self.sections.values().filter_map(|section| {
+            let frame = self.plan_viewers.get(&section.view.viewer)?;
+            Some((section, frame, self.view_types.get(&section.type_id).map(String::as_str)))
+        })
+    }
+
     /// Rien à écrire dans le contrat ?
     pub fn is_empty(&self) -> bool {
-        self.phases.is_empty() && self.views.is_empty() && self.plans.is_empty()
+        self.phases.is_empty() && self.views.is_empty() && self.plans.is_empty() && self.sections.is_empty()
     }
 }
 
@@ -548,11 +636,16 @@ fn plan_levels(graph: &ObjectGraph) -> (Option<[i64; 5]>, Option<[f64; 5]>) {
     (None, None)
 }
 
-/// Réduit un graphe `DBViewPlan` à ce qu'il faut pour ouvrir le plan : `None` pour un gabarit, un plan qui ne regarde pas vers le bas
-/// (`m_planViewType` 2 : plan de plafond ; tout ce qui n'est pas 1), ou dont une valeur manque.
+/// Réduit un graphe `DBViewPlan` à ce qu'il faut pour ouvrir le plan : `None` pour un gabarit, un plan qui n'est ni un plan d'étage
+/// (`m_planViewType` 1) ni un plan de plafond (2), ou dont une valeur manque.
 fn plan_record(id: i64, graph: &ObjectGraph) -> Option<Plan> {
     let fields = &graph.objects.first()?.fields;
-    if fields.get("m_planViewType").and_then(Value::as_i64) != Some(1) || fields.get("m_isTemplate").and_then(Value::as_bool).unwrap_or(false) {
+    let ceiling = match fields.get("m_planViewType").and_then(Value::as_i64) {
+        Some(1) => false,
+        Some(2) => true,
+        _ => return None,
+    };
+    if fields.get("m_isTemplate").and_then(Value::as_bool).unwrap_or(false) {
         return None;
     }
     let view = view_record(id, graph)?;
@@ -560,11 +653,51 @@ fn plan_record(id: i64, graph: &ObjectGraph) -> Option<Plan> {
     // Une plage illimitée ou absente se garde telle quelle : `ViewRange::cut_feet` dit qu'il n'y a rien à montrer.
     let feet = |name: &str| fields.get(name).and_then(Value::as_f64).unwrap_or(f64::NAN);
     Some(Plan {
+        ceiling,
         type_id: fields.get("m_dbViewTypeId").and_then(element_id).unwrap_or(-1),
         true_north: fields.get("m_bUseTrueNorth").and_then(Value::as_bool).unwrap_or(false),
-        range: ViewRange { cut: feet("m_cutPlaneElev"), bottom_clip: feet("m_bottomClipElev"), levels, offsets },
+        range: ViewRange { cut: feet("m_cutPlaneElev"), bottom_clip: feet("m_bottomClipElev"), top_clip: feet("m_topClipElev"), levels, offsets },
         view,
     })
+}
+
+/// Réduit un graphe `DBViewSection` à ce qu'il faut pour ouvrir la coupe ou la façade : `None` pour un gabarit, une vue de famille
+/// (`m_sectionViewType` 1), une sorte inconnue, ou la copie d'une vue dans la définition d'un groupe (`m_unplacedOwnerId` : le type de groupe,
+/// comme pour les éléments que la géométrie ne dessine pas, `geometry::saved`). Le plan de coupe est celui du `GenericPlaneCutter` de la vue
+/// (voir [`SectionView`]). Mesuré : 18 coupes et détails de `rac_advanced_sample_project` et `mega_advanced_sample_file` sont de ces copies (leur
+/// propriétaire d'ElemTable est un `ElementGroupType`), aucun plan ni aucune vue 3D des fichiers d'essai.
+fn section_record(id: i64, graph: &ObjectGraph) -> Option<SectionView> {
+    let fields = &graph.objects.first()?.fields;
+    let kind = match fields.get("m_sectionViewType").and_then(Value::as_i64) {
+        Some(0 | 3) => SectionKind::Section,
+        Some(2) => SectionKind::Elevation,
+        _ => return None,
+    };
+    if fields.get("m_isTemplate").and_then(Value::as_bool).unwrap_or(false) || fields.get("m_unplacedOwnerId").and_then(element_id).is_some_and(|owner| owner != -1) {
+        return None;
+    }
+    let view = view_record(id, graph)?;
+    Some(SectionView { kind, type_id: fields.get("m_dbViewTypeId").and_then(element_id).unwrap_or(-1), cut: cutter_depth(graph, &view), view })
+}
+
+/// La distance, le long du regard de la vue, de son origine au plan unique de son `GenericPlaneCutter` (`m_pPlane`) ; `None` sans ce plan, ou s'il
+/// n'est pas perpendiculaire au regard.
+fn cutter_depth(graph: &ObjectGraph, view: &ViewRecord) -> Option<f64> {
+    let index = graph.objects.iter().position(|object| object.class_name == "GenericPlaneCutter")?;
+    let plane = graph.objects.get(pointer(graph, index, graph.objects[index].fields.get("m_pPlane")?).ok()??)?;
+    if plane.class_name != "Plane" {
+        return None;
+    }
+    let (x, y, origin) = (vector(plane.fields.get("m_xVec"))?, vector(plane.fields.get("m_yVec"))?, vector(plane.fields.get("m_origin"))?);
+    let normal = [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+    let length = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
+    let back = view.back;
+    let back_length = (back[0] * back[0] + back[1] * back[1] + back[2] * back[2]).sqrt();
+    if length < 1e-9 || back_length < 1e-9 || ((normal[0] * back[0] + normal[1] * back[1] + normal[2] * back[2]).abs() / (length * back_length) - 1.0).abs() > 1e-6 {
+        return None;
+    }
+    // Le regard est −`m_viewDir`.
+    Some(-((origin[0] - view.eye[0]) * back[0] + (origin[1] - view.eye[1]) * back[1] + (origin[2] - view.eye[2]) * back[2]) / back_length)
 }
 
 #[cfg(test)]
@@ -896,19 +1029,173 @@ mod tests {
     }
 
     #[test]
-    fn les_gabarits_et_les_plans_de_plafond_ne_sont_pas_des_plans() {
-        assert!(plan_record(1, &plan_graph(json!({}), vec![])).is_some());
+    fn les_gabarits_ne_sont_pas_des_plans_et_un_plan_de_plafond_se_distingue() {
+        assert!(plan_record(1, &plan_graph(json!({}), vec![])).is_some_and(|plan| !plan.ceiling));
         // Un gabarit de vue : jamais ouvert.
         assert!(plan_record(2, &plan_graph(json!({"m_isTemplate": true}), vec![])).is_none());
-        // `m_planViewType` 2 : un plan de plafond, qui regarde vers le haut ; 0 et 3 ne sont pas des plans vus de dessus non plus.
-        for kind in [0, 2, 3] {
+        // `m_planViewType` 2 : un plan de plafond ; 0 et 3 ne sont ni l'un ni l'autre.
+        assert!(plan_record(3, &plan_graph(json!({"m_planViewType": 2}), vec![])).is_some_and(|plan| plan.ceiling));
+        for kind in [0, 3] {
             assert!(plan_record(3, &plan_graph(json!({"m_planViewType": kind}), vec![])).is_none(), "m_planViewType {kind}");
         }
-        // Une vue 3D n'est pas un plan.
         let mut digest = Digest::default();
         digest.observe(4, -1, "DBViewPlan", &plan_graph(json!({"m_isTemplate": true}), vec![]));
         digest.observe(5, -1, "DBViewPlan", &plan_graph(json!({"m_planViewType": 2}), vec![]));
-        assert_eq!(digest.plans.len(), 0);
+        assert_eq!(digest.plans.len(), 1);
+    }
+
+    #[test]
+    fn la_profondeur_d_un_plan_de_plafond_monte_jusqu_au_haut_de_sa_plage() {
+        // « Level 1 » de CeilingType.rvt : coupe à +7,5 pieds du niveau 30 (0), haut et profondeur au niveau 9946 (10 pieds), bas au niveau 30.
+        let ceiling = |fields: Value, levels: [i64; 5], offsets: [f64; 5]| plan_record(1, &plan_graph(fields, vec![range2(levels, offsets)])).expect("plan").range;
+        let level_1 = ceiling(json!({"m_planViewType": 2, "m_cutPlaneElev": 7.5, "m_bottomClipElev": 0.0, "m_topClipElev": 10.0}), [30, 9946, 30, 9946, -1], [7.5, 0.0, 0.0, 0.0, 0.0]);
+        close(level_1.cut_feet(), Some(7.5));
+        close(level_1.ceiling_depth_feet(), Some(10.0));
+        // « Level 0 » de RefineryPrimer : haut et profondeur sur le niveau du plan, à +9,843 pieds.
+        let refinery = ceiling(json!({"m_planViewType": 2, "m_cutPlaneElev": 7.546, "m_bottomClipElev": 0.0, "m_topClipElev": 9.843}), [311, 311, 311, 311, -1], [7.546, 9.843, 0.0, 9.843, 0.0]);
+        close(refinery.ceiling_depth_feet(), Some(9.843));
+        // Le dernier niveau (« niveau au-dessus » sans niveau au-dessus) : haut illimité, pas de profondeur.
+        let last = ceiling(json!({"m_planViewType": 2, "m_cutPlaneElev": 17.5, "m_bottomClipElev": 10.0, "m_topClipElev": 999_999_999.999_999_9}), [9946, -2, 9946, -2, -1], [7.5, 0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(last.ceiling_depth_feet(), None);
+        // Une profondeur illimitée (-1) ; une profondeur sur un autre niveau que le haut : le haut, prudent.
+        assert_eq!(ceiling(json!({"m_topClipElev": 10.0}), [30, 9946, 30, -1, -1], [7.5, 0.0, 0.0, 0.0, 0.0]).ceiling_depth_feet(), None);
+        close(ceiling(json!({"m_topClipElev": 10.0}), [30, 9946, 30, 777, -1], [7.5, 0.0, 0.0, 2.0, 0.0]).ceiling_depth_feet(), Some(10.0));
+    }
+
+    // ---------------------------------------------------------------------------------------------------- coupes et façades
+
+    /// Le graphe d'une `DBViewSection` : la façade « East » de `DynamoSample` (origine (44,76 ; −1,74 ; 3,94), regard vers −X), son
+    /// `GenericPlaneCutter` et son `Plane` à `depth` pieds de l'origine le long du regard.
+    fn section_graph(fields: Value, depth: Option<f64>) -> ObjectGraph {
+        let mut root = json!({
+            "m_viewName": "East", "m_named": true, "m_isTemplate": false, "m_sectionViewType": 2,
+            "m_origin": [44.759_915_475_945_675, -1.739_660_161_626_773, 3.937_007_874_015_747_3],
+            "m_horzDir": [0.0, 1.0, 0.0], "m_vertDir": [0.0, 0.0, 1.0], "m_viewDir": [1.0, 0.0, 0.0],
+            "m_viewerId": id(8175), "m_dbViewTypeId": id(-1),
+        });
+        for (name, value) in fields.as_object().expect("champs") {
+            root[name] = value.clone();
+        }
+        let mut objects = vec![("DBViewSection", root)];
+        if let Some(depth) = depth {
+            // Le cutter (objet 1) désigne le plan (objet 2) par son jeton.
+            objects.push(("GenericPlaneCutter", json!({"m_bAssignCutFaceTag": true, "m_bBackPlaneCut": false, "m_pPlane": {"class_tag": null, "offset": 0, "pointer_token": 2}})));
+            objects.push(("Plane", json!({"m_origin": [44.759_915_475_945_675 - depth, 5.0, 0.0], "m_xVec": [0.0, -1.0, 0.0], "m_yVec": [0.0, 0.0, 1.0]})));
+        }
+        graph(objects)
+    }
+
+    #[test]
+    fn une_coupe_ou_une_facade_garde_sa_sorte_et_la_profondeur_de_son_plan_de_coupe() {
+        let east = section_record(8176, &section_graph(json!({}), Some(0.0))).expect("façade");
+        assert_eq!((east.kind, east.view.name.as_str(), east.view.viewer, east.type_id), (SectionKind::Elevation, "East", 8175, -1));
+        close(east.cut, Some(0.0));
+        // Le détail d'une coupe à décrochement pris sur son second tronçon : le plan est à 23,449 pieds de l'origine.
+        let detail = section_record(1, &section_graph(json!({"m_sectionViewType": 3, "m_dbViewTypeId": id(77)}), Some(23.449))).expect("détail");
+        assert_eq!((detail.kind, detail.type_id), (SectionKind::Section, 77));
+        close(detail.cut, Some(23.449));
+        // Sans `GenericPlaneCutter` (une coupe à décrochement qui couvre plusieurs tronçons) : pas de plan de coupe.
+        assert_eq!(section_record(2, &section_graph(json!({"m_sectionViewType": 0}), None)).expect("coupe").cut, None);
+        // Les gabarits, les vues de familles (`m_sectionViewType` 1) et les copies dans la définition d'un groupe ne sont pas lus.
+        assert!(section_record(3, &section_graph(json!({"m_isTemplate": true}), Some(0.0))).is_none());
+        assert!(section_record(4, &section_graph(json!({"m_sectionViewType": 1}), Some(0.0))).is_none());
+        assert!(section_record(5, &section_graph(json!({"m_unplacedOwnerId": id(220_116)}), Some(0.0))).is_none());
+        assert!(section_record(6, &section_graph(json!({"m_unplacedOwnerId": id(-1)}), Some(0.0))).is_some());
+    }
+
+    /// Le cadre d'une façade « East » : son repère (droite, haut, regard), son origine, et ses décalages (droite/gauche, haut/bas, lointain/proche).
+    fn east_frame(crop: bool, far: bool, near: f64) -> Value {
+        json!({
+            "m_basis": [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, -0.0, -0.0]],
+            "m_boundActive": [[crop, crop], [crop, crop], [far, false]],
+            "m_boundOffset": [[75.546_498_353_995_96, -61.058_881_657_285_48], [27.372_053_079_437_08, -11.711_976_224_190_025], [88.169_946_225_697_22, near]],
+            "m_isOn": true, "m_orig": [44.759_915_475_945_675, -1.739_660_161_626_773, 3.937_007_874_015_747_3],
+        })
+    }
+
+    #[test]
+    fn une_facade_s_ecrit_face_a_son_plan_avec_son_cadre_sans_sa_decoupe_lointaine() {
+        let mut digest = Digest::default();
+        digest.observe(8176, -1, "DBViewSection", &section_graph(json!({}), Some(0.0)));
+        digest.observe(8175, 8176, "InteriorElevArrow", &graph(vec![("InteriorElevArrow", json!({"m_boundedSpace": east_frame(true, true, 0.0)}))]));
+        let views = views_of(&digest);
+        assert_eq!(views.len(), 1);
+        let view = &views[0];
+        assert_eq!((view["name"].as_str(), view["kind"].as_str()), (Some("East"), Some("elevation")));
+        assert!(view.get("type").is_none() && view.get("range").is_none());
+        // Regard vers −X de Revit (l'ouest) : −X du viewer ; haut vertical.
+        let camera = &view["camera"];
+        assert_eq!((camera["projection"].as_str(), &camera["direction"], &camera["up"]), (Some("orthographic"), &json!([-1, 0, 0]), &json!([0, 1, 0])));
+        // Le cadre : 136,605 pieds de large (le long de +Y de Revit), 39,084 de haut.
+        let size = &camera["size"];
+        assert!((number_of(&size[0]) - 136.605_379_997_245_44 * 0.3048).abs() < 1e-6 && (number_of(&size[1]) - 39.084_029_303_627_1 * 0.3048).abs() < 1e-6, "{size}");
+        // La boîte : axe x le long de la droite (+Y de Revit : rotation de 90°), du plan de coupe (x = 44,76 pieds) à 10 km vers l'ouest : la découpe
+        // lointaine (88,17 pieds, côté actif) n'est pas lue.
+        let boxed = &view["sectionBox"];
+        assert!((number_of(&boxed["rotation"]) - 90.0).abs() < 1e-9, "{boxed}");
+        assert!((number_of(&boxed["max"][2]) - number_of(&boxed["min"][2]) - 1e4).abs() < 1e-3, "{boxed}");
+        // Le centre de la boîte en x du viewer : 5 km à l'ouest du plan de coupe.
+        assert!(((number_of(&boxed["min"][0]) + number_of(&boxed["max"][0])) / 2.0 - (44.759_915_475_945_675 * 0.3048 - 5e3)).abs() < 1e-3, "{boxed}");
+        // Avant rotation, x de la boîte est la largeur du cadre (136,605 pieds), z sa profondeur.
+        assert!((number_of(&boxed["max"][0]) - number_of(&boxed["min"][0]) - 136.605_379_997_245_44 * 0.3048).abs() < 1e-3, "{boxed}");
+        // Hauteur : de 3,937 − 11,712 à 3,937 + 27,372 pieds.
+        assert!((number_of(&boxed["min"][1]) - (3.937_007_874_015_747_3 - 11.711_976_224_190_025) * 0.3048).abs() < 1e-6, "{boxed}");
+        // La caméra est sur le plan de coupe, au centre du cadre.
+        assert!((number_of(&camera["position"][0]) - 44.759_915_475_945_675 * 0.3048).abs() < 1e-6, "{camera}");
+    }
+
+    #[test]
+    fn une_facade_sans_cadre_ni_decoupe_lointaine_a_une_boite_ouverte_et_pas_de_taille() {
+        let mut digest = Digest::default();
+        digest.observe(8176, -1, "DBViewSection", &section_graph(json!({}), Some(0.0)));
+        digest.observe(8175, 8176, "InteriorElevArrow", &graph(vec![("InteriorElevArrow", json!({"m_boundedSpace": east_frame(false, false, 0.0)}))]));
+        let view = &views_of(&digest)[0];
+        assert!(view["camera"].get("size").is_none());
+        // La profondeur va à 10 km au-delà du plan de coupe, les côtés à 10 km de part et d'autre.
+        let boxed = &view["sectionBox"];
+        assert!((number_of(&boxed["max"][2]) - number_of(&boxed["min"][2]) - 1e4).abs() < 1e-3 && (number_of(&boxed["max"][0]) - number_of(&boxed["min"][0]) - 2e4).abs() < 1e-3, "{boxed}");
+    }
+
+    #[test]
+    fn une_coupe_a_decrochement_ou_dont_les_deux_temoins_du_plan_de_coupe_divergent_n_est_pas_ecrite() {
+        let mut digest = Digest::default();
+        // Sans plan de coupe unique.
+        digest.observe(1, -1, "DBViewSection", &section_graph(json!({"m_sectionViewType": 0, "m_viewName": "Décrochement", "m_viewerId": id(11)}), None));
+        digest.observe(11, 1, "Section", &graph(vec![("Section", json!({"m_boundedSpace": east_frame(true, false, 0.0)}))]));
+        // Le plan du cutter à 5 pieds, le cadre à 0 : on ne choisit pas.
+        digest.observe(2, -1, "DBViewSection", &section_graph(json!({"m_sectionViewType": 0, "m_viewName": "Divergente", "m_viewerId": id(12)}), Some(5.0)));
+        digest.observe(12, 2, "Section", &graph(vec![("Section", json!({"m_boundedSpace": east_frame(true, false, 0.0)}))]));
+        // Un cadre qui n'est pas dans le repère de la vue.
+        let mut tilted = east_frame(true, false, 0.0);
+        tilted["m_basis"] = json!([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]);
+        digest.observe(3, -1, "DBViewSection", &section_graph(json!({"m_sectionViewType": 0, "m_viewName": "Autre repère", "m_viewerId": id(13)}), Some(0.0)));
+        digest.observe(13, 3, "Section", &graph(vec![("Section", json!({"m_boundedSpace": tilted}))]));
+        // La bonne : écrite.
+        digest.observe(4, -1, "DBViewSection", &section_graph(json!({"m_sectionViewType": 0, "m_viewName": "Bonne", "m_viewerId": id(14), "m_dbViewTypeId": id(15)}), Some(0.0)));
+        digest.observe(14, 4, "Section", &graph(vec![("Section", json!({"m_boundedSpace": east_frame(true, false, 0.0)}))]));
+        digest.observe(15, -1, "DBViewType", &graph(vec![("DBViewType", json!({})), ("SymbolInfo", json!({"m_name": "Building Section"}))]));
+        let views = views_of(&digest);
+        assert_eq!(views.iter().map(|view| (view["name"].as_str(), view["kind"].as_str(), view["type"].as_str())).collect::<Vec<_>>(), vec![(Some("Bonne"), Some("section"), Some("Building Section"))]);
+    }
+
+    #[test]
+    fn un_plan_de_plafond_s_ecrit_apres_les_plans_avec_sa_plage_vers_le_haut() {
+        let mut digest = Digest::default();
+        observe_plan(&mut digest, 100, -1, json!({"m_viewName": "Level 1"}), vec![range2([30, 30, 30, 30, -1], [3.937, 7.546, 0.0, 0.0, 0.0])], no_crop(), "Floor Plan");
+        let ceiling = json!({"m_viewName": "Level 1", "m_planViewType": 2, "m_cutPlaneElev": 7.5, "m_bottomClipElev": 0.0, "m_topClipElev": 10.0});
+        observe_plan(&mut digest, 200, -1, ceiling, vec![range2([30, 9946, 30, 9946, -1], [7.5, 0.0, 0.0, 0.0, 0.0])], plan_crop(true, json!(PLAN_BASIS), [0.0; 3], [[10.0, -10.0], [5.0, -5.0]]), "Ceiling Plan");
+        let last = json!({"m_viewName": "Level 2", "m_planViewType": 2, "m_cutPlaneElev": 17.5, "m_bottomClipElev": 10.0, "m_topClipElev": 999_999_999.999_999_9});
+        observe_plan(&mut digest, 300, -1, last, vec![range2([9946, -2, 9946, -2, -1], [7.5, 0.0, 0.0, 0.0, 0.0])], no_crop(), "Ceiling Plan");
+        let views = views_of(&digest);
+        assert_eq!(views.iter().map(|view| (view["name"].as_str(), view["kind"].as_str())).collect::<Vec<_>>(), vec![(Some("Level 1"), Some("plan")), (Some("Level 1"), Some("ceiling")), (Some("Level 2"), Some("ceiling"))]);
+        // De la coupe (7,5 pieds) à la profondeur (10 pieds) ; la boîte du recadrage a cette plage en y.
+        let level_1 = &views[1];
+        assert!((number_of(&level_1["range"]["bottom"]) - 7.5 * 0.3048).abs() < 1e-9 && (number_of(&level_1["range"]["top"]) - 10.0 * 0.3048).abs() < 1e-9, "{}", level_1["range"]);
+        assert!((number_of(&level_1["sectionBox"]["min"][1]) - 7.5 * 0.3048).abs() < 1e-9 && (number_of(&level_1["sectionBox"]["max"][1]) - 10.0 * 0.3048).abs() < 1e-9, "{}", level_1["sectionBox"]);
+        // La caméra est celle du fichier : vue de dessus, comme un plan.
+        assert_eq!(level_1["camera"]["direction"], json!([0, -1, 0]));
+        // Sans niveau au-dessus : la plage n'a que sa coupe.
+        assert!(views[2]["range"].get("top").is_none() && (number_of(&views[2]["range"]["bottom"]) - 17.5 * 0.3048).abs() < 1e-9, "{}", views[2]["range"]);
     }
 
     /// Les trois enregistrements d'un plan, comme la lecture les observe : le plan, son `Viewer` (possédé par le plan) et son `DBViewType`.
