@@ -2,16 +2,20 @@ import { Box3 } from 'three';
 import { CLASH_STATUSES, STATUS_LABELS, conditionsText, mergeClashes, pairKey, parseConditions, type ClashRecord, type ClashSet, type ClashStatus, type ClashTest, type ElementRef } from '../data/clashes.ts';
 import { matchesCondition, valueAt, type RuleCondition } from '../data/conditions.ts';
 import { sourceIndexOf } from '../data/federation.ts';
-import { writeBcf } from '../data/bcf.ts';
-import { addObservations, observationFromClash, toBcfTopic } from '../data/observations.ts';
+import { newGuid, writeBcf, type BcfTopic } from '../data/bcf.ts';
+import { addObservations, observationFromClash, toBcfTopic, type Observation } from '../data/observations.ts';
 import { toModelPoint } from '../data/modelFrame.ts';
 import { integer, plural } from '../data/text.ts';
 import { boxAround } from '../engine/Sections.ts';
 import { runSliced } from '../engine/sliced.ts';
 import type { App } from './App.ts';
 import { button, clear, download, h } from './dom.ts';
-import { elementRef } from './elementRefs.ts';
+import { aimedCamera, bcfContext, elementRef, refResolver } from './elementRefs.ts';
+import { snapshotFrom } from './observationSnapshot.ts';
 import { authorName } from './ObservationsPanel.ts';
+
+/** Conflits qui ont une image dans le .bcf. */
+const SNAPSHOTS = 100;
 
 /** Conflits montrés par groupe ; les JSON les gardent tous. */
 const MAX_ROWS = 200;
@@ -183,8 +187,36 @@ export class ClashPanel {
       return;
     }
     // Le statut et le commentaire du conflit sont ceux de son sujet BCF.
-    const topics = app.clashes.records.map((record) => toBcfTopic({ ...observationFromClash(record, label, author, now, app.observations.lists), status: STATUS_LABELS[record.status] }));
-    void writeBcf(topics).then((blob) => download(blob, 'conflits.bcf'), (error: unknown) => app.toast(`Export BCF impossible : ${error instanceof Error ? error.message : String(error)}`, true));
+    void this.exportBcf(app.clashes.records.map((record) => ({ ...observationFromClash(record, label, author, now, app.observations.lists), status: STATUS_LABELS[record.status] })));
+  }
+
+  /** Le .bcf des conflits : chaque sujet vise son point et a son image (les `SNAPSHOTS` premiers : une image coûte un rendu). */
+  private async exportBcf(observations: Observation[]): Promise<void> {
+    const { app } = this;
+    const resolve = refResolver(app), context = bcfContext(app);
+    const shot = !app.mapOpen && observations.length > 0;
+    try {
+      app.busy('Écriture du .bcf…');
+      const topics: BcfTopic[] = [];
+      for (const [i, observation] of observations.entries()) {
+        let topic = observation;
+        const point = observation.point;
+        if (point && shot && i < SNAPSHOTS) {
+          const elements = observation.elements.flatMap((ref) => resolve(ref) ?? []);
+          const camera = aimedCamera(app, point, elements);
+          const snapshot = await snapshotFrom(app, camera, point);
+          if (snapshot) topic = { ...observation, viewpoints: [{ guid: newGuid(), camera, clippingPlanes: [], selection: [], snapshot }] };
+        }
+        topics.push(toBcfTopic(topic, context));
+      }
+      download(await writeBcf(topics), 'conflits.bcf');
+      if (app.mapOpen) app.toast('Mode carte : l’image des points de vue n’est pas disponible, les conflits sont écrits sans image.', true);
+      else if (observations.length > SNAPSHOTS) app.toast(`Image des ${SNAPSHOTS} premiers conflits seulement (${plural(observations.length - SNAPSHOTS, 'conflit')} sans image).`, true);
+    } catch (error) {
+      app.toast(`Export BCF impossible : ${error instanceof Error ? error.message : String(error)}`, true);
+    } finally {
+      app.busy(null);
+    }
   }
 
   /** Numéro de chaque élément de la session par sa maquette et sa clé. */

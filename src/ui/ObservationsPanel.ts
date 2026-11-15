@@ -3,7 +3,7 @@ import { levelPlans } from '../data/levels.ts';
 import { toModelPoint, toViewerPoint, yUpToZUp, zUpToYUp, type Vec3 } from '../data/modelFrame.ts';
 import {
   GROUP_LABELS, SORT_LABELS, addComment, allowedStatuses, changeStatus, extendLists, extensionsOf, filterObservations, frenchDate, fromBcfTopic, groupObservations,
-  isOverdue, locate, mergeBooks, newObservation, nextNumber, observationsCsv, orphans, sortObservations, statusColor, statusLayer, toBcfTopic, touched, viewOfViewpoint,
+  isAimed, isOverdue, locate, mergeBooks, newObservation, nextNumber, observationsCsv, orphans, sortObservations, statusColor, statusLayer, toBcfTopic, touched, viewOfViewpoint,
   viewpointOfView, type GroupKey, type Observation, type ObservationBook, type ObservationFilter, type ObservationLists, type SortKey,
 } from '../data/observations.ts';
 import type { ElementRef } from '../data/clashes.ts';
@@ -14,8 +14,9 @@ import { withoutExtension } from '../engine/fileKinds.ts';
 import { Pins } from '../engine/pins.ts';
 import type { App } from './App.ts';
 import { button, clear, download, h, stored } from './dom.ts';
-import { elementRef, elementsPoint, refResolver } from './elementRefs.ts';
+import { aimedCamera, bcfContext, elementRef, elementsPoint, isRevitSession, lookPoint, refResolver } from './elementRefs.ts';
 import { observationsPdf } from './observationReport.ts';
+import { markerOf, snapshotFrom } from './observationSnapshot.ts';
 import { reducePhoto, withPin } from './photo.ts';
 import { captureView } from './userViews.ts';
 
@@ -264,14 +265,24 @@ export class ObservationsPanel {
     const plan = app.activeView?.kind === 'plan' ? app.activeView : null;
     const { width, height } = app.viewer.size;
     const viewpoint = viewpointOfView(captureView(app, 'observation'), width / Math.max(height, 1), newGuid());
-    const snapshot = await this.snapshot(at);
+    if (app.mapOpen) app.toast('Mode carte : l’image de la vue n’est pas disponible, l’observation est créée sans image.');
+    // Le repère de l'image : le clic ; sans clic, le centre des éléments projeté dans la vue.
+    const marker = at ?? (point ? markerOf(app, app.viewer.camera, point) ?? undefined : undefined);
+    const snapshot = await this.snapshot(marker);
+    // Un second point de vue regarde le point (c'est lui qu'ouvrent les autres outils), avec sa propre image.
+    let viewpoints = [snapshot ? { ...viewpoint, snapshot } : viewpoint];
+    if (point && !(viewpoint.camera && isAimed(viewpoint.camera, point))) {
+      const camera = aimedCamera(app, point, elements);
+      const aimedSnapshot = await snapshotFrom(app, camera, point);
+      viewpoints = [defined({ guid: newGuid(), camera, clippingPlanes: viewpoint.clippingPlanes, selection: [], snapshot: aimedSnapshot }), ...viewpoints];
+    }
     if (model !== app.model) return;
     const book = this.book;
     const observation = newObservation(defined({
       elements: elements.map((element) => elementRef(app, element)), point,
       pin: plan && point ? { plan: plan.id ?? plan.name, x: point[0], y: point[1] } : undefined,
       location: locate(app.store.propsOf(elements[0]), book.settings), stage: this.lastPhase || undefined,
-      viewpoints: [snapshot ? { ...viewpoint, snapshot } : viewpoint],
+      viewpoints,
     }), author, new Date(), book.lists, nextNumber(book.topics));
     this.current = observation.guid;
     app.setObservations({ ...book, topics: [...book.topics, observation] });
@@ -306,18 +317,21 @@ export class ObservationsPanel {
     try {
       const read = await readBcf(file);
       const resolve = (ref: ElementRef) => this.resolve(ref);
+      const revit = isRevitSession(app);
       const known = new Set(this.book.topics.map((topic) => topic.guid.toLowerCase()));
       const topics: Observation[] = [];
       for (const topic of read.topics) {
-        const observation = fromBcfTopic(topic, 0);
+        const observation = fromBcfTopic(topic, 0, { revit, resolves: (key) => resolve({ key }) !== undefined });
         // Une image trop grande pour le BCF 3.0 (fichier d'un autre outil) est réduite une fois pour toutes.
         for (const viewpoint of observation.viewpoints) {
           const size = viewpoint.snapshot ? imageSize(new Uint8Array(await viewpoint.snapshot.arrayBuffer())) : null;
           if (viewpoint.snapshot && size && Math.max(size.width, size.height) > 1500) viewpoint.snapshot = await reducePhoto(viewpoint.snapshot);
         }
         const elements = observation.elements.flatMap((ref) => resolve(ref) ?? []);
-        topics.push(known.has(observation.guid.toLowerCase()) || elements.length === 0 ? observation
-          : defined({ ...observation, point: elementsPoint(app, elements), location: locate(app.store.propsOf(elements[0]), this.book.settings) }));
+        // Le point : celui du fichier (viewer-bim.json, croix), sinon le centre des éléments, sinon où la caméra regarde ; sinon aucun.
+        // Une observation déjà connue garde son point : seul celui du fichier est proposé à la fusion.
+        const point = observation.point ?? (known.has(observation.guid.toLowerCase()) ? undefined : elementsPoint(app, elements) ?? lookPoint(app, observation.viewpoints.find((viewpoint) => viewpoint.camera)?.camera));
+        topics.push(defined({ ...observation, point, location: elements.length > 0 ? locate(app.store.propsOf(elements[0]), this.book.settings) : observation.location }));
       }
       const ext = read.extensions;
       const { book, added, updated } = mergeBooks(this.book, { settings: {}, topics, lists: { kinds: ext.topicTypes, statuses: ext.topicStatuses, done: [], trades: ext.topicLabels, priorities: ext.priorities, phases: ext.stages, companies: [], transitions: {} } });
@@ -340,7 +354,8 @@ export class ObservationsPanel {
     const missing = book.topics.reduce((sum, topic) => sum + topic.documents.filter((document) => !document.data && document.url === undefined).length, 0);
     app.busy('Écriture du .bcf…');
     try {
-      download(await writeBcf(book.topics.map(toBcfTopic), extensionsOf(book)), `${this.baseName} - observations.bcf`);
+      const context = bcfContext(app);
+      download(await writeBcf(book.topics.map((topic) => toBcfTopic(topic, context)), extensionsOf(book)), `${this.baseName} - observations.bcf`);
       app.observationsUnsaved = false;
       if (missing > 0) app.toast(`${plural(missing, 'photo')} absente${missing > 1 ? 's' : ''} de cette session (restée${missing > 1 ? 's' : ''} dans un autre .bcf) : non écrite${missing > 1 ? 's' : ''}.`, true);
     } catch (error) {
@@ -480,7 +495,7 @@ export class ObservationsPanel {
       const rows = h('div');
       for (const topic of group.topics.slice(0, MAX_ROWS)) {
         const lost = resolve !== null && topic.elements.some((ref) => resolve(ref) === undefined);
-        const details = [topic.status, topic.assignedTo, topic.dueDate ? `échéance ${frenchDate(topic.dueDate)}` : '', isOverdue(topic, lists, localDay()) ? 'en retard' : '', lost ? 'élément introuvable' : ''].filter(Boolean).join(' · ');
+        const details = [topic.status, topic.assignedTo, topic.dueDate ? `échéance ${frenchDate(topic.dueDate)}` : '', isOverdue(topic, lists, localDay()) ? 'en retard' : '', lost ? 'élément introuvable' : '', !topic.point && !topic.pin ? 'sans position' : ''].filter(Boolean).join(' · ');
         const row = h('button', { class: 'dimensions-row', attrs: { type: 'button', ...(topic.guid === this.current ? { 'aria-current': 'true' } : {}) } },
           h('span', { class: 'dimensions-name' }, h('span', { class: 'compare-swatch', attrs: { style: `background:${statusColor(topic.status, lists)}` } }), `N° ${topic.number} · ${topic.title || '(sans titre)'}`),
           h('span', { class: 'dimensions-values', text: details }));
@@ -545,7 +560,7 @@ export class ObservationsPanel {
       return img;
     };
     const photos = h('div', { class: 'observation-photos' });
-    const snapshot = topic.viewpoints[0]?.snapshot;
+    const snapshot = topic.viewpoints.find((viewpoint) => viewpoint.snapshot)?.snapshot;
     if (snapshot) photos.append(image(snapshot, 'Vue de l’observation'));
     for (const document of topic.documents) {
       const remove = button('×', () => {

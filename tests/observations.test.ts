@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readBcf, writeBcf } from '../src/data/bcf.ts';
+import { readZip } from '../src/data/zip.ts';
 import { parseMetadata } from '../src/data/metadata.ts';
 import {
   addObservations, allowedStatuses, boxOfPlanes, changeStatus, defaultLists, emptyBook, filterObservations, fromBcfTopic, groupObservations,
@@ -124,7 +125,7 @@ test('an observation becomes a BCF topic (extension left out, elements as compon
   });
   const topic = toBcfTopic(observation);
   assert.deepEqual(Object.keys(topic).filter((key) => ['number', 'elements', 'pin', 'point', 'location', 'origin'].includes(key)), []);
-  assert.deepEqual(topic.viewpoints[0].selection, [{ ifcGuid: '2O2Fr$t4X7Zf8NOew3FLOH' }, { authoringToolId: '318215' }]);
+  assert.deepEqual(topic.viewpoints[0].selection, [{ ifcGuid: '2O2Fr$t4X7Zf8NOew3FLOH' }, { originatingSystem: 'Revit', authoringToolId: '318215' }]);
   const back = fromBcfTopic(topic, 12);
   assert.equal(back.number, 12);
   assert.deepEqual(back.elements, [{ key: '2O2Fr$t4X7Zf8NOew3FLOH' }, { key: 'rvt-318215' }]);
@@ -158,11 +159,14 @@ test('the observations section: JSON round trip without photos, carried by the m
   // An older file without the section loads unchanged.
   assert.equal(parseMetadata({ elements: { k: { a: 1 } } }).observations, undefined);
 
-  // The plan pin and our other fields are not in the .bcf; the photo is, and comes back by merging on the GUID.
-  const bcf = await writeBcf(book.topics.map(toBcfTopic));
+  // The plan pin and our other fields travel in viewer-bim.json only (no standard BCF field); the photo is in the .bcf, and comes back by merging on the GUID.
+  const bcf = await writeBcf(book.topics.map((topic) => toBcfTopic(topic)));
   const read = await readBcf(bcf, nodeInflate);
-  const text = new TextDecoder().decode(new Uint8Array(await bcf.arrayBuffer()));
-  assert.equal(/Niveau 1|"pin"|4\.5/.test(text), false);
+  const entries = await readZip(bcf, nodeInflate);
+  for (const [name, entry] of entries) {
+    const text = new TextDecoder().decode(await entry.bytes());
+    assert.equal(/Niveau 1/.test(text), name.endsWith('/viewer-bim.json'), name);
+  }
   const merged = mergeBooks(parsed, { ...emptyBook(), topics: read.topics.map((topic, i) => fromBcfTopic(topic, i + 1)) });
   assert.equal(merged.added, 0);
   assert.equal(merged.updated, 2);

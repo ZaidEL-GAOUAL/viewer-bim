@@ -4,8 +4,12 @@
 // champ de vision entre 45 et 60°, éléments par GlobalId IFC (`IfcGuid`) ou, à défaut, par l'identifiant de l'outil auteur
 // (`AuthoringToolId`). Coordonnées : celles du modèle d'origine, Z vers le haut, en mètres (voir data/modelFrame.ts).
 //
+// Écrits aussi : couleurs par élément (« Coloring », ARGB sans #, composants dans `Components` comme le veut 3.0 ; 2.1 les posait directement dans `Color`), lignes (« Lines », la croix qui marque un point) et, dans
+// le dossier du sujet, `viewer-bim.json` (point et repère sur plan : les autres outils ignorent ce fichier). Lus : sélection,
+// couleurs et exceptions de visibilité (les éléments d'un point de vue), lignes, `viewer-bim.json`.
+//
 // Non pris en charge (lu sans erreur, pas réécrit) : en-tête (fichiers IFC), extraits BIM (« BimSnippet »), visibilité par
-// élément (exceptions), couleurs par élément, lignes, images posées dans la vue (« Bitmaps »), listes de 2.1 (extensions.xsd).
+// élément (exceptions : lues, jamais écrites), images posées dans la vue (« Bitmaps »), listes de 2.1 (extensions.xsd).
 
 import { child, children, parseXml, XML_HEADER, xmlElement, xmlText, type XmlNode } from './xml.ts';
 import { readZip, writeZip, type Inflate, type ZipInput } from './zip.ts';
@@ -38,11 +42,28 @@ export interface BcfClippingPlane {
   direction: Vec3;
 }
 
+/** Des éléments d'une même couleur (« Coloring ») : `color` en ARGB hexadécimal sans « # » (`FFFF3B30`). */
+export interface BcfColoring {
+  color: string;
+  components: BcfComponent[];
+}
+
+/** Un segment (« Lines ») : deux points, repère du modèle, Z vers le haut. */
+export interface BcfLine {
+  start: Vec3;
+  end: Vec3;
+}
+
 export interface BcfViewpoint {
   guid: string;
   camera?: BcfCamera;
   clippingPlanes: BcfClippingPlane[];
   selection: BcfComponent[];
+  /** Absent quand il n'y en a pas (un fichier relu redonne ce qui était écrit). */
+  coloring?: BcfColoring[];
+  /** Les exceptions de visibilité, lues seulement (le fichier écrit montre tout). */
+  exceptions?: BcfComponent[];
+  lines?: BcfLine[];
   /** PNG ou JPEG. */
   snapshot?: Blob;
 }
@@ -89,7 +110,12 @@ export interface BcfTopic {
   documents: BcfDocument[];
   comments: BcfComment[];
   viewpoints: BcfViewpoint[];
+  /** Le contenu de `viewer-bim.json`, dans le dossier du sujet : ce que le BCF n'a pas (point, repère sur plan). */
+  viewerBim?: unknown;
 }
+
+/** Le fichier à nous, dans le dossier d'un sujet (la spécification permet des fichiers en plus ; les autres outils l'ignorent). */
+export const VIEWER_FILE = 'viewer-bim.json';
 
 /** Les listes de valeurs du projet (extensions.xml). */
 export interface BcfExtensions {
@@ -107,6 +133,7 @@ export const emptyExtensions = (): BcfExtensions => ({ topicTypes: [], topicStat
 export const SNAPSHOT_MAX = 1500;
 const FOV_MIN = 45, FOV_MAX = 60;
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const COLOR = /^[0-9a-f]{8}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
 
 export const newGuid = (): string => globalThis.crypto.randomUUID();
@@ -134,17 +161,24 @@ export const defined = <T extends object>(value: T): T => Object.fromEntries(Obj
 
 const vec = (name: string, [x, y, z]: Vec3) => xmlElement(name, {}, [xmlText('X', x), xmlText('Y', y), xmlText('Z', z)]);
 
+const component = (item: BcfComponent) => xmlElement('Component', { IfcGuid: item.ifcGuid }, [xmlText('OriginatingSystem', item.originatingSystem), xmlText('AuthoringToolId', item.authoringToolId)]);
+
 function visualizationInfo(viewpoint: BcfViewpoint): string {
   const camera = viewpoint.camera;
   const pose = camera ? [vec('CameraViewPoint', camera.viewPoint), vec('CameraDirection', camera.direction), vec('CameraUpVector', camera.up)] : [];
+  const colors = (viewpoint.coloring ?? []).filter((item) => item.components.length > 0);
+  const lines = viewpoint.lines ?? [];
+  // Ordre du schéma : Components (Selection, Visibility, Coloring), caméra, Lines, ClippingPlanes.
   return XML_HEADER + xmlElement('VisualizationInfo', { Guid: viewpoint.guid.toLowerCase() }, [
     xmlElement('Components', {}, [
-      viewpoint.selection.length > 0 ? xmlElement('Selection', {}, viewpoint.selection.map((component) => xmlElement('Component', { IfcGuid: component.ifcGuid }, [xmlText('OriginatingSystem', component.originatingSystem), xmlText('AuthoringToolId', component.authoringToolId)]))) : '',
+      viewpoint.selection.length > 0 ? xmlElement('Selection', {}, viewpoint.selection.map(component)) : '',
       xmlElement('Visibility', { DefaultVisibility: true }, []),
+      colors.length > 0 ? xmlElement('Coloring', {}, colors.map((item) => xmlElement('Color', { Color: item.color }, [xmlElement('Components', {}, item.components.map(component))]))) : '',
     ]),
     !camera ? '' : camera.kind === 'perspective'
       ? xmlElement('PerspectiveCamera', {}, [...pose, xmlText('FieldOfView', Math.min(FOV_MAX, Math.max(FOV_MIN, camera.fieldOfView ?? FOV_MAX))), xmlText('AspectRatio', camera.aspectRatio ?? 1)])
       : xmlElement('OrthogonalCamera', {}, [...pose, xmlText('ViewToWorldScale', camera.viewToWorldScale ?? 1), xmlText('AspectRatio', camera.aspectRatio ?? 1)]),
+    lines.length > 0 ? xmlElement('Lines', {}, lines.map((line) => xmlElement('Line', {}, [vec('StartPoint', line.start), vec('EndPoint', line.end)]))) : '',
     viewpoint.clippingPlanes.length > 0 ? xmlElement('ClippingPlanes', {}, viewpoint.clippingPlanes.map((plane) => xmlElement('ClippingPlane', {}, [vec('Location', plane.location), vec('Direction', plane.direction)]))) : '',
   ]);
 }
@@ -189,6 +223,8 @@ async function check(topic: BcfTopic): Promise<void> {
   const wrong = dates.find((date) => !DATE.test(date));
   if (wrong !== undefined) throw new Error(`${where} : « ${wrong} » n’est pas une date ISO 8601.`);
   for (const viewpoint of topic.viewpoints) {
+    const badColor = viewpoint.coloring?.find((item) => !COLOR.test(item.color));
+    if (badColor) throw new Error(`${where} : « ${badColor.color} » n’est pas une couleur ARGB hexadécimale.`);
     if (!viewpoint.snapshot) continue;
     const size = imageSize(new Uint8Array(await viewpoint.snapshot.arrayBuffer()));
     if (!size) throw new Error(`${where} : l’image du point de vue n’est ni un PNG ni un JPEG.`);
@@ -219,6 +255,7 @@ export async function writeBcf(topics: readonly BcfTopic[], extensions: BcfExten
       return { viewpoint: `viewpoint${suffix}.bcfv`, snapshot: viewpoint.snapshot ? `snapshot${suffix}.${viewpoint.snapshot.type === 'image/jpeg' ? 'jpg' : 'png'}` : undefined };
     });
     files.push({ name: `${folder}/markup.bcf`, data: text(markup(topic, names)) });
+    if (topic.viewerBim !== undefined) files.push({ name: `${folder}/${VIEWER_FILE}`, data: text(JSON.stringify(topic.viewerBim)) });
     topic.viewpoints.forEach((viewpoint, i) => {
       files.push({ name: `${folder}/${names[i].viewpoint}`, data: text(visualizationInfo(viewpoint)) });
       if (viewpoint.snapshot) files.push({ name: `${folder}/${names[i].snapshot}`, data: viewpoint.snapshot });
@@ -272,8 +309,20 @@ function readCamera(info: XmlNode | undefined): BcfCamera | undefined {
   } satisfies BcfCamera);
 }
 
+const componentsOf = (parent: XmlNode | undefined): BcfComponent[] => [...children(parent, 'Component'), ...children(child(parent, 'Components'), 'Component')].map((node) => defined({
+  ifcGuid: node.attributes.IfcGuid, originatingSystem: textOf(node, 'OriginatingSystem')?.trim(), authoringToolId: textOf(node, 'AuthoringToolId')?.trim(),
+}));
+
 function readViewpointFile(xml: string, guid: string): Omit<BcfViewpoint, 'snapshot'> {
   const info = child(parseXml(xml), 'VisualizationInfo');
+  const components = child(info, 'Components');
+  // Les composants d'une couleur ou d'une exception : posés directement ou dans `Components` (les deux se rencontrent).
+  const coloring = children(child(components, 'Coloring'), 'Color').map((color) => ({ color: color.attributes.Color?.trim() ?? '', components: componentsOf(color) })).filter((item) => item.components.length > 0);
+  const exceptions = componentsOf(child(child(components, 'Visibility'), 'Exceptions'));
+  const lines = children(child(info, 'Lines'), 'Line').flatMap((line) => {
+    const start = vector(child(line, 'StartPoint')), end = vector(child(line, 'EndPoint'));
+    return start && end ? [{ start, end }] : [];
+  });
   return defined({
     guid,
     camera: readCamera(info),
@@ -281,9 +330,10 @@ function readViewpointFile(xml: string, guid: string): Omit<BcfViewpoint, 'snaps
       const location = vector(child(plane, 'Location')), direction = vector(child(plane, 'Direction'));
       return location && direction ? [{ location, direction }] : [];
     }),
-    selection: children(child(child(info, 'Components'), 'Selection'), 'Component').map((component) => defined({
-      ifcGuid: component.attributes.IfcGuid, originatingSystem: textOf(component, 'OriginatingSystem')?.trim(), authoringToolId: textOf(component, 'AuthoringToolId')?.trim(),
-    })),
+    selection: componentsOf(child(components, 'Selection')),
+    coloring: coloring.length > 0 ? coloring : undefined,
+    exceptions: exceptions.length > 0 ? exceptions : undefined,
+    lines: lines.length > 0 ? lines : undefined,
   });
 }
 
@@ -366,6 +416,10 @@ export async function readBcf(file: Blob, inflate?: Inflate): Promise<BcfRead> {
         const viewpoint = path && entries.has(path) ? readViewpointFile(await read(path), guid) : { guid, clippingPlanes: [], selection: [] };
         viewpoints.push(defined({ ...viewpoint, snapshot: snapshot ? await blob(`${folder}/${snapshot}`) : undefined }));
       }
+      let viewerBim: unknown;
+      if (entries.has(`${folder}/${VIEWER_FILE}`)) {
+        try { viewerBim = JSON.parse(await read(`${folder}/${VIEWER_FILE}`)); } catch { notes.push(`${folder}/${VIEWER_FILE} illisible, ignoré.`); }
+      }
       topics.push(defined({
         guid: node.attributes.Guid ?? folder,
         type: node.attributes.TopicType ?? '',
@@ -394,6 +448,7 @@ export async function readBcf(file: Blob, inflate?: Inflate): Promise<BcfRead> {
           modifiedAuthor: textOf(comment, 'ModifiedAuthor'),
         })),
         viewpoints,
+        viewerBim,
       }));
     } catch (error) {
       notes.push(`${name} illisible, sujet ignoré : ${error instanceof Error ? error.message : String(error)}`);

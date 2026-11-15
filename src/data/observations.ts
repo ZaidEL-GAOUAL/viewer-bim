@@ -5,7 +5,7 @@
 // repère sur un plan, le point 3D, l'emplacement (niveau, local, zone) et l'origine (conflit, propriété requise).
 // Coordonnées : celles du modèle d'origine, Z vers le haut, en mètres. Pur : rien ici ne touche à la vue.
 
-import { defined, newGuid, type BcfCamera, type BcfClippingPlane, type BcfComment, type BcfComponent, type BcfDocument, type BcfExtensions, type BcfTopic, type BcfViewpoint } from './bcf.ts';
+import { defined, newGuid, type BcfCamera, type BcfClippingPlane, type BcfLine, type BcfComment, type BcfComponent, type BcfDocument, type BcfExtensions, type BcfTopic, type BcfViewpoint } from './bcf.ts';
 import { clashTopic, type ClashRecord, type ElementRef } from './clashes.ts';
 import type { ElementAppearance } from './appearanceRules.ts';
 import { isRecord } from './json.ts';
@@ -244,35 +244,158 @@ export function statusLayer(topics: readonly Observation[], resolve: (ref: Eleme
 
 const IFC_GUID = /^[0-9A-Za-z_$]{22}$/;
 
-/** Un élément pour le BCF : par GlobalId IFC, sinon par l'identifiant de l'outil auteur (`rvt-318215` → 318215). */
-export function componentOf(key: string): BcfComponent {
-  const revit = /^rvt-(\d+)$/.exec(key);
-  if (revit) return { authoringToolId: revit[1] };
-  return IFC_GUID.test(key) ? { ifcGuid: key } : { authoringToolId: key };
+/**
+ * Ce que le BCF a besoin de savoir d'un élément pour le désigner dans un autre outil : le type de sa maquette et, pour une
+ * maquette Revit, ses propriétés non modifiables (`readOnly`, ce que le lecteur déclare) : elles portent son identité dans son
+ * fichier. Aucun nom de propriété n'est connu ici : un entier est l'ElementId, un texte de 22 caractères le GlobalId.
+ */
+export interface ElementIdentity {
+  /** `revit`, `ifc`, `glb` ou `usd`. */
+  kind?: string;
+  props?: FlatProps;
+  readOnly?: readonly string[];
 }
 
-/** L'inverse de `componentOf` ; null pour un composant vide. */
-export function keyOfComponent(component: BcfComponent): string | null {
+/** Le contexte d'un export BCF : il vient de la session ouverte ; sans lui, les éléments sont désignés par leur seule clé. */
+export interface BcfExportContext {
+  identify?: (ref: ElementRef) => ElementIdentity | undefined;
+  /** La boîte de ces éléments, repère du modèle, Z vers le haut : elle règle la distance de la vue visée. */
+  frame?: (refs: readonly ElementRef[]) => { min: Vec3; max: Vec3 } | undefined;
+  /** Vrai si un obstacle sépare ce point de vue (premier) du point visé (second) : la caméra ne se met pas dans un mur. */
+  blocked?: (from: Vec3, to: Vec3) => boolean;
+}
+
+/** Les éléments d'un point de vue sont surlignés de cette couleur (ARGB, sans « # »). */
+export const HIGHLIGHT = 'FFFF3B30';
+/** Longueur d'un trait de la croix qui marque le point, en mètres. */
+const CROSS = 0.3;
+const PART = /^(.+)~\d+$/;
+
+/** La clé de l'élément d'origine : une pièce `<clé>~n` n'a pas d'identité à elle. */
+export function baseKey(key: string): string {
+  let base = key;
+  for (let match = PART.exec(base); match; match = PART.exec(base)) base = match[1];
+  return base;
+}
+
+function declaredIds(element: ElementIdentity): { guid?: string; id?: string } {
+  const found: { guid?: string; id?: string } = {};
+  for (const path of element.readOnly ?? []) {
+    if (path.endsWith('*')) continue;
+    const value = ownValue(element.props, path);
+    if (found.id === undefined && typeof value === 'number' && Number.isInteger(value) && value > 0) found.id = String(value);
+    else if (found.guid === undefined && typeof value === 'string' && IFC_GUID.test(value)) found.guid = value;
+  }
+  return found;
+}
+
+/**
+ * Un élément pour le BCF : par GlobalId IFC, avec l'identifiant de l'outil auteur quand on le connaît (Revit : `AuthoringToolId`
+ * = ElementId, `OriginatingSystem` = « Revit »), sinon par l'identifiant seul. Une pièce prend l'identité de son original.
+ */
+export function componentOf(key: string, element?: ElementIdentity): BcfComponent {
+  const base = baseKey(key);
+  const revit = /^rvt-(\d+)$/.exec(base);
+  const found = element?.kind === 'revit' ? declaredIds(element) : {};
+  if (revit) return defined({ ifcGuid: found.guid, originatingSystem: 'Revit', authoringToolId: revit[1] });
+  if (IFC_GUID.test(base)) return element?.kind === 'revit' ? defined({ ifcGuid: base, originatingSystem: 'Revit', authoringToolId: found.id }) : { ifcGuid: base };
+  return defined({ authoringToolId: base, originatingSystem: element?.kind });
+}
+
+/** L'inverse de `componentOf` ; null pour un composant vide. Un nombre n'est un ElementId Revit que si le système le dit (ou `revit`). */
+export function keyOfComponent(component: BcfComponent, revit = false): string | null {
   if (component.ifcGuid) return component.ifcGuid;
   const id = component.authoringToolId;
   if (!id) return null;
-  return /^\d+$/.test(id) ? `rvt-${id}` : id;
+  return /^\d+$/.test(id) && (revit || /revit/i.test(component.originatingSystem ?? '')) ? `rvt-${id}` : id;
 }
 
-/** Le sujet BCF d'une observation : ses champs propres retirés, ses éléments dans la sélection du premier point de vue. */
-export function toBcfTopic(observation: Observation): BcfTopic {
-  const { number: _number, elements, pin: _pin, point: _point, location: _location, origin: _origin, ...topic } = observation;
-  void [_number, _pin, _point, _location, _origin];
-  if (elements.length === 0) return topic;
-  const selection = elements.map((ref) => componentOf(ref.key));
+/** Les clés possibles d'un composant, la plus sûre d'abord : le GlobalId, puis `rvt-<ElementId>` si un Revit donne les deux. */
+function candidateKeys(component: BcfComponent, revit: boolean): string[] {
+  const id = component.authoringToolId;
+  const second = component.ifcGuid && id && /^\d+$/.test(id) && (revit || /revit/i.test(component.originatingSystem ?? '')) ? [`rvt-${id}`] : [];
+  const first = keyOfComponent(component, revit);
+  return first ? [first, ...second] : [];
+}
+
+/** La croix qui marque un point : trois traits de 30 cm centrés sur lui, le long de X, Y et Z. */
+export function crossAt(point: Vec3): BcfLine[] {
+  return [0, 1, 2].map((axis) => {
+    const start = [...point] as Vec3, end = [...point] as Vec3;
+    start[axis] = Math.round((start[axis] - CROSS / 2) * 1e6) / 1e6;
+    end[axis] = Math.round((end[axis] + CROSS / 2) * 1e6) / 1e6;
+    return { start, end };
+  });
+}
+
+/** Le centre de la boîte de ces traits (le centre d'une croix), au millimètre ; rien sans trait. */
+export function crossCentre(lines: readonly BcfLine[] | undefined): Vec3 | undefined {
+  if (!lines || lines.length === 0) return undefined;
+  const points = lines.flatMap((line) => [line.start, line.end]);
+  return [0, 1, 2].map((axis) => Math.round(((Math.min(...points.map((p) => p[axis])) + Math.max(...points.map((p) => p[axis]))) / 2) * 1000) / 1000 + 0) as Vec3;
+}
+
+/** Vrai si la vue regarde déjà ce point : à moins de 8° de son axe (perspective), ou à moins d'un dixième de sa hauteur (parallèle). */
+export function isAimed(camera: NonNullable<BcfViewpoint['camera']>, point: Vec3): boolean {
+  const to = [point[0] - camera.viewPoint[0], point[1] - camera.viewPoint[1], point[2] - camera.viewPoint[2]];
+  const axis = unit(camera.direction), length = Math.hypot(to[0], to[1], to[2]);
+  if (!axis || length < 1e-9) return false;
+  const along = dot(axis, to);
+  if (along <= 0) return false;
+  return camera.kind === 'perspective' ? along / length > Math.cos((8 * Math.PI) / 180) : Math.sqrt(Math.max(0, length * length - along * along)) < (camera.viewToWorldScale ?? 10) / 10;
+}
+
+/** Un GUID dérivé de celui du sujet (ses chiffres décalés) : l'export répété du même sujet redonne le même point de vue visé. */
+function aimedGuid(guid: string): string {
+  const digits = guid.replace(/-/g, '');
+  const rotated = digits.slice(13) + digits.slice(0, 13);
+  return `${rotated.slice(0, 8)}-${rotated.slice(8, 12)}-${rotated.slice(12, 16)}-${rotated.slice(16, 20)}-${rotated.slice(20)}`.toLowerCase();
+}
+
+/**
+ * Le sujet BCF d'une observation : ses champs propres retirés. Ses éléments sont dans la sélection et la couleur du premier point de vue ;
+ * son point est marqué d'une croix, et regardé par un point de vue en tête quand la vue de l'utilisateur ne l'est pas déjà. Le point et
+ * le repère sur plan vont dans `viewer-bim.json`, à nous.
+ */
+export function toBcfTopic(observation: Observation, context: BcfExportContext = {}): BcfTopic {
+  const { number: _number, elements, pin, point, location: _location, origin: _origin, ...topic } = observation;
+  void [_number, _location, _origin];
+  const seen = new Set<string>();
+  const components = elements.flatMap((ref) => {
+    const component = componentOf(ref.key, context.identify?.({ ...ref, key: baseKey(ref.key) }));
+    const id = JSON.stringify(component);
+    return seen.has(id) ? [] : (seen.add(id), [component]);
+  });
+  const withElements = (viewpoint: BcfViewpoint): BcfViewpoint => defined({ ...viewpoint, selection: components, coloring: components.length > 0 ? [{ color: HIGHLIGHT, components }] : undefined });
+  const viewerBim = pin || point ? defined({ point, pin }) : undefined;
   const [first, ...rest] = topic.viewpoints;
-  return { ...topic, viewpoints: first ? [{ ...first, selection }, ...rest] : [{ guid: newGuid(), clippingPlanes: [], selection }] };
+  if (!point) return defined({ ...topic, viewerBim, viewpoints: first ? [withElements(first), ...rest] : components.length > 0 ? [withElements({ guid: newGuid(), clippingPlanes: [], selection: [] })] : [] });
+  const lines = crossAt(point);
+  if (first?.camera && isAimed(first.camera, point)) return { ...topic, viewerBim, viewpoints: [{ ...withElements(first), lines }, ...rest] };
+  const box = context.frame?.(elements);
+  const radius = box ? Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) / 2 : 0;
+  const lead = withElements({ guid: aimedGuid(topic.guid), camera: aimAt(point, box ? Math.min(80, Math.max(4, radius * 2.5)) : 6, context.blocked), clippingPlanes: [], selection: [], lines });
+  return { ...topic, viewerBim, viewpoints: [lead, ...(first ? [withElements(first)] : []), ...rest] };
 }
 
-/** Une observation lue d'un sujet BCF : les éléments sélectionnés deviennent les siens (sans maquette : cherchés dans toutes). */
-export function fromBcfTopic(topic: BcfTopic, number: number): Observation {
-  const keys = [...new Set(topic.viewpoints.flatMap((viewpoint) => viewpoint.selection.flatMap((component) => keyOfComponent(component) ?? [])))];
-  return { ...topic, viewpoints: topic.viewpoints.map((viewpoint) => ({ ...viewpoint, selection: [] })), number, elements: keys.map((key) => ({ key })), location: {} };
+/**
+ * Une observation lue d'un sujet BCF. Ses éléments sont ceux de la sélection, sinon de la couleur, sinon des exceptions de visibilité : le
+ * premier groupe dont un élément se retrouve (`resolves`) ; sans maquette, cherchés dans toutes. Son point : `viewer-bim.json`, sinon le
+ * centre de la croix ; le reste (boîte des éléments, regard de la caméra) dépend de la maquette ouverte et se décide à l'ouverture.
+ * `revit` : la maquette ouverte est un `.rvt` (un nombre seul est alors un ElementId).
+ */
+export function fromBcfTopic(topic: BcfTopic, number: number, options: { revit?: boolean; resolves?: (key: string) => boolean } = {}): Observation {
+  const picks: ((viewpoint: BcfViewpoint) => BcfComponent[])[] = [(viewpoint) => viewpoint.selection, (viewpoint) => viewpoint.coloring?.flatMap((item) => item.components) ?? [], (viewpoint) => viewpoint.exceptions ?? []];
+  const groups = picks.map((pick) => [...new Set(topic.viewpoints.flatMap((viewpoint) => pick(viewpoint).flatMap((component) => { const keys = candidateKeys(component, !!options.revit); return (options.resolves ? keys.find(options.resolves) ?? keys[0] : keys[0]) ?? []; })))]).filter((keys) => keys.length > 0);
+  const keys = groups.find((group) => (options.resolves ? group.some(options.resolves) : true)) ?? groups[0] ?? [];
+  const { viewerBim, ...rest } = topic;
+  const extra = isRecord(viewerBim) ? viewerBim : {};
+  const pin = isRecord(extra.pin) && typeof extra.pin.plan === 'string' && finite(extra.pin.x) && finite(extra.pin.y) ? { plan: extra.pin.plan, x: extra.pin.x, y: extra.pin.y } : undefined;
+  const point = vec3(extra.point) ?? crossCentre(topic.viewpoints.find((viewpoint) => viewpoint.lines)?.lines);
+  return defined({
+    ...rest, number, elements: keys.map((key) => ({ key })), location: {}, point, pin,
+    viewpoints: topic.viewpoints.map(({ coloring: _coloring, exceptions: _exceptions, lines: _lines, ...viewpoint }) => ({ ...viewpoint, selection: [] })),
+  });
 }
 
 /** Les listes du projet, telles que le BCF les décrit (extensions.xml). */
@@ -365,9 +488,19 @@ export function viewOfViewpoint(viewpoint: BcfViewpoint, name: string): SavedVie
   return defined({ name, kind: '3d' as const, origin: 'user' as const, camera: savedCamera, sections: free, sectionBox: box ?? undefined });
 }
 
-/** Une caméra en perspective qui regarde `point` (Z vers le haut) d'en haut, de biais, à `distance` mètres. */
-export function aimAt(point: Vec3, distance = 6): BcfViewpoint['camera'] {
-  const viewPoint: Vec3 = [point[0] - distance * 0.6, point[1] - distance * 0.6, point[2] + distance * 0.5];
+/**
+ * Une caméra en perspective qui regarde `point` (Z vers le haut) d'en haut, de biais, à `distance` mètres. `blocked` : un obstacle
+ * entre la caméra et le point écarte la place ; on essaie les autres côtés, puis plus près.
+ */
+export function aimAt(point: Vec3, distance = 6, blocked?: (from: Vec3, to: Vec3) => boolean): BcfViewpoint['camera'] {
+  let viewPoint: Vec3 = [point[0] - distance * 0.6, point[1] - distance * 0.6, point[2] + distance * 0.5];
+  if (blocked) {
+    const places = [1, 0.5, 0.25].flatMap((scale) => [0, 90, 270, 180, 45, 315, 135, 225].map((turn): Vec3 => {
+      const c = Math.cos((turn * Math.PI) / 180), s = Math.sin((turn * Math.PI) / 180);
+      return [point[0] - distance * scale * (0.6 * c - 0.6 * s), point[1] - distance * scale * (0.6 * s + 0.6 * c), point[2] + distance * scale * 0.5];
+    }));
+    viewPoint = places.find((place) => !blocked(place, point)) ?? viewPoint;
+  }
   const direction = unit([point[0] - viewPoint[0], point[1] - viewPoint[1], point[2] - viewPoint[2]])!;
   const up = unit([-direction[2] * direction[0], -direction[2] * direction[1], 1 - direction[2] * direction[2]])!;
   return { kind: 'perspective', viewPoint, direction, up, fieldOfView: 60, aspectRatio: 1.5 };

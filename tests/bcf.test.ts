@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { imageSize, readBcf, writeBcf, type BcfTopic } from '../src/data/bcf.ts';
+import { componentOf, crossAt, crossCentre, fromBcfTopic, keyOfComponent, newObservation, defaultLists, toBcfTopic, type Observation } from '../src/data/observations.ts';
 import { readZip } from '../src/data/zip.ts';
 import { deflatedZip, nodeInflate } from './zipHelpers.ts';
 
@@ -151,4 +152,124 @@ test('an unreadable topic is skipped with a note; an unknown version is refused'
   assert.equal(notes.length, 1);
   assert.match(notes[0], /x\/markup\.bcf/);
   await assert.rejects(readBcf(deflatedZip({ 'bcf.version': '<Version VersionId="1.0"/>' }), nodeInflate), /1\.0/);
+});
+
+// ------------------------------------------------------------------ the issue points at its object
+
+const IFC = '2O2Fr$t4X7Zf8NOew3FLOH';
+const POINT: [number, number, number] = [12.5, -3.25, 1.7];
+const text = async (entries: Awaited<ReturnType<typeof readZip>>, name: string) => new TextDecoder().decode(await entries.get(name)!.bytes());
+
+function observed(fields: Partial<Observation> = {}): Observation {
+  return {
+    ...newObservation({ title: 'Fuite', point: POINT, pin: { plan: 'Niveau 1', x: 12.5, y: -3.25 }, elements: [{ key: IFC, model: 'a.ifc' }, { key: 'rvt-318215', model: 'b.rvt' }, { key: `${IFC}~2`, model: 'a.ifc' }] }, 'Zaid', new Date('2026-11-14T08:00:00Z'), defaultLists(), 1),
+    // The user's own view looks away from the point: not aimed.
+    viewpoints: [{ guid: 'd00dfeed-1234-4abc-8def-0123456789ab', camera: { kind: 'perspective', viewPoint: [0, 0, 1.7], direction: [-1, 0, 0], up: [0, 0, 1], fieldOfView: 60, aspectRatio: 1.5 }, clippingPlanes: [], selection: [], snapshot: new Blob([fakePng(800, 600)], { type: 'image/png' }) }],
+    ...fields,
+  };
+}
+
+test('a topic with a point writes two viewpoints, a coloring, a cross centred on the point and viewer-bim.json', async () => {
+  const topic = toBcfTopic(observed());
+  assert.equal(topic.viewpoints.length, 2);
+  const entries = await readZip(await writeBcf([topic]), nodeInflate);
+  const folder = topic.guid;
+  const names = [...entries.keys()].filter((name) => name.startsWith(`${folder}/`)).sort();
+  assert.deepEqual(names, [`${folder}/markup.bcf`, `${folder}/snapshot-${topic.viewpoints[1].guid}.png`, `${folder}/viewer-bim.json`, `${folder}/viewpoint-${topic.viewpoints[1].guid}.bcfv`, `${folder}/viewpoint.bcfv`].sort());
+  const markup = await text(entries, `${folder}/markup.bcf`);
+  assert.equal(markup.match(/<ViewPoint /g)?.length, 2);
+  assert.match(markup, /<Snapshot>snapshot-[0-9a-f-]+\.png<\/Snapshot>/);
+  // The first viewpoint is the aimed one: elements twice (selection, colour), the three-segment cross, in schema order.
+  const first = await text(entries, `${folder}/viewpoint.bcfv`);
+  assert.match(first, /<Components><Selection><Component IfcGuid="2O2Fr\$t4X7Zf8NOew3FLOH"\/><Component><OriginatingSystem>Revit<\/OriginatingSystem><AuthoringToolId>318215<\/AuthoringToolId><\/Component><\/Selection><Visibility DefaultVisibility="true"\/><Coloring><Color Color="FFFF3B30"><Components><Component IfcGuid="2O2Fr\$t4X7Zf8NOew3FLOH"\/>/);
+  assert.equal(first.match(/<Component IfcGuid="2O2Fr\$t4X7Zf8NOew3FLOH"\/>/g)?.length, 2, 'the part and its original are one element');
+  assert.ok(first.indexOf('</PerspectiveCamera><Lines>') > 0 && first.indexOf('</Lines>') < (first.indexOf('<ClippingPlanes') < 0 ? Infinity : first.indexOf('<ClippingPlanes')));
+  const read = await readBcf(await writeBcf([topic]), nodeInflate);
+  const lines = read.topics[0].viewpoints[0].lines!;
+  assert.equal(lines.length, 3);
+  lines.forEach((line, axis) => assert.ok(Math.abs(Math.hypot(...line.start.map((v, i) => v - line.end[i])) - 0.3) < 1e-9, `segment ${axis} is 30 cm`));
+  const centre = crossCentre(lines)!;
+  centre.forEach((value, i) => assert.ok(Math.abs(value - POINT[i]) < 0.001));
+  assert.deepEqual(JSON.parse(await text(entries, `${folder}/viewer-bim.json`)), { point: POINT, pin: { plan: 'Niveau 1', x: 12.5, y: -3.25 } });
+  // Exporting again gives the same aimed viewpoint (no pile-up when the .bcf is merged later).
+  assert.equal(toBcfTopic(observed({ guid: topic.guid })).viewpoints[0].guid, topic.viewpoints[0].guid);
+});
+
+test('a view that already looks at the point is not doubled', () => {
+  const aimed = observed();
+  const lead = toBcfTopic(aimed).viewpoints[0];
+  assert.equal(toBcfTopic({ ...aimed, viewpoints: [lead] }).viewpoints.length, 1);
+  assert.equal(toBcfTopic({ ...aimed, point: undefined, pin: undefined }).viewerBim, undefined);
+});
+
+test('round trip: point and pin come back; without viewer-bim.json the cross gives the point; without both there is none', async () => {
+  const written = toBcfTopic(observed());
+  const back = async (topic: BcfTopic) => fromBcfTopic((await readBcf(await writeBcf([topic]), nodeInflate)).topics[0], 1);
+  const full = await back(written);
+  assert.deepEqual(full.point, POINT);
+  assert.deepEqual(full.pin, { plan: 'Niveau 1', x: 12.5, y: -3.25 });
+  assert.deepEqual(full.elements, [{ key: IFC }, { key: 'rvt-318215' }]);
+  assert.equal(full.viewpoints[0].lines, undefined, 'drawn lines are not kept: they are written again');
+  const { viewerBim: _viewerBim, ...withoutFile } = written;
+  void _viewerBim;
+  const fromCross = await back(withoutFile);
+  assert.deepEqual(fromCross.point, POINT);
+  assert.equal(fromCross.pin, undefined);
+  const bare = await back({ ...withoutFile, viewpoints: withoutFile.viewpoints.map(({ lines: _lines, ...viewpoint }) => viewpoint) });
+  void 0;
+  // No point left in the file: the box centre or the view ray is chosen with the open model (ui), not here.
+  assert.equal(bare.point, undefined);
+  assert.deepEqual(bare.elements, [{ key: IFC }, { key: 'rvt-318215' }]);
+});
+
+test('componentOf: parts take their original, Revit keeps both ids, other keys name their system', () => {
+  assert.deepEqual(componentOf(`${IFC}~3`), { ifcGuid: IFC });
+  assert.deepEqual(componentOf(`rvt-42~1~2`), { originatingSystem: 'Revit', authoringToolId: '42' });
+  // The Revit reader declares its identity properties as read-only: an integer is the ElementId, a 22-character text the GlobalId.
+  const revit = { kind: 'revit', readOnly: ['Identifiant Revit', 'GUID IFC', 'Source de la géométrie'], props: { 'Identifiant Revit': 318215, 'GUID IFC': IFC, 'Source de la géométrie': 'Maillage' } };
+  assert.deepEqual(componentOf(IFC, revit), { ifcGuid: IFC, originatingSystem: 'Revit', authoringToolId: '318215' });
+  assert.deepEqual(componentOf(`${IFC}~2`, revit), { ifcGuid: IFC, originatingSystem: 'Revit', authoringToolId: '318215' });
+  assert.deepEqual(componentOf('rvt-318215', { ...revit, props: { 'Identifiant Revit': 318215 } }), { originatingSystem: 'Revit', authoringToolId: '318215' });
+  assert.deepEqual(componentOf('mur-12', { kind: 'glb' }), { authoringToolId: 'mur-12', originatingSystem: 'glb' });
+  assert.deepEqual(componentOf('mur-12'), { authoringToolId: 'mur-12' });
+  assert.deepEqual(componentOf(IFC, { kind: 'ifc' }), { ifcGuid: IFC });
+  // A number alone is a Revit id only when the file says Revit, or the open model is Revit.
+  assert.equal(keyOfComponent({ authoringToolId: '318215' }), '318215');
+  assert.equal(keyOfComponent({ authoringToolId: '318215' }, true), 'rvt-318215');
+  assert.equal(keyOfComponent({ authoringToolId: '318215', originatingSystem: 'Autodesk Revit 2024' }), 'rvt-318215');
+  assert.equal(keyOfComponent({ ifcGuid: IFC, authoringToolId: '1' }, true), IFC);
+});
+
+test('crossAt is three centred 30 cm segments along X, Y and Z', () => {
+  const cross = crossAt([1, 2, 3]);
+  assert.deepEqual(cross.map((line) => [line.start, line.end]), [[[0.85, 2, 3], [1.15, 2, 3]], [[1, 1.85, 3], [1, 2.15, 3]], [[1, 2, 2.85], [1, 2, 3.15]]]);
+  assert.equal(crossCentre([]), undefined);
+});
+
+test('a hand-written BCF 2.1 that marks the object only by Coloring (or a visibility exception) gives its elements', async () => {
+  const folder = '2b9d2f1e-6c4a-4f3e-9d1a-1f2e3d4c5b6b';
+  const markup = (vp: string) => `<Markup><Topic Guid="${folder}" TopicType="Issue" TopicStatus="Open"><Title>x</Title><CreationDate>2026-10-02T09:15:00Z</CreationDate><CreationAuthor>a</CreationAuthor></Topic><Viewpoints Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9"><Viewpoint>${vp}</Viewpoint></Viewpoints></Markup>`;
+  const camera = '<PerspectiveCamera><CameraViewPoint><X>0</X><Y>0</Y><Z>1</Z></CameraViewPoint><CameraDirection><X>1</X><Y>0</Y><Z>0</Z></CameraDirection><CameraUpVector><X>0</X><Y>0</Y><Z>1</Z></CameraUpVector><FieldOfView>60</FieldOfView></PerspectiveCamera>';
+  const open = async (components: string) => {
+    const file = deflatedZip({ 'bcf.version': '<Version VersionId="2.1"/>', [`${folder}/markup.bcf`]: markup('v.bcfv'), [`${folder}/v.bcfv`]: `<VisualizationInfo Guid="5e6f7a8b-9c0d-4e1f-a2b3-c4d5e6f7a8b9"><Components>${components}</Components>${camera}</VisualizationInfo>` });
+    return (await readBcf(file, nodeInflate)).topics[0];
+  };
+  const byColor = await open(`<Visibility DefaultVisibility="true"/><Coloring><Color Color="FFFF0000"><Component IfcGuid="${IFC}"/></Color><Color Color="FF00FF00"><Component><AuthoringToolId>77</AuthoringToolId></Component></Color></Coloring>`);
+  assert.deepEqual(byColor.viewpoints[0].selection, []);
+  assert.deepEqual(byColor.viewpoints[0].coloring, [{ color: 'FFFF0000', components: [{ ifcGuid: IFC }] }, { color: 'FF00FF00', components: [{ authoringToolId: '77' }] }]);
+  assert.deepEqual(fromBcfTopic(byColor, 1).elements, [{ key: IFC }, { key: '77' }]);
+  // 3.0 wraps the components of a colour in <Components>: read too. Visibility exceptions are the last resort.
+  const wrapped = await open(`<Visibility DefaultVisibility="false"><Exceptions><Component IfcGuid="${IFC}"/></Exceptions></Visibility><Coloring><Color Color="FFFF0000"><Components><Component><AuthoringToolId>77</AuthoringToolId></Component></Components></Color></Coloring>`);
+  assert.deepEqual(fromBcfTopic(wrapped, 1, { revit: true }).elements, [{ key: 'rvt-77' }]);
+  // The first group that resolves wins: here the colour group does not resolve, the exceptions do.
+  assert.deepEqual(fromBcfTopic(wrapped, 1, { resolves: (key) => key === IFC }).elements, [{ key: IFC }]);
+  // A Revit component with both ids: the GlobalId first, the ElementId when no element has the GUID.
+  const both = { ...byColor, viewpoints: [{ ...byColor.viewpoints[0], selection: [{ ifcGuid: IFC, originatingSystem: 'Revit', authoringToolId: '318215' }] }] };
+  assert.deepEqual(fromBcfTopic(both, 1).elements, [{ key: IFC }]);
+  assert.deepEqual(fromBcfTopic(both, 1, { resolves: (key) => key === IFC }).elements, [{ key: IFC }]);
+  assert.deepEqual(fromBcfTopic(both, 1, { resolves: (key) => key === 'rvt-318215' }).elements, [{ key: 'rvt-318215' }]);
+  assert.deepEqual(fromBcfTopic(both, 1, { resolves: () => false }).elements, [{ key: IFC }]);
+  const exceptionsOnly = await open(`<Visibility DefaultVisibility="false"><Exceptions><Component IfcGuid="${IFC}"/></Exceptions></Visibility>`);
+  assert.deepEqual(fromBcfTopic(exceptionsOnly, 1).elements, [{ key: IFC }]);
+  assert.equal(fromBcfTopic(exceptionsOnly, 1).point, undefined);
 });

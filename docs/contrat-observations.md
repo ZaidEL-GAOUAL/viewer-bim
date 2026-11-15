@@ -25,12 +25,16 @@ Rien ne quitte la page sans un export choisi par l'utilisateur. Les photos ne vi
 | Entreprise | `AssignedTo` |
 | Échéance, priorité, titre, description | `DueDate`, `Priority`, `Title`, `Description` |
 | Créée le / par, modifiée le / par | `CreationDate`, `CreationAuthor`, `ModifiedDate`, `ModifiedAuthor` |
-| Éléments | sélection du premier point de vue : `Component/@IfcGuid` (GlobalId IFC, sans préfixe de session) ; à défaut `AuthoringToolId` (clé `rvt-<ElementId>` d'un élément Revit sans GUID → `<ElementId>`) |
+| Éléments | `Selection` **et** `Coloring` (une couleur, `FFFF3B30`, ARGB sans `#`) du premier point de vue, `Visibility` : tout visible. Par élément : `IfcGuid` (GlobalId IFC, sans préfixe de session) ; un élément Revit y ajoute `OriginatingSystem` = `Revit` et `AuthoringToolId` = son ElementId (lu dans les propriétés non modifiables que le lecteur déclare : l'entier est l'ElementId, le texte de 22 caractères le GlobalId) ; un Revit sans GUID n'a que `AuthoringToolId` (clé `rvt-<ElementId>`) ; autre clé : `AuthoringToolId` et `OriginatingSystem` = le type de la maquette. Une pièce (`<clé>~n`) prend l'identité de son original |
 | Vue et coupe | caméra du point de vue (`PerspectiveCamera` ou `OrthogonalCamera`) et `ClippingPlanes` |
-| Image de la vue | `snapshot.png` du point de vue (au plus 1 500 px de côté) |
+| Point | `Lines` du premier point de vue : une croix de trois traits de 30 cm centrée sur le point (X, Y, Z), repère du modèle, Z vers le haut ; et `viewer-bim.json` (ci-dessous) |
+| Image de la vue | `snapshot.png` du point de vue (au plus 1 500 px de côté), repère rouge sur le point ; absente en mode carte (le globe dessine sa propre copie : l'application le dit) |
 | Photos | `DocumentReferences` → `documents.xml` et `Documents/<guid>` (JPEG, réduites à 1 500 px de côté) |
 | Historique (changements de statut compris) et commentaires | `Comments/Comment` |
-| Repère sur un plan, point 3D, emplacement, numéro, origine | aucun : section `observations` du JSON seulement |
+| Repère sur un plan, point 3D | `viewer-bim.json` du dossier du sujet : `{ "point": [x, y, z], "pin": { "plan", "x", "y" } }` (fichier à nous, que la spécification BCF permet ; les autres outils l'ignorent) |
+| Emplacement, numéro, origine | aucun : section `observations` du JSON seulement |
+
+**Deux points de vue par sujet qui a un point.** Quand la vue de l'utilisateur ne regarde pas déjà le point (axe à moins de 8°), le sujet écrit **en premier** un point de vue visé (en perspective, de biais et d'en haut, cadré sur la boîte des éléments, jamais derrière un mur), puis la vue de l'utilisateur : les autres outils ouvrent le premier. Ses éléments, sa croix et (à la création) son image sont ceux du point de vue visé. Son GUID est dérivé de celui du sujet : un export répété ne l'empile pas.
 
 Les listes du projet vont dans `extensions.xml` : `TopicTypes` (types), `TopicStatuses` (statuts), `Priorities`,
 `TopicLabels` (lots), `Users` (entreprises et auteurs), `Stages` (phases).
@@ -49,9 +53,15 @@ plans de coupe libres sont écrits d'abord, puis la boîte de coupe en six plans
 dans l'ordre du schéma, XML échappé.
 
 **Lu** : BCF 3.0 et 2.1 (commentaires et points de vue à côté du sujet, étiquettes répétées, documents par chemin), archives
-stockées ou compressées (deflate). **Pas pris en charge** (lu sans erreur, pas réécrit) : en-tête des fichiers IFC,
-`BimSnippet`, visibilité et couleurs par élément, lignes et images posées dans la vue, `extensions.xsd` de 2.1 (les valeurs
-des sujets lus rejoignent les listes).
+stockées ou compressées (deflate). Les éléments d'un sujet : `Selection`, sinon `Coloring`, sinon les exceptions de
+`Visibility` ; le premier groupe dont un élément se retrouve dans la maquette ouverte (sinon le premier non vide). Un
+`AuthoringToolId` numérique est un ElementId Revit (`rvt-<id>`) quand `OriginatingSystem` dit Revit ou que la maquette
+ouverte est un `.rvt` ; sinon c'est une clé ordinaire. Le point : `viewer-bim.json`, sinon le centre de la croix (`Lines`),
+sinon le centre des éléments, sinon l'endroit de la maquette que la caméra regarde (rayon le long de sa direction), sinon
+aucun : l'observation est alors listée « sans position ». Un fichier sans elles s'ouvre comme avant.
+**Pas pris en charge** (lu sans erreur, pas réécrit) : en-tête des fichiers IFC, `BimSnippet`, exceptions de visibilité
+(lues, jamais écrites), images posées dans la vue, `extensions.xsd` de 2.1 (les valeurs des sujets lus rejoignent les
+listes).
 
 ## 2. La section `observations` du JSON
 
