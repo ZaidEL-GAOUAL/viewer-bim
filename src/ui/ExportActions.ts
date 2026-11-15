@@ -36,7 +36,7 @@ export class ExportActions {
   constructor(app: App) {
     const print = new PrintDialog(app), dxf = new DxfDialog(app);
     this.buttons = [
-      button('Imprimer / PDF…', () => print.toggle(), { title: 'Imprimer la vue, à l’échelle pour un plan ou une coupe, en PDF' }),
+      button('Imprimer en PDF…', () => print.toggle(), { title: 'Imprimer la vue, à l’échelle pour un plan ou une coupe, en PDF' }),
       button('DXF…', () => dxf.toggle(), { title: 'DXF (AutoCAD, BricsCAD, Revit) : les lignes de coupe du plan ou de la coupe affichée' }),
       button('Copier l’image', () => void copyImage(app).catch((error) => app.toast(error instanceof Error ? error.message : String(error), true)), { title: 'Copier la vue (PNG) dans le presse-papiers' }),
     ];

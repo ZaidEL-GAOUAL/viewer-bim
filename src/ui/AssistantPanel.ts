@@ -218,7 +218,7 @@ export class AssistantPanel {
       // On n'annule que sa propre étape : si d'autres modifications l'ont suivie, on le dit au lieu d'annuler la mauvaise.
       undo = () => {
         if (app.propertyEdits?.lastChange === step) app.undoProperties();
-        else this.line('note', 'D’autres modifications ont suivi : annulez-les d’abord avec « Annuler » dans la barre d’outils.');
+        else this.line('note', 'D’autres modifications ont suivi : annulez-les d’abord avec le bouton « Annuler » des outils de vue.');
       };
     }
     if (!undo) { this.card(answer); return outcome; }

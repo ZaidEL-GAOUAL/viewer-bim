@@ -7,6 +7,7 @@
 // (docs/contrat-etude.md) ; une maquette BIM (Revit, IFC, glb…) peut être posée sur le site. Une proposition s'exporte
 // en GLB + JSON pour le viewer, géoréférencée.
 
+import { pageTabs, themeButton } from '../ui/Shell.ts';
 import { Vector3 } from 'three';
 import { fold, integer, oneDecimal } from '../data/text.ts';
 import { Sketch } from '../engine/sketch.ts';
@@ -229,13 +230,14 @@ export class SitePage {
       if (event.key === 'Enter') void this.runSearch();
     });
     const topbar = h('header', { class: 'topbar' },
-      h('span', { class: 'brand', text: 'Étude de site' }),
+      h('span', { class: 'brand', text: 'Viewer BIM' }),
+      pageTabs('etude'),
       this.nameInput,
       this.studyButtons,
       this.saveStateEl,
       this.studyFileInput, this.modelInput,
       h('div', { class: 'spacer' }),
-      h('a', { class: 'site-back', text: 'Viewer BIM', attrs: { href: 'index.html', title: 'Ouvrir le viewer de maquettes' } }),
+      themeButton(),
     );
 
     const canvasHost = h('div', { class: 'canvas-host' });
@@ -273,7 +275,7 @@ export class SitePage {
     this.recent = await this.store.list();
     const handoff = await this.store.takeHandoff();
     if (handoff) await this.receiveModel(handoff);
-    else if (new URLSearchParams(location.search).has('maquette')) this.toast('Aucune maquette reçue du viewer : renvoyez-la depuis le menu « Chantier » du viewer.', true);
+    else if (new URLSearchParams(location.search).has('maquette')) this.toast('Aucune maquette reçue du viewer : renvoyez-la depuis le groupe « Chantier » du viewer.', true);
     this.render();
   }
 

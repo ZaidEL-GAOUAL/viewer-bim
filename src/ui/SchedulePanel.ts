@@ -76,7 +76,7 @@ export class SchedulePanel {
     });
     this.example = button('Planning d’exemple', () => void this.loadExample(), { title: 'Dates fictives pour le petit bâtiment de démonstration' });
     this.example.hidden = true;
-    this.exportButton = button('Planning JSON ↓', () => this.download(), { title: 'Télécharger le planning, ou un exemple de structure si aucun planning n’est chargé' });
+    this.exportButton = button('Enregistrer le planning', () => this.download(), { title: 'Télécharger le planning, ou un exemple de structure si aucun planning n’est chargé' });
     const actions = h('div', { class: 'schedule-actions' },
       button('Importer un planning…', () => this.input.click()),
       button('Depuis les métadonnées…', () => this.mapMetadata()),
@@ -145,6 +145,9 @@ export class SchedulePanel {
 
   private get minimum(): number { return Math.max(parseScheduleDate('0001-01-01'), (this.compiled?.startDay ?? 1) - 1); }
   private get maximum(): number { return Math.min(parseScheduleDate('9999-12-31'), (this.compiled?.endDay ?? -1) + 1); }
+
+  /** Déplie le planning (depuis le rail). */
+  show(): void { this.setOpen(true); }
 
   private setOpen(open: boolean): void {
     this.body.hidden = !open;

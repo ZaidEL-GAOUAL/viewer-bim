@@ -4,7 +4,7 @@
 
 import type { App } from '../ui/App.ts';
 import { h } from '../ui/dom.ts';
-import type { MenuCard } from '../ui/PanelMenu.ts';
+import type { MenuCard } from '../ui/Shell.ts';
 
 export function studyCard(app: App): MenuCard {
   return {

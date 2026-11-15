@@ -188,7 +188,7 @@ export class SplitPanel {
     this.existing = h('div', { class: 'split-step' },
       h('p', { class: 'field-label', text: 'Découpages' }), this.list, this.merge,
       h('p', { class: 'hint', text: 'Avec plusieurs maquettes, seuls les éléments de la première se découpent.' }),
-      h('p', { class: 'hint', text: 'Les pièces copient les propriétés de l’original et reçoivent « Pièce / Numéro », « Pièce / Séquence » (à modifier pour l’ordre du planning) et leurs propres quantités. Elles s’enregistrent comme une définition de coupe avec « JSON ↓ » et « Modifications ↓ » ; « GLB ↓ » contient les pièces à la place des originaux.' }));
+      h('p', { class: 'hint', text: 'Les pièces copient les propriétés de l’original et reçoivent « Pièce / Numéro », « Pièce / Séquence » (à modifier pour l’ordre du planning) et leurs propres quantités. Elles s’enregistrent comme une définition de coupe avec « Enregistrer mes modifications » et « Toutes les propriétés » (groupe Exporter) ; « Maquette 3D » contient les pièces à la place des originaux.' }));
     this.el = h('section', { class: 'card tool-card split-card', attrs: { hidden: '', 'aria-label': this.label } },
       h('div', { class: 'card-head' }, h('h2', { class: 'card-title', text: this.label }),
         button('×', () => this.toggle(false), { class: 'close-button', title: 'Fermer : la vue d’avant revient', attrs: { 'aria-label': 'Fermer le découpage' } })),
@@ -710,7 +710,7 @@ export class SplitPanel {
     const model = app.model!, edits = app.propertyEdits;
     const parts = new Set(keys);
     const modified = edits ? Object.keys(edits.diff(model.keys).elements).filter((key) => parts.has(key)).length : 0;
-    return modified === 0 || window.confirm(`${plural(modified, 'pièce modifiée', 'pièces modifiées')} dans ce découpage : ces modifications seront perdues (« Modifications ↓ » les enregistre d’abord). ${question}`);
+    return modified === 0 || window.confirm(`${plural(modified, 'pièce modifiée', 'pièces modifiées')} dans ce découpage : ces modifications seront perdues (« Enregistrer mes modifications » les enregistre d’abord). ${question}`);
   }
 
   private remove(id: string): void {

@@ -3,6 +3,7 @@
 // membres, compte. Tout se lit et s'écrit dans le magasin de l'appareil (store.ts) ; la ligne d'état dit ce qui n'est pas encore
 // envoyé. Navigation par l'adresse (#/p/<projet>/o/<observation>…) : le bouton « retour » du téléphone marche.
 
+import { pageTabs } from '../ui/Shell.ts';
 import { writeBcf } from '../data/bcf.ts';
 import {
   addComment, allowedStatuses, changeStatus, extensionsOf, filterObservations, frenchDate, isOverdue, newObservation, nextNumber, statusColor, toBcfTopic, touched,
@@ -74,7 +75,7 @@ export class ChantierPage {
     this.options = options;
     root.className = 'ch-app';
     root.append(
-      h('header', { class: 'ch-bar' }, link('Suivi de chantier', '#/', 'ch-brand'), h('span', { class: 'ch-spacer' }), link('Viewer BIM', 'index.html', 'ch-other'), this.account),
+      h('header', { class: 'ch-bar' }, link('Viewer BIM', '#/', 'ch-brand'), pageTabs('chantier'), h('span', { class: 'ch-spacer' }), this.account),
       this.status, this.main, this.toastEl,
     );
     window.addEventListener('hashchange', () => void this.render());

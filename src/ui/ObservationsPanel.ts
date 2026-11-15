@@ -464,7 +464,7 @@ export class ObservationsPanel {
     this.syncFilters();
     this.note.textContent = !app.model ? 'Ouvrez d’abord une maquette.'
       : app.mapOpen ? 'Carte ouverte : les repères sont masqués et la pose par clic attend sa fermeture ; la liste reste utilisable.'
-        : 'Chaque observation garde la vue, la coupe et une image. Enregistrez avec « Exporter .bcf » (photos comprises) et « JSON ↓ » ou « Modifications ↓ » (repères sur plan, réglages).';
+        : 'Chaque observation garde la vue, la coupe et une image. Enregistrez avec « Exporter .bcf » (photos comprises) et « Enregistrer mes modifications » ou « Toutes les propriétés » (groupe Exporter) (repères sur plan, réglages).';
     this.renderCounts(list);
     this.renderList(list);
     if (editor) this.renderEditor();

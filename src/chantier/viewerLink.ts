@@ -5,7 +5,7 @@
 
 import type { App } from '../ui/App.ts';
 import { h, stored } from '../ui/dom.ts';
-import type { MenuCard } from '../ui/PanelMenu.ts';
+import type { MenuCard } from '../ui/Shell.ts';
 
 /** Le projet lié à une maquette (par le nom de son fichier), gardé dans ce navigateur. */
 export const linkKey = (fileName: string): string => `viewer-bim.chantier.projet.${fileName}`;

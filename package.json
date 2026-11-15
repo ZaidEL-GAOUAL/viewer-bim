@@ -17,6 +17,8 @@
     "samples:revit": "node scripts/fetch-revit-samples.mjs"
   },
   "dependencies": {
+    "@fontsource/barlow": "5.2.8",
+    "@fontsource/barlow-semi-condensed": "5.2.7",
     "@supabase/supabase-js": "2.119.0",
     "cesium": "^1.146.0",
     "jspdf": "4.2.1",

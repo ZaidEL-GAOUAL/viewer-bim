@@ -1,42 +1,74 @@
+/* Jetons du design (docs/superpowers/plans/2026-11-15-corrections/18-design.md). Le vocabulaire vient du plan de
+   construction : papier, calque, trait, encre ; un seul accent, le bleu de traçage ; l'orange « signal » ne sert qu'à ce qui
+   demande attention (non enregistré, en retard, refusé). Clair et sombre partagent les mêmes noms. */
 :root {
-  --bg: #f3f4f6;
+  --bg: #f4f5f3;
   --panel: #ffffff;
-  --panel-alt: #f7f8fa;
-  --border: #dfe3e8;
-  --text: #1b2026;
-  --muted: #65707d;
-  --accent: #1667d9;
-  --accent-soft: #e4eefc;
+  --panel-alt: #f6f7f6;
+  --border: #d6dadd;
+  --text: #17212b;
+  --muted: #5e6b78;
+  --accent: #2647c8;
+  --accent-soft: #e6ebfb;
   --accent-text: #ffffff;
+  --signal: #c2410c;
+  --signal-soft: #fdeee4;
   --danger: #b3261e;
-  --viewport: #e7eaee;
+  --viewport: #e8ebed;
   --cap: #39424f;
-  --shadow: 0 6px 24px rgb(15 23 42 / 0.12);
-  --radius: 6px;
+  --shadow: 0 8px 28px rgb(23 33 43 / 0.14);
+  --radius: 5px;
   --row: 26px;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --rail: 68px;
+  --font: 'Barlow', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data: 'Barlow Semi Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
+  color-scheme: light;
+  font-family: var(--font);
   font-size: 13px;
   line-height: 1.4;
   color: var(--text);
   background: var(--bg);
 }
 
+/* Sombre : celui du système, ou forcé par le bouton de thème (data-theme). */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171b;
-    --panel: #1b1f24;
-    --panel-alt: #20252b;
-    --border: #2d333b;
-    --text: #e5e8ec;
-    --muted: #96a0ab;
-    --accent: #4c9bff;
-    --accent-soft: #1d3250;
-    --accent-text: #0b1522;
+  :root:not([data-theme='light']) {
+    --bg: #141a21;
+    --panel: #1b232c;
+    --panel-alt: #212a34;
+    --border: #2b3642;
+    --text: #e6eaee;
+    --muted: #93a0ad;
+    --accent: #86a4ff;
+    --accent-soft: #23305a;
+    --accent-text: #0e1626;
+    --signal: #ff8a4c;
+    --signal-soft: #3a2415;
     --danger: #ff8a80;
-    --viewport: #23282e;
+    --viewport: #222a33;
     --cap: #aab4c0;
-    --shadow: 0 6px 24px rgb(0 0 0 / 0.45);
+    --shadow: 0 8px 28px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #141a21;
+  --panel: #1b232c;
+  --panel-alt: #212a34;
+  --border: #2b3642;
+  --text: #e6eaee;
+  --muted: #93a0ad;
+  --accent: #86a4ff;
+  --accent-soft: #23305a;
+  --accent-text: #0e1626;
+  --signal: #ff8a4c;
+  --signal-soft: #3a2415;
+  --danger: #ff8a80;
+  --viewport: #222a33;
+  --cap: #aab4c0;
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
 }
 
 * {
@@ -180,10 +212,8 @@ button[aria-pressed='true'] {
 
 .field-label {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* ------------------------------------------------------------ disposition */
@@ -249,24 +279,8 @@ button[aria-pressed='true'] {
   gap: 6px;
 }
 
-.samples {
-  max-width: 120px;
-}
-
 .segmented {
   display: flex;
-}
-
-/* « Export » devant GLB | USD : le choix porte sur les téléchargements, pas sur le fichier ouvert. */
-.formats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.bar-label {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .segmented button {
@@ -308,31 +322,12 @@ button[aria-pressed='true'] {
   mask: center / contain no-repeat;
 }
 
-.panel-toggle.left::before {
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1 2h14v12H1z M7 3.500v9h6.500v-9z'/%3E%3C/svg%3E");
-}
-
 .panel-toggle.right::before {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1 2h14v12H1z M2.500 3.500v9H9v-9z'/%3E%3C/svg%3E");
 }
 
 .panel-toggle[aria-pressed='false'] {
   color: var(--muted);
-}
-
-/* Résumé du modèle, en bas à gauche de la vue 3D. */
-.stats {
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  max-width: calc(100% - 20px);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  pointer-events: none;
 }
 
 .sidebar {
@@ -394,32 +389,6 @@ button[aria-pressed='true'] {
   padding: 11px 12px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
-}
-
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-}
-
-.tabs button {
-  flex: 1;
-  min-width: 0;
-  height: 38px;
-  padding: 0 6px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  background: none;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: normal;
-  line-height: 1.2;
-}
-
-.tabs button[aria-selected='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--text);
 }
 
 /* ------------------------------------------------------------ arborescence */
@@ -937,18 +906,6 @@ button[aria-pressed='true'] {
   opacity: 0.85;
 }
 
-.cards {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 300px;
-  max-width: calc(100% - 24px); /* vue étroite : les cartes ne débordent pas sur le panneau voisin */
-  max-height: calc(100% - 24px);
-}
-
 .card {
   padding: 10px 12px 12px;
   border: 1px solid var(--border);
@@ -1342,45 +1299,6 @@ button[aria-pressed='true'] {
 
 /* ------------------------------------------------- menu Mesures et carte Cotes */
 
-.measure-menu-wrap { position: relative; }
-.measure-menu-trigger { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px 0 7px; }
-.measure-menu-trigger svg { width: 18px; height: 18px; flex: none; }
-.measure-menu-icon, .measure-menu-chevron { display: inline-flex; }
-.measure-menu-chevron svg { width: 14px; height: 14px; opacity: 0.7; }
-.measure-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  z-index: 30;
-  display: flex;
-  flex-direction: column;
-  min-width: 250px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  white-space: normal;
-}
-.measure-menu[hidden] { display: none; }
-.measure-menu-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  height: auto;
-  padding: 7px 9px;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  text-align: left;
-}
-.measure-menu-item svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
-.measure-menu-item:hover, .measure-menu-item:focus-visible { background: var(--panel-alt); }
-.measure-menu-item[aria-checked='true'] { color: var(--accent); background: var(--accent-soft); }
-.measure-menu-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.measure-menu-name { font-weight: 600; }
-.measure-menu-summary { color: var(--muted); font-size: 11px; line-height: 1.3; }
-
 .dimensions-card { display: flex; flex-direction: column; min-height: 0; max-height: 100%; }
 .dimensions-body { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
 .dimensions-title { margin: 6px 0 4px; font-weight: 600; overflow-wrap: anywhere; }
@@ -1564,3 +1482,135 @@ button[aria-pressed='true'] {
 .observation-image { width: 96px; height: 72px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; cursor: zoom-in; }
 .observation-comments { display: flex; flex-direction: column; gap: 4px; max-height: 160px; margin: 0; padding: 0; overflow: auto; list-style: none; }
 .observation-comments li { display: flex; flex-direction: column; overflow-wrap: anywhere; }
+
+/* ================================================================== ossature (Shell.ts)
+   Un en-tête mince, un rail de groupes, un panneau d'outils, la maquette, les propriétés, le planning et le cartouche. Rien ne
+   flotte sur la maquette, sauf les outils de vue. */
+
+.app.shell {
+  grid-template:
+    'head head head head' auto
+    'rail dock view props' minmax(0, 1fr)
+    'plan plan plan plan' auto
+    'foot foot foot foot' auto
+    / var(--rail) var(--left-width, 320px) minmax(0, 1fr) var(--right-width, 320px);
+}
+
+.shell > .topbar { grid-area: head; flex-wrap: nowrap; gap: 14px; min-height: 46px; padding: 0 12px 0 16px; }
+.shell > .rail { grid-area: rail; }
+.shell > .sidebar.left { grid-area: dock; }
+.shell > .viewport { grid-area: view; }
+.shell > .sidebar.right { grid-area: props; }
+.shell > .schedule-panel { grid-area: plan; }
+.shell > .cartouche { grid-area: foot; }
+
+.brand { font-size: 15px; font-weight: 600; letter-spacing: 0; }
+@media (max-width: 1150px) { .shell .brand { display: block; } }
+
+/* Les trois pages : celle où l'on est porte le trait d'accent, comme un onglet de classeur. */
+.page-tabs { display: flex; align-self: stretch; gap: 2px; }
+.page-tab { display: flex; align-items: center; padding: 0 12px; border-bottom: 2px solid transparent; color: var(--muted); font-weight: 500; text-decoration: none; white-space: nowrap; }
+.page-tab:hover { color: var(--text); }
+.page-tab.current { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+
+/* Rail : une icône et son nom ; le groupe ouvert est marqué d'un trait à gauche. */
+.rail { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border); }
+.rail-button { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; height: auto; min-height: 54px; padding: 7px 2px 6px; border: 0; border-left: 2px solid transparent; border-radius: 0; background: none; color: var(--muted); font-family: var(--font-data); font-size: 11px; font-weight: 500; line-height: 1.15; text-align: center; }
+.rail-button svg { width: 21px; height: 21px; flex: none; }
+.rail-button:hover:not(:disabled) { color: var(--text); background: var(--panel-alt); }
+.rail-button[aria-pressed='true'] { border-left-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Panneau d'outils : un titre, puis le groupe. */
+.dock { min-width: 0; }
+.dock-head { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-bottom: 1px solid var(--border); }
+.dock-title { margin: 0; font-size: 15px; font-weight: 600; }
+.dock-back { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: -6px; padding: 0; border: 0; background: none; color: var(--muted); }
+.dock-back svg { width: 18px; height: 18px; }
+.dock-back:hover:not(:disabled) { color: var(--text); background: var(--panel-alt); }
+.dock-body { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.dock-page { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; }
+.dock-page > .panel { flex: 1; min-height: 0; }
+.dock-intro { margin: 0; padding: 12px 14px 4px; color: var(--muted); }
+
+.dock-list { display: flex; flex-direction: column; padding: 6px 8px 10px; }
+.dock-row { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; height: auto; min-height: 44px; padding: 7px 8px; border: 0; border-radius: var(--radius); background: none; text-align: left; text-decoration: none; }
+.dock-row:hover:not(:disabled) { background: var(--panel-alt); }
+.dock-row[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 400; }
+.dock-row-name { font-weight: 600; }
+.dock-row-summary { color: var(--muted); font-size: 12px; line-height: 1.3; }
+.dock-row[aria-pressed='true'] .dock-row-summary { color: inherit; opacity: 0.85; }
+.dock-note { margin: 0; padding: 0 8px 8px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+
+/* Exporter : la première ligne est l'action principale. Les boutons d'origine gardent leur texte. */
+.export-list { gap: 2px; }
+.export-list .dock-row { min-height: 36px; justify-content: center; font-weight: 600; }
+.export-list .dock-row.primary-row { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text); align-items: center; }
+.export-list .dock-row.primary-row:disabled { border-color: var(--border); background: var(--panel-alt); color: var(--muted); opacity: 1; }
+.export-list .quick-look { height: 36px; padding: 0 8px; border: 0; font-weight: 600; }
+.export-format { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 8px 8px 2px; border-top: 1px solid var(--border); }
+
+/* Une carte d'outil dans le panneau : plus de cadre ni d'ombre, toute la largeur ; son titre est celui du panneau. */
+.dock .card { flex: none; max-height: none; padding: 12px 14px 16px; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
+.dock .card > .card-head > .card-title, .dock .card > .card-head > .close-button { display: none; }
+.dock .card > .card-head:not(:has(> :not(.card-title):not(.close-button))) { display: none; }
+.dock .tool-checks { max-height: 220px; }
+
+/* À droite : le compte rendu d'ouverture (conversion IFC, lecture Revit) au-dessus des propriétés. */
+.sidebar.right > .conversion-card { margin: 10px; box-shadow: none; }
+
+/* Outils de vue : une barre au bas de la maquette. */
+.view-tools { position: absolute; left: 50%; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 3px; max-width: calc(100% - 24px); padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); transform: translateX(-50%); overflow-x: auto; white-space: nowrap; }
+.view-tools button { height: 30px; border-color: transparent; background: none; }
+.view-tools button:hover:not(:disabled) { border-color: transparent; background: var(--panel-alt); }
+.view-tools button[aria-pressed='true'] { border-color: transparent; background: var(--accent-soft); }
+.view-tools .bar-group { gap: 3px; }
+.view-tools-sep { flex: none; width: 1px; height: 18px; margin: 0 3px; background: var(--border); }
+.shell .toast { bottom: 62px; }
+.shell .measure-hint { bottom: 62px; }
+
+/* Menu court de l'en-tête. */
+.menu-wrap { position: relative; }
+.menu-trigger { display: inline-flex; align-items: center; gap: 4px; }
+.menu-trigger svg { width: 14px; height: 14px; opacity: 0.7; }
+.menu-list { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: flex; flex-direction: column; width: 280px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); box-shadow: var(--shadow); white-space: normal; }
+.theme-button svg { width: 17px; height: 17px; }
+
+/* Cartouche : la ligne d'état, dessinée comme le cartouche d'un plan — des cases étiquetées, séparées par des traits. */
+.cartouche { display: flex; min-width: 0; overflow: hidden; background: var(--panel); border-top: 1px solid var(--border); font-family: var(--font-data); }
+.cartouche-cell { display: flex; flex: none; flex-direction: column; justify-content: center; gap: 0; min-width: 0; padding: 3px 14px 4px; border-right: 1px solid var(--border); }
+.cartouche-cell.wide { flex: 0 1 auto; max-width: 34%; }
+.cartouche-cell.end { margin-left: auto; border-right: 0; border-left: 1px solid var(--border); }
+.cartouche-label { color: var(--muted); font-size: 10.5px; line-height: 1.2; }
+.cartouche-value { overflow: hidden; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.cartouche-cell.signal { background: var(--signal-soft); }
+.cartouche-cell.signal .cartouche-value { color: var(--signal); font-weight: 600; }
+
+/* Données denses : la coupe étroite de la police, chiffres alignés. */
+.props, .row, .count, .readout, .assistant-table, .schedule-panel { font-family: var(--font-data); }
+.props { font-size: 13.5px; }
+.row { font-size: 13.5px; }
+
+/* Écran d'accueil : ce qu'on peut déposer, sans cadre en pointillé. */
+.empty-card { max-width: 460px; padding: 30px 34px; border: 1px solid var(--border); border-radius: 10px; text-align: left; box-shadow: var(--shadow); }
+.empty-card h1 { margin-bottom: 8px; font-size: 24px; font-weight: 600; }
+.empty-actions { justify-content: flex-start; }
+.empty-card .empty-site { display: none; }
+
+/* Fenêtre étroite : le rail reste, le panneau et les propriétés s'ouvrent par-dessus la maquette. */
+@media (max-width: 960px) {
+  .app.shell { grid-template: 'head head' auto 'rail view' minmax(0, 1fr) 'plan plan' auto 'foot foot' auto / var(--rail) minmax(0, 1fr); }
+  .shell > .sidebar.left, .shell > .sidebar.right { grid-area: view; }
+  .shell .page-tab { padding: 0 8px; }
+  .cartouche-cell:not(.wide):not(.signal) { display: none; }
+  .cartouche-cell.wide { max-width: none; }
+}
+@media (max-width: 640px) {
+  :root { --rail: 56px; }
+  .shell .brand { display: none; }
+  .rail-button span { font-size: 10px; }
+}
+
+/* Le planning ne prend de place que déplié : on l'ouvre depuis « Planifier », son bouton le replie. */
+.shell > .schedule-panel:has(> .schedule-body[hidden]) { display: none; }
+.dock-page.in-tool > .dock-intro { display: none; }
+.dock .views-list { max-height: none; overflow: visible; }

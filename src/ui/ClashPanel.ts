@@ -85,7 +85,7 @@ export class ClashPanel {
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Grouper par' }), this.groupBy, this.paths),
       h('div', { class: 'tool-row' }, this.sort),
       this.results,
-      h('p', { class: 'hint', text: 'Conditions : « Propriété = valeur », « != » (différent), « ~ » (contient), séparées par « ; ». Un conflit franc pénètre de plus que la tolérance ; deux éléments qui se touchent n’en sont pas un. Statuts et commentaires s’enregistrent avec « JSON ↓ » et « Modifications ↓ ».' }),
+      h('p', { class: 'hint', text: 'Conditions : « Propriété = valeur », « != » (différent), « ~ » (contient), séparées par « ; ». Un conflit franc pénètre de plus que la tolérance ; deux éléments qui se touchent n’en sont pas un. Statuts et commentaires s’enregistrent avec « Enregistrer mes modifications » et « Toutes les propriétés » (groupe Exporter).' }),
     );
     app.on('model', () => {
       this.controller?.abort();
@@ -187,7 +187,7 @@ export class ClashPanel {
       const records = app.clashes.records.filter((record) => record.status === 'new' || record.status === 'active');
       const { book, added } = addObservations(app.observations, records.map((record) => observationFromClash(record, label, author, now, app.observations.lists)));
       app.setObservations(book);
-      app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : menu « Chantier », carte « Observations ».` : 'Ces conflits ont déjà leurs observations.');
+      app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : groupe « Chantier », outil « Observations ».` : 'Ces conflits ont déjà leurs observations.');
       return;
     }
     // Le statut et le commentaire du conflit sont ceux de son sujet BCF.

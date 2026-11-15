@@ -69,3 +69,8 @@ a.ch-card:hover { border-color: var(--muted); }
 .ch-pin { position: absolute; display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px; transform: translate(-50%, -50%); border: 2px solid #fff; border-radius: 13px; color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; box-shadow: 0 1px 4px rgb(0 0 0 / 0.4); }
 
 .ch-toast { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); max-width: min(92vw, 640px); }
+
+/* En-tête commun aux trois pages (ui/Shell.ts) : sur un téléphone, la marque laisse la place aux onglets. */
+.ch-bar .page-tabs { align-self: stretch; min-height: 36px; }
+.ch-bar .page-tab { padding: 0 8px; }
+@media (max-width: 520px) { .ch-bar .ch-brand { display: none; } }

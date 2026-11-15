@@ -157,7 +157,7 @@ export class RequirementsPanel {
     }));
     const { book, added } = addObservations(app.observations, list);
     app.setObservations(book);
-    app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : menu « Chantier », carte « Observations ».` : 'Ces éléments ont déjà leurs observations.');
+    app.toast(added > 0 ? `${plural(added, 'observation créée', 'observations créées')} : groupe « Chantier », outil « Observations ».` : 'Ces éléments ont déjà leurs observations.');
   }
 
   /** Un champ par propriété requise : la valeur saisie est écrite sur les éléments en défaut, en une étape annulable. */

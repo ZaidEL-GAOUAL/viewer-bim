@@ -1,9 +1,18 @@
+import '@fontsource/barlow/400.css';
+import '@fontsource/barlow/500.css';
+import '@fontsource/barlow/600.css';
+import '@fontsource/barlow-semi-condensed/400.css';
+import '@fontsource/barlow-semi-condensed/500.css';
+import '@fontsource/barlow-semi-condensed/600.css';
 import '../styles.css';
 import './chantier.css';
+import { applyTheme } from '../ui/Shell.ts';
 import { ChantierPage } from './ChantierPage.ts';
 import { connectBackend, isDemo, localDatabase } from './backend/connect.ts';
 import { openKv } from './kv.ts';
 import { ChantierStore } from './store.ts';
+
+applyTheme();
 
 void (async () => {
   const backend = await connectBackend().catch(() => null);

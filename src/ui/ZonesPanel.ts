@@ -72,7 +72,7 @@ export class ZonesPanel {
       h('label', { class: 'tool-field' }, h('span', { class: 'field-label', text: 'Propriété' }), this.property),
       h('div', { class: 'dimensions-actions' }, this.assign),
       this.report,
-      h('p', { class: 'hint', text: 'Chaque élément va à la zone qui couvre la plus grande part de son emprise au sol ; hors de toute zone, il n’est pas modifié. Les zones s’enregistrent avec « JSON ↓ » et « Modifications ↓ ».' }),
+      h('p', { class: 'hint', text: 'Chaque élément va à la zone qui couvre la plus grande part de son emprise au sol ; hors de toute zone, il n’est pas modifié. Les zones s’enregistrent avec « Enregistrer mes modifications » et « Toutes les propriétés » (groupe Exporter).' }),
     );
     let model = app.model;
     app.on('model', () => {

@@ -54,7 +54,7 @@ export class ViewsPanel {
       ),
       h('div', { class: 'section-place' }, this.save),
       this.list,
-      h('p', { class: 'hint', text: 'Vos vues reprennent tout ce que vous voyez et s’enregistrent avec « JSON ↓ » ou « Modifications ↓ ». Celles du fichier reprennent caméra, boîte de coupe, masquages et phase ; un plan d’étage s’ouvre vu du dessus, en 2D, coupé à sa hauteur de coupe ; une coupe ou une façade, en 2D face à son plan de coupe ; un plan de plafond, vu d’en dessous et orienté comme le plan d’étage, comme dans Revit.' }),
+      h('p', { class: 'hint', text: 'Vos vues reprennent tout ce que vous voyez et s’enregistrent avec « Enregistrer mes modifications » ou « Toutes les propriétés » (groupe Exporter). Celles du fichier reprennent caméra, boîte de coupe, masquages et phase ; un plan d’étage s’ouvre vu du dessus, en 2D, coupé à sa hauteur de coupe ; une coupe ou une façade, en 2D face à son plan de coupe ; un plan de plafond, vu d’en dessous et orienté comme le plan d’étage, comme dans Revit.' }),
     );
     app.on('model', () => {
       this.generated = levelPlans(app.levels, app.savedViews);

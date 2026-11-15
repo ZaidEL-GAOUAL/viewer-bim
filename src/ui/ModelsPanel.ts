@@ -41,7 +41,7 @@ export class ModelsPanel {
         button('×', () => this.toggle(false), { class: 'close-button', title: 'Fermer', attrs: { 'aria-label': 'Fermer les maquettes' } })),
       this.status, this.list,
       h('div', { class: 'dimensions-actions' }, button('Ajouter une maquette…', choose, { class: 'primary' }), this.input),
-      h('p', { class: 'hint', text: 'Chaque élément reçoit la propriété « Modèle » (le nom de son fichier) : l’arbre, les filtres, les couleurs et le planning portent sur toutes les maquettes. « JSON ↓ » et « Modifications ↓ » écrivent un fichier par maquette, avec ses propres identifiants ; « GLB ↓ » les réunit. Seule la dernière maquette ajoutée se retire.' }),
+      h('p', { class: 'hint', text: 'Chaque élément reçoit la propriété « Modèle » (le nom de son fichier) : l’arbre, les filtres, les couleurs et le planning portent sur toutes les maquettes. « Enregistrer mes modifications » et « Toutes les propriétés » (groupe Exporter) écrivent un fichier par maquette, avec ses propres identifiants ; « Maquette 3D » les réunit. Seule la dernière maquette ajoutée se retire.' }),
     );
     for (const event of ['model', 'metadata', 'visibility'] as const) app.on(event, () => this.render());
   }
@@ -94,7 +94,7 @@ export class ModelsPanel {
     if (!model || !edits) return;
     const keys = new Set(model.keys.slice(source.start, source.start + source.count));
     const modified = Object.keys(edits.diff(model.keys).elements).filter((key) => keys.has(key)).length;
-    if (modified > 0 && !window.confirm(`${plural(modified, 'élément modifié')} dans « ${source.name} » : ces modifications seront perdues (« Modifications ↓ » les enregistre d’abord). Retirer la maquette ?`)) return;
+    if (modified > 0 && !window.confirm(`${plural(modified, 'élément modifié')} dans « ${source.name} » : ces modifications seront perdues (« Enregistrer mes modifications » les enregistre d’abord). Retirer la maquette ?`)) return;
     removeLastModel(app);
     this.render();
   }

@@ -262,7 +262,7 @@ export class MapPanel {
         fromFile ? button('Position du fichier', () => app.setGeoreference(fromFile), { title: 'Revenir à la position lue dans le fichier' }) : null,
       ),
       keysDetails,
-      h('p', { class: 'hint', text: 'Altitude au-dessus de la mer, comme dans l’IFC (le viewer convertit pour le globe, géoïde EGM96). Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. « Au sol » pose la maquette sur le relief choisi. La position est enregistrée dans « JSON ↓ ». Cartes, relief mondial et bâtiments OpenStreetMap : gratuits, sans clé.' }),
+      h('p', { class: 'hint', text: 'Altitude au-dessus de la mer, comme dans l’IFC (le viewer convertit pour le globe, géoïde EGM96). Nord (°) : angle du nord vrai par rapport à l’axe Y du projet, sens horaire. « Au sol » pose la maquette sur le relief choisi. La position est enregistrée dans « Toutes les propriétés ». Cartes, relief mondial et bâtiments OpenStreetMap : gratuits, sans clé.' }),
     );
   }
 }

@@ -15,7 +15,7 @@ import { ComparePanel } from './ComparePanel.ts';
 import { ModelsPanel } from './ModelsPanel.ts';
 import { ObservationsPanel } from './ObservationsPanel.ts';
 import { Sketch } from '../engine/sketch.ts';
-import { PanelMenu } from './PanelMenu.ts';
+import { Shell, applyTheme, menuButton, pageTabs, themeButton, type MenuCard, type ShellTool } from './Shell.ts';
 import { QuantitiesPanel } from './QuantitiesPanel.ts';
 import { ExportActions } from './ExportActions.ts';
 import { RequirementsPanel } from './RequirementsPanel.ts';
@@ -52,7 +52,7 @@ import { iconButton } from './icons.ts';
 import { combineNotices, type Notice } from './notices.ts';
 import { AssistantPanel } from './AssistantPanel.ts';
 import { DimensionsCard } from './DimensionsCard.ts';
-import { MEASURES, MeasureMenu } from './MeasureMenu.ts';
+import { MEASURES } from './MeasureMenu.ts';
 import { ApplePreview } from './ApplePreview.ts';
 import { FilterPanel } from './FilterPanel.ts';
 import { PropertiesPanel } from './PropertiesPanel.ts';
@@ -129,7 +129,7 @@ export class App {
   /** Des observations ont changé depuis le dernier .bcf exporté : leurs photos ne sont que dans la page. */
   observationsUnsaved = false;
   /**
-   * Vues, zones, découpages, conflits ou observations ont changé depuis le dernier « JSON ↓ » ou « Modifications ↓ » (qui
+   * Vues, zones, découpages, conflits ou observations ont changé depuis le dernier « Enregistrer mes modifications » ou « Toutes les propriétés » (groupe Exporter) (qui
    * les contiennent) : ils ne sont que dans la page.
    */
   sessionUnsaved = false;
@@ -257,29 +257,15 @@ export class App {
       });
     }
 
-    const samples = h('select', { class: 'samples', title: 'Charger un modèle de démonstration' },
-      h('option', { text: 'Exemples…', attrs: { value: '' } }),
-      h('option', { text: 'Petit bâtiment (220 éléments)', attrs: { value: 'demo' } }),
-      h('option', { text: 'Tour (22 500 éléments)', attrs: { value: 'demo-large' } }),
-      h('option', { text: 'Maquette IFC (convertie dans le navigateur)', attrs: { value: 'ifc' } }),
-      h('option', { text: 'Maquette Revit (2023)', attrs: { value: 'revit' } }),
-    );
-    samples.addEventListener('change', () => {
-      if (samples.value) void this.loadSample(samples.value);
-      samples.value = '';
-    });
 
     // Sélection, puis le menu qui réunit les mesures (distance, surface, volume, cotes).
     const selectTool = iconButton('select', 'Sélection', () => this.setTool('select'), 'Sélection — cliquer un élément pour afficher ses propriétés');
     this.selectButton = selectTool;
     const quantitiesPanel = new QuantitiesPanel(this), requirementsPanel = new RequirementsPanel(this), splitPanel = new SplitPanel(this), zonesPanel = new ZonesPanel(this);
-    const metres = new PanelMenu('Métrés', 'Quantités manquantes, propriétés requises, découpage en pièces, zones', [quantitiesPanel, requirementsPanel, splitPanel, zonesPanel]);
     const modelsPanel = new ModelsPanel(this), comparePanel = new ComparePanel(this), clashPanel = new ClashPanel(this);
-    const checks = new PanelMenu('Contrôles', 'Plusieurs maquettes, comparaison de versions, conflits', [modelsPanel, comparePanel, clashPanel]);
     const observationsPanel = new ObservationsPanel(this);
     const project = projectCard(this, () => { if (observationsPanel.el.hidden) observationsPanel.toggle(true); });
-    const site = new PanelMenu('Chantier', 'Suivi de chantier : observations, photos, rapport ; projet lié ; étude du site de la maquette', [observationsPanel, project, studyCard(this)]);
-    const tools = h('div', { class: 'bar-group tools', attrs: { role: 'group', 'aria-label': 'Outils' } }, selectTool, new MeasureMenu(this).el, metres.el, checks.el, site.el);
+    const study = studyCard(this);
 
     const mapToggle = button('Carte', () => {
       void this.mapPanel.toggle().then((open) => mapToggle.setAttribute('aria-pressed', String(open)));
@@ -288,10 +274,6 @@ export class App {
     const viewsPanel = new ViewsPanel(this);
     // Mode visite : touche V ou bouton, carte d'aide dans la vue ; le double-clic ne replace que hors mesure.
     const walkPanel = new WalkPanel(this.viewer, (message) => this.toast(message), () => !isPointMeasure(this.tool) && this.tool !== 'section');
-    const sectionToggle = button('Coupes', () => {
-      const open = sectionPanel.toggle();
-      sectionToggle.setAttribute('aria-pressed', String(open));
-    }, { title: 'Plans de coupe', attrs: { 'aria-pressed': 'false' } });
     // Vue 2D : projection orthographique et vues standard, affichées sous la barre.
     this.viewBar = h('div', { class: 'view-bar', attrs: { hidden: '', role: 'group', 'aria-label': 'Vues 2D' } },
       ...VIEW_ORDER.map((id) => button(STANDARD_VIEWS[id].label, () => this.viewer.viewFrom(id), { title: STANDARD_VIEWS[id].title })),
@@ -338,13 +320,10 @@ export class App {
     });
     // Téléchargements du modèle affiché (le titre du bouton GLB/USD est posé par `syncDownloads`).
     const exports = new ExportActions(this);
-    this.downloads = h('div', { class: 'bar-group', attrs: { hidden: '' } },
-      (this.modelDownload = button('GLB ↓', () => void this.download('model'))),
-      (this.changesDownload = button('Modifications ↓', () => void this.download('changes'), { title: 'Télécharger seulement ce qui a été modifié (JSON) : rouvert avec le fichier d’origine, il rétablit les modifications' })),
-      (this.jsonDownload = button('JSON ↓', () => void this.download('json'), { title: 'Télécharger toutes les propriétés (JSON), modifications comprises' })),
-      ...exports.buttons,
-      this.quickLookLink,
-    );
+    this.modelDownload = button('Maquette 3D', () => void this.download('model'), { class: 'dock-row' });
+    this.changesDownload = button('Enregistrer mes modifications', () => void this.download('changes'), { class: 'dock-row primary-row', title: 'Seulement ce que vous avez changé (JSON) : rouvert avec le fichier d’origine, il rétablit vos modifications, vues, découpages et observations' });
+    this.jsonDownload = button('Toutes les propriétés', () => void this.download('json'), { class: 'tool-row', title: 'Toutes les propriétés de la maquette (JSON), modifications comprises' });
+    for (const item of exports.buttons) item.classList.add('dock-row');
     // Les modifications de propriétés ne vivent que dans la page : on prévient avant de la quitter.
     window.addEventListener('beforeunload', (event) => {
       if (this.propertyEdits?.changed || this.sessionUnsaved || this.observationsUnsaved) event.preventDefault();
@@ -394,41 +373,36 @@ export class App {
       }
     };
 
-    this.stats = h('div', { class: 'stats' });
+    this.stats = h('footer', { class: 'cartouche', attrs: { 'aria-label': 'État de la maquette' } });
     const openButton = button('Ouvrir…', () => fileInput.click(), { class: 'primary', title: 'Ouvrir un .ifc, un fichier Revit (.rvt, .rfa, gabarits .rte et .rft), ou un .glb ou .gltf avec son .json de métadonnées' });
     watchPreloadIntent({ page: window, openControl: openButton, preload: preloadIfc, storage: stored });
+    const leftToggle = panelToggle('left', 'le panneau des outils');
+    void leftToggle;
+    const fileMenu = menuButton('Plus', 'Autres façons d’ouvrir une maquette, et les exemples', [
+      { label: 'Ouvrir un dossier…', summary: 'Un .gltf avec son .bin et ses textures', run: () => folderInput.click() },
+      { label: 'Joindre des métadonnées…', summary: 'Ajouter ou remplacer le .json de la maquette affichée', run: () => this.chooseMetadata() },
+      { label: 'Exemple : petit bâtiment', summary: '220 éléments', run: () => void this.loadSample('demo') },
+      { label: 'Exemple : tour', summary: '22 500 éléments', run: () => void this.loadSample('demo-large') },
+      { label: 'Exemple : maquette IFC', summary: 'Convertie dans le navigateur', run: () => void this.loadSample('ifc') },
+      { label: 'Exemple : maquette Revit', summary: 'Lue sans Revit', run: () => void this.loadSample('revit') },
+    ]);
     const topbar = h('header', { class: 'topbar' },
-      panelToggle('left', 'le panneau de gauche (arborescence, filtres)'),
       h('div', { class: 'brand', text: 'Viewer BIM' }),
-      h('a', { text: 'Étude de site', title: 'Ouvrir l’étude de site : lieu, terrain, voisins, volumes, soleil (avant-projet)', attrs: { href: 'site.html' } }),
-      h('a', { text: 'Suivi de chantier', title: 'Ouvrir le suivi de chantier : projets, observations, photos, plans, sur téléphone ou ordinateur', attrs: { href: 'chantier.html' } }),
-      h('div', { class: 'formats', title: 'Format des téléchargements (GLB ↓ ou USD ↓) et de la conversion d’un IFC, pas celui du fichier ouvert' },
-        h('span', { class: 'bar-label', text: 'Export', attrs: { id: 'export-format-label' } }),
-        formats,
-      ),
-      h('div', { class: 'bar-group' },
-        openButton,
-        modelsPanel.addButton,
-        button('Dossier…', () => folderInput.click(), { title: 'Ouvrir un dossier contenant un .gltf, son .bin et ses textures' }),
-        button('Métadonnées…', () => this.chooseMetadata(), { title: 'Ajouter ou remplacer le fichier .json de métadonnées du modèle affiché' }),
-        samples, fileInput, folderInput, this.metadataInput,
-      ),
-      tools, clearMeasures, history,
-      h('div', { class: 'bar-group' },
-        this.twoDButton,
-        walkPanel.button,
-        mapToggle,
-        viewsPanel.button,
-        sectionToggle,
-        button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
-        this.maskButton,
-        this.isolateButton,
-        deselect,
-        button('Tout afficher', () => this.showWholeModel(), { title: 'Réafficher tous les éléments et cadrer le modèle entier (A)' }),
-      ),
-      this.downloads,
+      pageTabs('maquette'),
       h('div', { class: 'spacer' }),
-      panelToggle('right', 'le panneau de droite (propriétés)'),
+      h('div', { class: 'bar-group' }, openButton, modelsPanel.addButton, fileMenu, fileInput, folderInput, this.metadataInput),
+      themeButton(() => this.applyTheme()),
+      panelToggle('right', 'le panneau des propriétés'),
+    );
+    // Les outils de vue, en bas de la maquette : ce qui agit sur ce qu'on voit, à portée de main.
+    const separator = () => h('span', { class: 'view-tools-sep', attrs: { 'aria-hidden': 'true' } });
+    const viewTools = h('div', { class: 'view-tools', attrs: { role: 'toolbar', 'aria-label': 'Outils de vue' } },
+      selectTool, deselect, separator(),
+      this.twoDButton, walkPanel.button, mapToggle, separator(),
+      button('Cadrer', () => this.fitSelection(), { title: 'Cadrer la vue sur la sélection, ou sur ce qui est affiché (F)' }),
+      this.maskButton, this.isolateButton,
+      button('Tout afficher', () => this.showWholeModel(), { title: 'Réafficher tous les éléments et cadrer le modèle entier (A)' }),
+      separator(), history, clearMeasures,
     );
     fitPanelsToWidth();
     narrow.addEventListener('change', fitPanelsToWidth);
@@ -452,7 +426,7 @@ export class App {
       ),
     );
     const globeHost = h('div', { class: 'globe-host', attrs: { hidden: '' } });
-    this.viewport = h('main', { class: 'viewport' }, globeHost, canvasHost, overlayRoot, this.emptyEl, this.stats, this.toastEl, this.busyEl);
+    this.viewport = h('main', { class: 'viewport' }, globeHost, canvasHost, overlayRoot, this.emptyEl, this.toastEl, this.busyEl);
     this.mapPanel = new MapPanel(this, globeHost);
     this.mapPanel.onChange = () => {
       globeHost.hidden = !this.mapPanel.isOpen;
@@ -477,30 +451,80 @@ export class App {
         button('Télécharger le JSON', () => void this.download('json')),
       ),
     );
-    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, h('div', { class: 'cards' }, new DimensionsCard(this).el, this.mapPanel.el, viewsPanel.el, sectionPanel.el, quantitiesPanel.el, requirementsPanel.el, splitPanel.el, zonesPanel.el, modelsPanel.el, comparePanel.el, clashPanel.el, observationsPanel.el, project.el, ...exports.cards, this.conversionEl));
+    const dimensionsCard = new DimensionsCard(this);
+    this.viewport.append(this.viewBar, this.measureHint, walkPanel.el, viewTools);
 
     // -------------------------------------------------------------- panneaux
     const tree = new TreePanel(this);
     const filters = new FilterPanel(this);
     const assistant = new AssistantPanel(this);
-    const tabs = h('div', { class: 'tabs', attrs: { role: 'tablist' } });
-    const panels: [string, HTMLElement][] = [['Arborescence', tree.el], ['Couleurs et filtres', filters.el], ['Assistant', assistant.el]];
-    const tabButtons = panels.map(([label, panel], index) => {
-      const tab = button(label, () => {
-        panels.forEach(([, other], i) => {
-          other.hidden = i !== index;
-          tabButtons[i].setAttribute('aria-selected', String(i === index));
-        });
-      }, { attrs: { role: 'tab', 'aria-selected': String(index === 0) } });
-      panel.hidden = index !== 0;
-      return tab;
-    });
-    tabs.append(...tabButtons);
-    const left = h('aside', { class: 'sidebar left' }, tabs, tree.el, filters.el, assistant.el);
-    const right = h('aside', { class: 'sidebar right' }, new PropertiesPanel(this).el);
-
     this.planning = new SchedulePanel(this);
-    root.append(topbar, left, this.viewport, right, this.planning.el);
+
+    // Ce qu'on enregistre et ce qu'on exporte, en une liste : chaque ligne dit ce qu'elle produit.
+    this.downloads = h('div', { class: 'dock-list export-list', attrs: { hidden: '' } },
+      this.changesDownload,
+      h('p', { class: 'dock-note', text: 'Vos changements seulement : propriétés, vues, découpages, zones, observations. À rouvrir avec le fichier d’origine.' }),
+      this.jsonDownload,
+      h('div', { class: 'export-format', title: 'Format de la maquette 3D exportée, et de la conversion d’un IFC ; ce n’est pas celui du fichier ouvert' },
+        h('span', { class: 'field-label', text: 'Format de la maquette 3D', attrs: { id: 'export-format-label' } }), formats),
+      this.modelDownload,
+      exports.buttons[2],
+      this.quickLookLink,
+    );
+    const exportEmpty = h('p', { class: 'dock-intro', text: 'Ouvrez une maquette pour l’enregistrer ou l’exporter.' });
+    new MutationObserver(() => { exportEmpty.hidden = !this.downloads.hidden; }).observe(this.downloads, { attributes: true, attributeFilter: ['hidden'] });
+
+    const card = (panel: MenuCard): ShellTool => ({
+      label: panel.label, summary: panel.summary, el: panel.el,
+      open: () => { if (panel.el.hidden) panel.toggle(true); },
+      close: () => { if (!panel.el.hidden) panel.toggle(false); },
+    });
+    const pressButton = (label: string, summary: string, el: HTMLElement, control: HTMLButtonElement): ShellTool => ({
+      label, summary, el,
+      open: () => { if (el.hidden) control.click(); },
+      close: () => { if (!el.hidden) control.click(); },
+    });
+    const measures: ShellTool[] = MEASURES.map((measure) => ({
+      label: measure.label, summary: measure.summary,
+      ...(measure.id === 'dimensions' ? { el: dimensionsCard.el } : {}),
+      // Choisir l'outil déjà actif le referme : retour à la sélection.
+      open: () => this.setTool(this.tool === measure.id ? 'select' : measure.id),
+      close: () => { if (this.tool === measure.id) this.setTool('select'); },
+      active: () => this.tool === measure.id,
+    }));
+    const shell = new Shell([
+      { id: 'explorer', label: 'Explorer', icon: 'tree', content: [tree.el] },
+      { id: 'couleurs', label: 'Couleurs', title: 'Couleurs et filtres', icon: 'palette', content: [filters.el] },
+      { id: 'vues', label: 'Vues', title: 'Vues et coupes', icon: 'eye', intro: 'Retrouver une vue, couper la maquette, la poser sur la carte.', tools: [
+        pressButton('Vues', 'Les vôtres, celles du fichier et un plan par niveau', viewsPanel.el, viewsPanel.button),
+        { label: 'Coupes', summary: 'Plans de coupe et boîte de coupe', el: sectionPanel.el, open: () => { if (sectionPanel.el.hidden) sectionPanel.toggle(); }, close: () => { if (!sectionPanel.el.hidden) sectionPanel.toggle(); } },
+        { label: 'Carte', summary: 'Poser la maquette sur le globe, un plan ou une photo aérienne', el: this.mapPanel.el, open: () => { if (!this.mapPanel.isOpen) void this.mapPanel.toggle(); }, close: () => { if (this.mapPanel.isOpen) void this.mapPanel.toggle(); } },
+      ] },
+      { id: 'mesurer', label: 'Mesurer', icon: 'distance', intro: 'Mesurer dans la vue, ou calculer les quantités qui manquent.', tools: [...measures, card(quantitiesPanel)] },
+      { id: 'controler', label: 'Contrôler', icon: 'check', intro: 'Réunir des maquettes, comparer deux versions, chercher les conflits, vérifier les propriétés.', tools: [card(modelsPanel), card(comparePanel), card(clashPanel), card(requirementsPanel)] },
+      { id: 'planifier', label: 'Planifier', icon: 'calendar', intro: 'Préparer le phasage : découper, ranger par zones, dérouler le planning.', tools: [
+        { label: 'Planning 4D', summary: 'Dérouler le chantier dans le temps, en bas de l’écran', open: () => this.planning.show() },
+        card(splitPanel), card(zonesPanel),
+      ] },
+      { id: 'chantier', label: 'Chantier', icon: 'pin', intro: 'Noter ce qu’on constate sur la maquette et le suivre.', tools: [
+        card(observationsPanel), card(project),
+        { label: study.label, summary: study.summary, open: () => void study.toggle() },
+      ] },
+      { id: 'exporter', label: 'Exporter', icon: 'export', content: [exportEmpty, this.downloads], tools: [
+        pressButton('Imprimer en PDF', 'La vue ou plusieurs vues, à l’échelle, avec cartouche', exports.cards[0], exports.buttons[0]),
+        pressButton('Exporter en DXF', 'Les lignes de coupe, pour AutoCAD, BricsCAD ou Revit', exports.cards[1], exports.buttons[1]),
+      ] },
+      { id: 'assistant', label: 'Assistant', icon: 'chat', content: [assistant.el] },
+    ]);
+    shell.onDockVisible = (visible) => setPanel.get('left')?.(!visible);
+    this.on('tool', () => shell.refresh());
+    // Fenêtre étroite ou repli par ailleurs : le rail suit l'état réel du panneau.
+    new MutationObserver(() => shell.setVisible(!isCollapsed('left'), false)).observe(root, { attributes: true, attributeFilter: ['class'] });
+    shell.setVisible(!isCollapsed('left'), false);
+
+    const right = h('aside', { class: 'sidebar right' }, this.conversionEl, new PropertiesPanel(this).el);
+    root.classList.add('shell');
+    root.append(topbar, shell.rail, shell.dock, this.viewport, right, this.planning.el, this.stats);
 
     this.bindPointer();
     this.bindKeyboard();
@@ -509,6 +533,8 @@ export class App {
     this.setTool('select');
     this.updateStats();
     this.on('visibility', () => this.updateStats());
+    this.on('selection', () => this.updateStats());
+    this.on('view', () => this.updateStats());
     this.viewer.onMotionEnd = () => this.updateStats();
     this.on('visibility', () => this.syncIsolateButton());
     this.on('selection', () => this.syncIsolateButton());
@@ -1506,11 +1532,11 @@ export class App {
   private syncDownloads(): void {
     const hasMetadata = this.store.matched > 0;
     this.modelDownload.hidden = this.model === null;
-    this.modelDownload.textContent = `${this.format === 'usd' ? 'USD' : 'GLB'} ↓`;
+    this.modelDownload.textContent = `Maquette 3D (${this.format === 'usd' ? 'USD' : 'GLB'})`;
     this.modelDownload.title = 'Télécharger le modèle avec ses métadonnées actuelles';
     this.jsonDownload.hidden = !hasMetadata;
     const modified = this.propertyEdits?.modifiedCount ?? 0;
-    this.changesDownload.textContent = modified > 0 ? `Modifications (${integer.format(modified)}) ↓` : 'Modifications ↓';
+    this.changesDownload.textContent = modified > 0 ? `Enregistrer mes modifications (${integer.format(modified)})` : 'Enregistrer mes modifications';
     // Les vues de l'utilisateur sont aussi des modifications : elles s'enregistrent même sans propriété changée.
     this.changesDownload.disabled = modified === 0 && this.userViews.length === 0 && !this.splits?.definitions.length && this.zones.length === 0 && this.clashes.records.length === 0 && this.observations.topics.length === 0;
     this.downloads.hidden = this.model === null;
@@ -1552,7 +1578,7 @@ export class App {
     this.refreshAppearance(); this.emit('metadata'); this.emit('history');
   }
   private confirmReplace(): boolean {
-    return (!(this.propertyEdits?.changed || this.sessionUnsaved) || window.confirm('Des modifications (propriétés, vues, zones, découpages, conflits, observations) ne sont pas enregistrées. « Modifications ↓ » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?'))
+    return (!(this.propertyEdits?.changed || this.sessionUnsaved) || window.confirm('Des modifications (propriétés, vues, zones, découpages, conflits, observations) ne sont pas enregistrées. « Enregistrer mes modifications » les enregistre dans un JSON : rouvert avec le fichier, il les rétablit. Remplacer le modèle ?'))
       && (!this.observationsUnsaved || window.confirm('Des observations n’ont pas été exportées en .bcf : leurs photos ne sont que dans cette page. Remplacer le modèle ?'));
   }
 
@@ -1848,34 +1874,30 @@ export class App {
     if (message !== null) this.busyEl.replaceChildren(message, ...(cancel ? [' ', button('Arrêter', cancel)] : []));
   }
 
+  /** Le cartouche, en bas : la maquette ouverte, comme dans le cartouche d'un plan. */
   private updateStats(): void {
     const model = this.model;
+    const cell = (label: string, value: string, kind = '') => h('div', { class: `cartouche-cell ${kind}`.trim() }, h('span', { class: 'cartouche-label', text: label }), h('span', { class: 'cartouche-value', text: value }));
     if (!model) {
-      this.stats.textContent = '';
+      this.stats.replaceChildren(cell('Maquette', 'Aucune maquette ouverte', 'wide'));
       return;
     }
     let hidden = 0;
     for (let i = 0; i < model.count; i++) if (!model.state.isVisible(i)) hidden++;
-    const parts = [
-      this.fileName,
-      plural(model.count, 'élément'),
-      plural(model.triangleCount, 'triangle'),
-      plural(model.chunks.length, 'lot'),
+    const cells = [
+      cell('Fichier', this.fileName, 'wide'),
+      cell('Éléments', integer.format(model.count)),
+      cell('Triangles', integer.format(model.triangleCount)),
+      cell('Propriétés', this.metadata ? `${integer.format(this.store.matched)} sur ${integer.format(model.count)} éléments (${this.metadata.source ?? 'JSON'})` : 'Sans fichier de propriétés'),
     ];
-    parts.push(
-      this.metadata
-        ? `métadonnées : ${this.metadata.source ?? 'JSON'} (${integer.format(this.store.matched)} sur ${integer.format(model.count)})`
-        : 'sans fichier de métadonnées',
-    );
-    if (hidden > 0) parts.push(`${integer.format(hidden)} masqué${s(hidden)}`);
-    if (this.edits > 0) parts.push(plural(this.edits, 'élément modifié', 'éléments modifiés'));
+    if (this.selection.size > 0) cells.push(cell('Sélection', integer.format(this.selection.size)));
+    if (this.activeView) cells.push(cell('Vue', this.activeView.name));
+    if (hidden > 0) cells.push(cell('Masqués', integer.format(hidden)));
+    if (this.edits > 0) cells.push(cell('Non enregistré', plural(this.edits, 'élément modifié', 'éléments modifiés'), 'signal'));
     // Fluidité mesurée pendant le dernier mouvement de caméra : utile pour comparer des machines.
     const { frameTime, motionScale } = this.viewer.adaptive;
-    if (frameTime > 0) {
-      parts.push(`${Math.round(1000 / frameTime)} img/s`);
-      if (motionScale < 1) parts.push(`résolution réduite à ${Math.round(motionScale * 100)} % en mouvement`);
-    }
-    this.stats.textContent = parts.join(' · ');
+    if (frameTime > 0) cells.push(cell('Fluidité', `${Math.round(1000 / frameTime)} img/s${motionScale < 1 ? `, ${Math.round(motionScale * 100)} % en mouvement` : ''}`, 'end'));
+    this.stats.replaceChildren(...cells);
   }
 
   private bindPointer(): void {
@@ -2022,13 +2044,16 @@ export class App {
     });
   }
 
+  /** Les couleurs de la vue 3D (fond, coupes) reprises du thème affiché. */
+  private applyTheme(): void {
+    const style = getComputedStyle(document.documentElement);
+    this.viewer.setBackground(style.getPropertyValue('--viewport').trim() || '#e8ebed');
+    this.viewer.setCapColor(style.getPropertyValue('--cap').trim() || '#39424f');
+  }
+
   private bindTheme(): void {
-    const apply = () => {
-      const style = getComputedStyle(document.documentElement);
-      this.viewer.setBackground(style.getPropertyValue('--viewport').trim() || '#e9ecef');
-      this.viewer.setCapColor(style.getPropertyValue('--cap').trim() || '#39424f');
-    };
-    apply();
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply);
+    applyTheme();
+    this.applyTheme();
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.applyTheme());
   }
 }

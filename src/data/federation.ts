@@ -81,7 +81,7 @@ export function framesNotice(apart: number | null, name: string): string {
   return `« ${name} » est à ${integer.format(Math.round(apart))} m de la maquette ouverte : les deux fichiers n’ont peut-être pas le même repère (point de base déplacé). Le recalage n’est pas encore disponible.`;
 }
 
-/** Le moteur du lecteur Revit : aussi le `generator` du « GLB ↓ » d'un modèle lu ainsi, pour qu'il se compare à son .rvt. */
+/** Le moteur du lecteur Revit : aussi le `generator` du « Maquette 3D » d'un modèle lu ainsi, pour qu'il se compare à son .rvt. */
 export const REVIT_ENGINE = 'viewer-bim, lecteur Revit';
 
 /**
@@ -233,7 +233,7 @@ export function removeLastSource(model: Model, splits: SplitSet, original: Origi
 }
 
 /**
- * Un document du contrat (« JSON ↓ » ou « Modifications ↓ ») de la session, découpé par maquette : à chacune ses éléments,
+ * Un document du contrat (« Enregistrer mes modifications » ou « Toutes les propriétés » (groupe Exporter)) de la session, découpé par maquette : à chacune ses éléments,
  * sous leurs clés d'origine et sans `Modèle`. Les sections de la session (vues, découpages, zones, conflits…) vont à la
  * première ; `source` (modifications) nomme le fichier de chaque maquette.
  */
