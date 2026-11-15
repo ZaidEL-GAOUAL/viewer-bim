@@ -18,6 +18,7 @@ import { ModelBuilder } from '../engine/buildModel.ts';
 import type { Model } from '../engine/Model.ts';
 import { partsToRaw, splitJob, type ElementSplit, type PartGeometry, type SplitRefusal } from '../engine/derivedParts.ts';
 import { elementQuantities, reliabilityOf, targetsFor, type QuantityPreset } from '../engine/quantities.ts';
+import type { MeshPart } from '../engine/meshMath.ts';
 import { mergeSolids, verticalPlane, type CutPlane, type SplitPart } from '../engine/splitMesh.ts';
 import { runSliced } from '../engine/sliced.ts';
 import type { Color, IUniform } from 'three';
@@ -35,7 +36,11 @@ export interface SplitDefinition {
   id: string;
   /** Clés des éléments découpés. */
   elements: string[];
-  /** Lignes dessinées en plan : chacune porte un plan de coupe vertical et doit traverser l'élément de part en part. */
+  /**
+   * Lignes dessinées en plan : chacune porte un plan de coupe vertical et doit traverser l'élément de part en part. Une coupe
+   * droite de la carte est la ligne entière par ses deux clics : elle est enregistrée prolongée à travers toute la sélection
+   * (`extendAcross`), si bien qu'une définition plus ancienne se lit et se découpe exactement comme avant.
+   */
   lines?: [Vec3, Vec3][];
   references?: SplitReferences;
   /** Pièces réunies : chaque groupe de clés de pièces devient la pièce du plus petit numéro. */
@@ -189,6 +194,38 @@ export function cutPlanes(definition: SplitDefinition, box: { min: number[]; max
   return { planes, missing, parts };
 }
 
+/**
+ * Pourquoi un trait libre (borné à ses deux points `from` et `to`, x et z du viewer) serait refusé sur ces éléments, ou null :
+ * il doit en traverser au moins un, et de part en part chaque élément qu'il touche. Sans calculer la section : les points où
+ * les arêtes des triangles passent par son plan vertical disent où elle est (`splitByPlane` refuse de même une coupe
+ * partielle). Assez rapide pour suivre le curseur.
+ */
+export function freeLineProblem(elements: readonly { label: string; parts: readonly MeshPart[] }[], from: readonly [number, number], to: readonly [number, number]): string | null {
+  const dx = to[0] - from[0], dz = to[1] - from[1], length = Math.hypot(dx, dz);
+  if (length === 0) return null;
+  const nx = -dz / length, nz = dx / length, margin = 1e-3;
+  let crossed = false;
+  for (const { label, parts } of elements) {
+    let within = 0, outside = 0;
+    for (const { positions: p, index, start, count } of parts) {
+      for (let k = start; k + 2 < start + count; k += 3) {
+        for (let j = 0; j < 3; j++) {
+          const a = index[k + j] * 3, b = index[k + (j + 1) % 3] * 3;
+          const da = nx * (p[a] - from[0]) + nz * (p[a + 2] - from[1]), db = nx * (p[b] - from[0]) + nz * (p[b + 2] - from[1]);
+          if (da * db > 0) continue;
+          const s = da === db ? 0 : da / (da - db);
+          const along = ((p[a] + s * (p[b] - p[a]) - from[0]) * dx + (p[a + 2] + s * (p[b + 2] - p[a + 2]) - from[1]) * dz) / length;
+          if (along >= -margin && along <= length + margin) within++;
+          else outside++;
+        }
+      }
+    }
+    if (within > 0 && outside > 0) return `coupe partielle de « ${label} » : le trait doit le traverser de part en part`;
+    if (within > 0) crossed = true;
+  }
+  return crossed ? null : 'le trait ne traverse aucun élément choisi';
+}
+
 const QUANTITY_PRESETS = [groupPreset as QuantityPreset, ifcPreset as QuantityPreset];
 
 /** Ce qu'une pièce reprend de son original : ses propriétés et son nom affiché. */
@@ -271,10 +308,13 @@ export class SplitSet {
       if (index.has(key)) twice.add(key);
       else index.set(key, i);
     });
-    // Pièces que le fichier contient déjà (un GLB exporté avec elles), et pièces de cette session.
+    // Pièces que le fichier contient déjà (un GLB exporté avec elles), et pièces de cette session ; celles de la définition
+    // elle-même (même `id`, qu'on modifie) seront remplacées par `put`.
     const baked = new Set<string>(), split = new Set<string>();
+    const own = new Set(this.definitions.find((item) => item.id === definition.id)?.elements);
     model.keys.forEach((key, i) => {
-      if (key.includes(PART_SEPARATOR)) (model.parents[i] >= 0 ? split : baked).add(key.slice(0, key.lastIndexOf(PART_SEPARATOR)));
+      const original = key.slice(0, key.lastIndexOf(PART_SEPARATOR));
+      if (key.includes(PART_SEPARATOR) && !(model.parents[i] >= 0 && own.has(original))) (model.parents[i] >= 0 ? split : baked).add(original);
     });
     const outcome: SplitOutcome = { splits: [], refused: [], missingLevels: [] };
     const elements: number[] = [];
@@ -452,7 +492,15 @@ export class SplitSet {
 
 /** Ce qu'un découpage n'a pas pu faire, en phrases : éléments refusés (et pourquoi), niveaux introuvables. */
 export function describeOutcome(outcome: SplitOutcome, label: (element: number) => string): string[] {
-  const notes = outcome.refused.map(({ element, reason }) => (element < 0 ? `Non découpé : ${reason}.` : `« ${label(element)} » non découpé : ${reason}.`));
+  // Une même raison pour plusieurs éléments est dite une fois.
+  const byReason = new Map<string, number[]>();
+  for (const { element, reason } of outcome.refused) byReason.set(reason, [...byReason.get(reason) ?? [], element]);
+  const notes = [...byReason].map(([reason, elements]) => {
+    const named = elements.filter((element) => element >= 0);
+    if (named.length < 2) return named.length === 0 ? `Non découpé : ${reason}.` : `« ${label(named[0])} » non découpé : ${reason}.`;
+    const names = named.slice(0, 3).map((element) => `« ${label(element)} »`).join(', ');
+    return `${named.length} éléments non découpés (${names}${named.length > 3 ? '…' : ''}) : ${reason}.`;
+  });
   if (outcome.missingLevels.length > 0) notes.push(`Niveau${outcome.missingLevels.length > 1 ? 'x' : ''} introuvable${outcome.missingLevels.length > 1 ? 's' : ''} : ${outcome.missingLevels.join(', ')}.`);
   return notes;
 }

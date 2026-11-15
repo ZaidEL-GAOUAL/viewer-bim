@@ -1495,6 +1495,36 @@ button[aria-pressed='true'] {
 .requirement-results details ul { margin: 4px 0 0; padding-left: 16px; }
 .sketch-shape { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
 .sketch-svg polyline { fill: none; }
+/* Esquisse : coupes calculées en pointillés, trait refusé en rouge avec sa raison, ce que l'aimant attrape, numéros et teintes. */
+.sketch-guide { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.measure-line.refused { stroke: var(--danger); }
+.sketch-snap, .sketch-refusal, .sketch-mark { font-size: 12px; font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; }
+.sketch-snap { fill: var(--accent); }
+.sketch-refusal { fill: var(--danger); }
+.sketch-mark { fill: var(--text); font-size: 14px; text-anchor: middle; dominant-baseline: middle; }
+.sketch-area { stroke: none; fill-opacity: 0.4; }
+.sketch-area.tone-0 { fill: #4e79a7; }
+.sketch-area.tone-1 { fill: #f28e2b; }
+.sketch-area.tone-2 { fill: #59a14f; }
+.sketch-area.tone-3 { fill: #e15759; }
+.sketch-area.tone-4 { fill: #b07aa1; }
+.sketch-area.tone-5 { fill: #edc948; }
+/* Découpage pas à pas : l'étape, sa phrase, les trois façons de couper. */
+.split-progress { margin: 0; color: var(--muted); font-size: 11px; }
+.split-sentence { margin: 0; font-weight: 600; line-height: 1.4; }
+.split-step { display: flex; flex-direction: column; gap: 6px; }
+.split-step p { margin: 0; }
+.split-step ul, .split-step ol { margin: 0; padding-left: 18px; }
+.split-step > button { align-self: flex-start; }
+.split-actions { gap: 6px; margin-top: 0; }
+.split-choices { display: flex; flex-direction: column; gap: 6px; }
+.split-choice { display: flex; align-items: center; gap: 10px; height: auto; padding: 8px 10px; text-align: left; }
+.split-choice svg { flex: 0 0 28px; width: 28px; height: 28px; }
+.split-choice[aria-pressed='true'] { border-color: var(--accent); }
+.split-choice-text { display: flex; flex-direction: column; gap: 2px; }
+.split-choice-line { color: var(--muted); font-size: 12px; font-weight: normal; }
+.split-plan input { flex: 0 0 auto; }
+.split-plan input[inputmode='numeric'] { width: 44px; }
 .tool-card .warning { color: var(--danger); }
 
 /* Contrôles : maquettes, comparaison, conflits (cartes ouvertes par le menu « Contrôles »). */

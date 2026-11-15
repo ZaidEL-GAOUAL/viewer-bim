@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { Color } from 'three';
+import { Box3, Color, Vector3 } from 'three';
 import { runTool, type ToolContext } from '../src/assistant/tools.ts';
 import { parseMetadata, type PropValue } from '../src/data/metadata.ts';
 import { PropertyEdits } from '../src/data/PropertyEdits.ts';
 import { parseScheduleDate } from '../src/data/schedule.ts';
 import { applyOverlays, buildStore, modificationsFile, openingProps } from '../src/data/sidecar.ts';
-import { MAX_CUTS, MAX_PARTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, loadSplits, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition } from '../src/data/splits.ts';
+import { toModelPoint, toViewerPoint, type Vec3 } from '../src/data/modelFrame.ts';
+import { MAX_CUTS, MAX_PARTS, MIN_INTERVAL, PART_SEQUENCE, SplitSet, applyTailChange, describeOutcome, freeLineProblem, loadSplits, parseSplits, splitRefusalsOf, splitsOf, splitsToJson, type OriginalOf, type SplitDefinition, type SplitOutcome } from '../src/data/splits.ts';
 import { splitJob, type ElementSplit, type SplitRefusal } from '../src/engine/derivedParts.ts';
 import type { Model } from '../src/engine/Model.ts';
+import { extendAcross } from '../src/engine/sketch.ts';
 import type { CutPlane } from '../src/engine/splitMesh.ts';
 import { writeGlb } from '../src/engine/writeGlb.ts';
 import { CUBE, buildFromNodes, loadGlb } from './helpers.ts';
@@ -246,4 +248,73 @@ test('a failing reshape (a model that cannot be added) puts the parts back as th
   assert.deepEqual(model.parents, parents);
   assert.equal(model.state.isReplaced(0), true);
   assert.deepEqual(set.tailStart.element, 2);
+});
+
+/** Une coupe en plan, repère du viewer → définition (repère du modèle), comme la carte l'enregistre. */
+const toDefinition = (model: Model, id: string, lines: [Vector3, Vector3][]): SplitDefinition => {
+  const offset = model.offset.toArray();
+  return { id, elements: ['dalle'], lines: lines.map(([a, b]) => [toModelPoint(a.toArray(), offset), toModelPoint(b.toArray(), offset)] as [Vec3, Vec3]) };
+};
+const volumesOf = (outcome: SplitOutcome) => outcome.splits.flatMap((split) => split.parts.map((part) => +part.volume.toFixed(6)));
+
+test('a straight two-point cut shorter than the element cuts it completely; drawn short without the tool, it is refused as before', async () => {
+  const model = await build();
+  const set = new SplitSet(model, select);
+  const offset = model.offset.toArray();
+  // Deux clics à 40 cm l'un de l'autre, au milieu de la dalle (2 m de large en z) : x = 1.
+  const [a, b] = [[1, 0.2, 0.8], [1, 0.2, 1.2]].map((point) => new Vector3(...toViewerPoint(point, offset)));
+  const box = model.boxOf([0], new Box3());
+  const straight = run(set.compute(toDefinition(model, 'droite', [extendAcross(a, b, box)]), []));
+  assert.deepEqual(straight.refused, []);
+  assert.deepEqual(volumesOf(straight), [0.4, 1.2], 'the whole line through the two points: two parts, west and east');
+  const short = run(set.compute(toDefinition(model, 'courte', [[a, b]]), []));
+  assert.equal(short.splits.length, 0);
+  assert.match(short.refused[0].reason, /aucune coupe ne traverse/, 'a stored line keeps its meaning (bounded by its two points): definitions saved before load the same');
+});
+
+test('a definition saved before (crossing lines) gives the same parts as before, and as the same lines drawn with the tool', async () => {
+  const model = await build();
+  const set = new SplitSet(model, select);
+  const legacy = run(set.compute(cross, []));
+  assert.deepEqual(legacy.refused, []);
+  assert.deepEqual(volumesOf(legacy), [0.2, 0.6, 0.2, 0.6]);
+  const offset = model.offset.toArray(), box = model.boxOf([0], new Box3());
+  const drawn = cross.lines!.map(([p, q]) => extendAcross(new Vector3(...toViewerPoint(p, offset)), new Vector3(...toViewerPoint(q, offset)), box));
+  assert.deepEqual(volumesOf(run(set.compute(toDefinition(model, 'trace', drawn), []))), [0.2, 0.6, 0.2, 0.6]);
+});
+
+test('a free stroke that does not cross is refused with the reason, while drawing and when cut', async () => {
+  const model = await build();
+  const offset = model.offset.toArray();
+  const at = (x: number, z: number) => { const [vx, , vz] = toViewerPoint([x, 0.2, z], offset); return [vx, vz] as [number, number]; };
+  const elements = [{ label: 'Dalle', parts: model.parts(0) }, { label: 'Mur', parts: model.parts(1) }];
+  assert.equal(freeLineProblem(elements, at(1, -1), at(1, 3)), null, 'across the slab');
+  assert.match(String(freeLineProblem(elements, at(1, -1), at(1, 1))), /coupe partielle de « Dalle »/, 'stops in the middle');
+  assert.match(String(freeLineProblem(elements, at(1, -1), at(1, -0.5))), /ne traverse aucun élément/);
+  // A bent stroke: its first segment crosses, its second stops inside.
+  const bent: [Vector3, Vector3][] = [[[1, -1], [1, 3]], [[1, 3], [3, 1]]].map((line) => line.map(([x, z]) => new Vector3(...toViewerPoint([x, 0.2, z], offset))) as [Vector3, Vector3]);
+  assert.match(String(freeLineProblem(elements, [bent[1][0].x, bent[1][0].z], [bent[1][1].x, bent[1][1].z])), /coupe partielle/);
+  const outcome = run(new SplitSet(model, select).compute(toDefinition(model, 'coude', bent), []));
+  assert.equal(outcome.splits.length, 0);
+  assert.match(outcome.refused[0].reason, /coupe partielle/);
+});
+
+test('editing a split recomputes it under the same id: its elements are not refused as already cut, its parts are replaced', async () => {
+  const { model, set, store } = await open([cross]);
+  const halves: SplitDefinition = { id: 'coulage', elements: ['dalle'], references: { axis: 'x', count: 2 } };
+  const outcome = run(set.compute(halves, []));
+  assert.deepEqual(outcome.refused, []);
+  const renew = model.keys.filter((_, i) => model.parents[i] === 0);
+  applyTailChange(set.put(halves, outcome.splits, fromExtras(model), renew), model, store, null, null);
+  assert.deepEqual(model.keys, ['dalle', 'mur', 'dalle~1', 'dalle~2']);
+  assert.equal(store.propsOf(2)?.['Quantités calculées / Volume net (m³)'], 0.8, 'the renewed part has its new quantities');
+  assert.match(run(set.compute({ ...halves, id: 'autre' }, [])).refused[0].reason, /déjà découpé/, 'another split of the same element is still refused');
+});
+
+test('a reason shared by several elements is said once', () => {
+  const refused = [{ element: 0, reason: 'aucune coupe ne traverse l’élément' }, { element: 1, reason: 'aucune coupe ne traverse l’élément' }, { element: 2, reason: 'maillage ouvert' }];
+  assert.deepEqual(describeOutcome({ splits: [], refused, missingLevels: [] }, (i) => `Poteau ${i + 1}`), [
+    '2 éléments non découpés (« Poteau 1 », « Poteau 2 ») : aucune coupe ne traverse l’élément.',
+    '« Poteau 3 » non découpé : maillage ouvert.',
+  ]);
 });
