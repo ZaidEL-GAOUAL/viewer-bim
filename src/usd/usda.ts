@@ -160,6 +160,14 @@ class Parser {
     const c = this.peek();
     if (c === '"' || c === "'") return this.string();
     if (c === '<') return this.path();
+    if (c === '@') {
+      // Chemin de fichier (`@0/texture.png@`) : gardé comme texte.
+      const end = this.text.indexOf('@', this.at + 1);
+      if (end < 0) this.error('chemin de fichier non terminé');
+      const asset = this.text.slice(this.at + 1, end);
+      this.at = end + 1;
+      return asset;
+    }
     if (c === '[') {
       this.at++;
       const items: UsdValue[] = [];
@@ -274,6 +282,23 @@ class Parser {
     }
     const type = this.typeName(word);
     const name = this.identifier();
+    if (name.endsWith('.timeSamples')) {
+      // Valeur animée : seul le premier échantillon est gardé, si l'attribut n'a pas de valeur par défaut.
+      const base = name.slice(0, -'.timeSamples'.length);
+      this.expect('=');
+      this.expect('{');
+      let first: UsdValue | undefined;
+      while (!this.accept('}')) {
+        this.value();
+        this.expect(':');
+        const sample = this.value();
+        first ??= sample;
+        this.accept(',');
+      }
+      const existing = prim.attributes.get(base);
+      if (existing?.value === undefined) prim.attributes.set(base, { type, value: first, meta: existing?.meta ?? {} });
+      return;
+    }
     let value: UsdValue | undefined;
     if (this.accept('=')) {
       value = NUMERIC_ARRAY.test(type) && this.peek() === '[' ? (this.at++, this.numberArray(type.startsWith('int') || type.startsWith('uint'))) : this.value();

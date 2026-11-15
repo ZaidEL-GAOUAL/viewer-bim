@@ -6,7 +6,7 @@ import type { App } from './App.ts';
 import { button, clear, h } from './dom.ts';
 
 /** Fichiers qu'« Ajouter… » accepte : un modèle 3D, un IFC ou un fichier Revit, et ses JSON, .bin et textures. */
-export const MODEL_ACCEPT = '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp';
+export const MODEL_ACCEPT = '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usdc,.usd,.json,.bin,.png,.jpg,.jpeg,.webp';
 
 /**
  * Carte « Maquettes » : les maquettes réunies dans la scène (voir data/federation.ts), leurs nombres d'éléments et de

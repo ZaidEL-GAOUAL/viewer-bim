@@ -476,11 +476,14 @@ seulement). La mesure sur l'IFC de 21 Mo à 4 workers reste à refaire.
   nuages de points du glTF sont ignorés, de même que les scènes autres que la scène par défaut.
 - Les textures compressées KTX2 ne sont pas décodées : le modèle s'affiche avec ses couleurs de
   base et un avertissement.
-- USD : seul le format texte (`.usda`, seul ou dans un `.usdz`) est lu, avec les maillages
-  polygonaux, les transformations par matrice, les références internes et les matériaux
-  UsdPreviewSurface. Le format binaire (`.usdc`) et les scènes plus riches (variantes, fichiers
-  liés, textures) ne sont pas pris en charge. Un USD texte est bien plus volumineux qu'un GLB
-  (environ quatre fois).
+- USD : le format texte (`.usda`) et le format binaire (`.usdc`), seuls ou dans un `.usdz`, sont
+  lus avec les maillages polygonaux, les transformations (matrice ou translate / rotate / scale /
+  orient), les références et charges internes et les matériaux UsdPreviewSurface (couleur
+  unie). Les scènes plus riches (variantes, fichiers liés, textures, matériaux par sous-ensemble
+  de faces, sphères et autres formes non maillées) ne sont pas prises en charge ; les formes
+  ignorées sont signalées. Dans un USD binaire, les propriétés d'un élément sont rangées par ordre
+  alphabétique (le format les trie). Un USD texte est bien plus volumineux qu'un GLB (environ
+  quatre fois).
 - Un verre décrit par l'extension « transmission » est rendu par une simple transparence.
 - Les éléments transparents ne sont pas triés entre eux : des vitrages superposés de couleurs
   très différentes peuvent se mélanger de façon approximative.

@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { Color, Vector3 } from 'three';
+import { Color, Matrix4, Mesh, Vector3, type Object3D } from 'three';
 import { buildModel } from '../src/engine/buildModel.ts';
-import { loadUsda, usdaFromUsdz } from '../src/usd/loadUsd.ts';
+import { loadUsda, loadUsdData, loadUsdFile, rootLayerOfUsdz } from '../src/usd/loadUsd.ts';
 import { parseUsda } from '../src/usd/usda.ts';
 
 const samples = new URL('./fixtures/', import.meta.url);
-const usdz = readFileSync(new URL('ifc-demo.usdz', samples));
-const text = usdaFromUsdz(usdz.buffer.slice(usdz.byteOffset, usdz.byteOffset + usdz.byteLength) as ArrayBuffer);
+const read = (name: string): ArrayBuffer => {
+  const bytes = readFileSync(new URL(name, samples));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+};
+const text = new TextDecoder().decode(rootLayerOfUsdz(read('ifc-demo.usdz')));
 
 test('le paquet usdz livre un usda que le lecteur comprend', () => {
   assert.ok(text.startsWith('#usda 1.0'));
@@ -78,17 +81,78 @@ def Xform "Boite" {
   assert.equal(model.triangleCount, 4); // deux quadrilatères découpés en triangles
 });
 
-test('un usdz contenant un USD binaire est refusé avec un message clair', () => {
-  const name = 'model.usdc';
-  const body = new TextEncoder().encode('PXR-USDC\u0000\u0000');
-  const header = new Uint8Array(30 + name.length + body.length);
-  const view = new DataView(header.buffer);
-  view.setUint32(0, 0x04034b50, true);
-  view.setUint32(18, body.length, true);
-  view.setUint16(26, name.length, true);
-  header.set(new TextEncoder().encode(name), 30);
-  header.set(body, 30 + name.length);
-  assert.throws(() => usdaFromUsdz(header.buffer), /USD binaire/);
+/** Maillages d'une scène, avec leur matrice monde et leurs sommets, dans l'ordre du parcours. */
+function meshes(scene: Object3D): { path: string; matrix: Matrix4; points: ArrayLike<number> }[] {
+  scene.updateMatrixWorld(true);
+  const out: { path: string; matrix: Matrix4; points: ArrayLike<number> }[] = [];
+  scene.traverse((object) => {
+    if (!(object as Mesh).isMesh) return;
+    const names: string[] = [];
+    for (let at: Object3D | null = object; at; at = at.parent) names.unshift(at.name);
+    out.push({ path: names.join('/'), matrix: object.matrixWorld, points: (object as Mesh).geometry.getAttribute('position').array });
+  });
+  return out;
+}
+
+function assertSameScene(a: Object3D, b: Object3D): void {
+  const left = meshes(a);
+  const right = meshes(b);
+  assert.deepEqual(right.map((mesh) => mesh.path), left.map((mesh) => mesh.path));
+  left.forEach((mesh, i) => {
+    const other = right[i];
+    mesh.matrix.elements.forEach((value, k) => assert.ok(Math.abs(value - other.matrix.elements[k]) < 1e-6, `${mesh.path} : matrice ${k}`));
+    assert.equal(other.points.length, mesh.points.length, mesh.path);
+    for (let k = 0; k < mesh.points.length; k++) assert.ok(Math.abs(mesh.points[k] - other.points[k]) < 1e-5, `${mesh.path} : sommet ${k}`);
+  });
+}
+
+test('un usdz binaire (usdc) donne exactement le même modèle que le même fichier en texte', async () => {
+  const textual = loadUsda(text);
+  const binary = await loadUsdFile(new File([read('ifc-demo-binary.usdz')], 'ifc-demo-binary.usdz'));
+  assert.deepEqual(binary.warnings, []);
+  const a = buildModel(textual.source, { value: new Color() });
+  const b = buildModel(binary.source, { value: new Color() });
+  assert.equal(b.count, 26);
+  assert.deepEqual(b.keys, a.keys);
+  assert.deepEqual(b.names, a.names);
+  assert.equal(b.triangleCount, a.triangleCount);
+  assert.ok(b.offset.distanceTo(a.offset) < 1e-6);
+  // Les douze poteaux partagent un prototype par référence interne : chacun a sa géométrie.
+  assert.equal(b.names.filter((name) => name.startsWith('Poteau')).length, 12);
+  assertSameScene(textual.source.scene, binary.source.scene);
+  // Mêmes métadonnées : identifiants, propriétés (un dictionnaire binaire est trié par clé, d'où la
+  // comparaison sans ordre), liste readOnly, position sur Terre.
+  assert.ok(binary.metadata && textual.metadata);
+  assert.deepEqual([...binary.metadata.elements.keys()].sort(), [...textual.metadata.elements.keys()].sort());
+  for (const [id, entry] of textual.metadata.elements) assert.deepEqual(binary.metadata.elements.get(id), entry, id);
+  assert.deepEqual(binary.metadata.readOnly, textual.metadata.readOnly);
+  assert.deepEqual(binary.metadata.georeference, textual.metadata.georeference);
+  assert.ok(b.chunks.some((chunk) => chunk.transparent), 'le vitrage est transparent');
+});
+
+test('un usdc avec instances, dictionnaires imbriqués et opérations de transformation se lit comme son texte', async () => {
+  const textual = loadUsda(new TextDecoder().decode(read('usd-ops.usda')));
+  const binary = await loadUsdData(read('usd-ops.usdc'));
+  assertSameScene(textual.source.scene, binary.source.scene);
+  assert.deepEqual(binary.warnings, textual.warnings);
+  assert.match(binary.warnings.join('\n'), /« Sphere » non affichée.*\/World\/Ball/);
+  // Dictionnaire de deux niveaux dans customData : propriétés aplaties comme pour le texte.
+  assert.deepEqual(binary.metadata?.elements.get('a'), { label: undefined, props: { 'Pset / Sub / deep': 'x', 'Pset / v': 1.25 } });
+  assert.deepEqual(binary.metadata?.elements.get('a'), textual.metadata?.elements.get('a'));
+  // Translate, rotateXYZ (90° autour de Y), scale 2 ; centimètres ; référence vers le prototype.
+  const boxes = new Map(meshes(binary.source.scene).map((mesh) => [mesh.path.split('/').at(-2), mesh.matrix]));
+  const corner = (name: string): number[] => new Vector3(1, 1, 1).applyMatrix4(boxes.get(name)!).toArray().map((v) => Math.round(v * 1e4) / 1e4);
+  assert.deepEqual(corner('A'), [1.02, 0.02, -0.02]);
+  // Quaternion de 45° autour de X (réel en premier, comme dans le texte), au-dessus d'une translation.
+  assert.deepEqual(corner('B'), [0.01, 3, 0.0141]);
+  // Valeur animée sans valeur par défaut : premier échantillon, puis translation imbriquée.
+  assert.deepEqual(corner('Nested'), [0.025, 0.01, 5.01]);
+  assert.equal(meshes(binary.source.scene).length, 4);
+});
+
+test('un fichier USD binaire tronqué donne un message clair', async () => {
+  const whole = read('usd-ops.usdc');
+  await assert.rejects(loadUsdData(whole.slice(0, whole.byteLength / 2)), /USD binaire illisible : il est tronqué ou endommagé/);
 });
 
 test('la liste readOnly du calque est lue avec les métadonnées', () => {

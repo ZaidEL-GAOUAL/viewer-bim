@@ -54,7 +54,7 @@ const SUN_STEP_MINUTES = 10;
 /** Points au plus par analyse : borne le nombre de rayons (≈ 6 000 × 432 pour la composante de ciel). */
 const MAX_POINTS = 6000;
 const SUN_GRADIENT = ['#253494', '#2c7fb8', '#41b6c4', '#a1dab4', '#ffffcc'];
-const MODEL_ACCEPT = '.rvt,.rfa,.rte,.rft,.ifc,.glb,.gltf,.bin,.json,.usdz,.usda,.usd,.png,.jpg,.jpeg,.webp';
+const MODEL_ACCEPT = '.rvt,.rfa,.rte,.rft,.ifc,.glb,.gltf,.bin,.json,.usdz,.usda,.usdc,.usd,.png,.jpg,.jpeg,.webp';
 const PLAY_SECONDS = 10;
 
 /** Pastille de couleur ; la couleur passe par `safeColor` puis par la propriété DOM, jamais par une chaîne de style. */

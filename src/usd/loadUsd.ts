@@ -1,8 +1,9 @@
-// Chargement d'un fichier USD (usda ou usdz) en scène three.js prête pour buildModel, avec les
-// métadonnées lues dans les prims. Sous-ensemble : maillages polygonaux, transformations par
-// matrice, références internes, matériaux UsdPreviewSurface.
+// Chargement d'un fichier USD (usda, usdc ou usdz) en scène three.js prête pour buildModel, avec
+// les métadonnées lues dans les prims. Sous-ensemble : maillages polygonaux, transformations
+// (matrice ou opérations translate / rotate / scale / orient), références et charges internes,
+// matériaux UsdPreviewSurface. Le binaire (usdc) est converti dans le même calque que le texte.
 
-import { BufferAttribute, BufferGeometry, DoubleSide, FrontSide, LinearSRGBColorSpace, Matrix4, Mesh, MeshStandardMaterial, Object3D } from 'three';
+import { BufferAttribute, BufferGeometry, DoubleSide, Euler, FrontSide, LinearSRGBColorSpace, MathUtils, Matrix4, Mesh, MeshStandardMaterial, Object3D, Quaternion, type EulerOrder } from 'three';
 import { flattenProperties, type Metadata, type MetadataEntry } from '../data/metadata.ts';
 import { parseGeoreference } from '../geo/georeference.ts';
 import type { ModelSource } from '../engine/buildModel.ts';
@@ -20,13 +21,15 @@ const Z_UP_TO_Y_UP = new Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0
 
 // ------------------------------------------------------------------- usdz
 
-/** Extrait le premier fichier usda d'un paquet usdz (archive zip sans compression). */
-export function usdaFromUsdz(data: ArrayBuffer): string {
+/**
+ * Calque racine d'un paquet usdz (archive zip sans compression) : la première entrée USD, qui est
+ * la première de l'archive selon la spécification. Les images et autres calques sont ignorés.
+ */
+export function rootLayerOfUsdz(data: ArrayBuffer): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(data);
   const view = new DataView(data);
   let at = 0;
   const decoder = new TextDecoder();
-  let fallback: string | null = null;
   while (at + 30 <= bytes.length && view.getUint32(at, true) === 0x04034b50) {
     const method = view.getUint16(at + 8, true);
     const size = view.getUint32(at + 18, true);
@@ -36,13 +39,10 @@ export function usdaFromUsdz(data: ArrayBuffer): string {
     const start = at + 30 + nameLength + extraLength;
     if (/\.(usda|usd|usdc)$/i.test(name)) {
       if (method !== 0) throw new Error(`Le paquet USDZ contient un fichier compressé (« ${name} »), ce que le format n’autorise pas.`);
-      const text = decoder.decode(bytes.subarray(start, start + size));
-      if (text.startsWith('#usda')) return text;
-      fallback ??= name;
+      return bytes.subarray(start, start + size);
     }
     at = start + size;
   }
-  if (fallback) throw new Error(`« ${fallback} » est un USD binaire (usdc) : seul le format texte (usda) est pris en charge.`);
   throw new Error('Aucun fichier USD trouvé dans le paquet USDZ.');
 }
 
@@ -116,7 +116,7 @@ function meshFrom(prim: UsdPrim, layer: UsdLayer, materials: Map<string, UsdMate
 
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(Float32Array.from(points), 3));
-  const normals = prim.attributes.get('normals');
+  const normals = prim.attributes.get('normals') ?? prim.attributes.get('primvars:normals');
   if (normals?.value instanceof Float64Array && normals.value.length === points.length && normals.meta.interpolation !== 'faceVarying') {
     geometry.setAttribute('normal', new BufferAttribute(Float32Array.from(normals.value), 3));
   }
@@ -130,13 +130,50 @@ function meshFrom(prim: UsdPrim, layer: UsdLayer, materials: Map<string, UsdMate
   return mesh;
 }
 
+/** Matrice d'une opération de transformation (`xformOp:translate`, `xformOp:rotateXYZ:pivot`…). */
+function opMatrix(name: string, value: UsdValue | undefined): Matrix4 | null {
+  const kind = name.split(':')[1] ?? '';
+  const values = tuple(value);
+  if (kind === 'transform') {
+    const flat = Array.isArray(value) ? value.flatMap((row) => tuple(row) ?? []) : [];
+    // Lignes USD = colonnes glTF : les seize nombres sont dans l'ordre attendu par fromArray.
+    return flat.length === 16 ? new Matrix4().fromArray(flat) : null;
+  }
+  if (kind === 'translate' && values?.length === 3) return new Matrix4().makeTranslation(values[0], values[1], values[2]);
+  if (kind === 'scale' && values?.length === 3) return new Matrix4().makeScale(values[0], values[1], values[2]);
+  if (kind === 'orient' && values?.length === 4) {
+    // Quaternion USD : (réel, i, j, k).
+    return new Matrix4().makeRotationFromQuaternion(new Quaternion(values[1], values[2], values[3], values[0]).normalize());
+  }
+  const axis = /^rotate([XYZ])$/.exec(kind)?.[1];
+  if (axis && typeof value === 'number') {
+    const angle = MathUtils.degToRad(value);
+    return axis === 'X' ? new Matrix4().makeRotationX(angle) : axis === 'Y' ? new Matrix4().makeRotationY(angle) : new Matrix4().makeRotationZ(angle);
+  }
+  const order = /^rotate([XYZ]{3})$/.exec(kind)?.[1];
+  if (order && values?.length === 3) {
+    // rotateXYZ tourne d'abord autour de X, puis Y, puis Z : en vecteurs colonnes Rz·Ry·Rx, soit
+    // l'ordre « ZYX » d'Euler de three.js. Les angles sont dans l'ordre du nom (X, Y, Z).
+    const [x, y, z] = ['X', 'Y', 'Z'].map((letter) => MathUtils.degToRad(values[order.indexOf(letter)]));
+    return new Matrix4().makeRotationFromEuler(new Euler(x, y, z, [...order].reverse().join('') as EulerOrder));
+  }
+  return null;
+}
+
+/** Transformation locale : les opérations de `xformOpOrder`, de la première (la plus externe) à la dernière. */
 function transformOf(prim: UsdPrim): Matrix4 | null {
-  const value = prim.attributes.get('xformOp:transform')?.value;
-  if (!Array.isArray(value)) return null;
-  const flat = value.flatMap((row) => tuple(row) ?? []);
-  if (flat.length !== 16) return null;
-  // Lignes USD = colonnes glTF : les seize nombres sont dans l'ordre attendu par fromArray.
-  return new Matrix4().fromArray(flat);
+  const order = prim.attributes.get('xformOpOrder')?.value;
+  const ops = Array.isArray(order) ? order.filter((op): op is string => typeof op === 'string') : ['xformOp:transform'];
+  let matrix: Matrix4 | null = null;
+  for (const op of ops) {
+    const inverse = op.startsWith('!invert!');
+    const name = inverse ? op.slice('!invert!'.length) : op;
+    const step = opMatrix(name, prim.attributes.get(name)?.value);
+    if (!step) continue;
+    if (inverse) step.invert();
+    matrix = matrix ? matrix.multiply(step) : step;
+  }
+  return matrix;
 }
 
 // ------------------------------------------------------------------- scène
@@ -147,6 +184,8 @@ interface Context {
   fallback: MeshStandardMaterial;
   metadata: Map<string, MetadataEntry>;
   depth: number;
+  /** Formes non polygonales rencontrées (Sphere, Cube…), par type, avec un exemple de chemin. */
+  skipped: Map<string, { count: number; path: string }>;
 }
 
 function customData(prim: UsdPrim): UsdDictionary | null {
@@ -155,11 +194,14 @@ function customData(prim: UsdPrim): UsdDictionary | null {
 }
 
 function referenced(prim: UsdPrim, layer: UsdLayer): UsdPrim | null {
-  const reference = prim.meta.references;
+  const reference = prim.meta.references ?? prim.meta.payload;
   const target = Array.isArray(reference) ? (reference[0] as UsdPath | undefined) : (reference as UsdPath | undefined);
   if (!target || typeof target !== 'object' || !('path' in target)) return null;
   return layer.byPath.get(target.path) ?? null;
 }
+
+/** Formes géométriques USD autres que les maillages : non affichées, mais signalées. */
+const GPRIMS = new Set(['Sphere', 'Cube', 'Cylinder', 'Cone', 'Capsule', 'Plane', 'Points', 'BasisCurves', 'NurbsCurves', 'NurbsPatch', 'PointInstancer', 'TetMesh']);
 
 /** Construit l'objet three.js d'un prim : ses maillages, ses enfants, et ce qu'il référence. */
 function instantiate(prim: UsdPrim, context: Context): Object3D {
@@ -194,7 +236,14 @@ function instantiate(prim: UsdPrim, context: Context): Object3D {
       }
       // Les prototypes (prims de classe) et les matériaux ne s'affichent pas d'eux-mêmes.
       if (child.specifier === 'class' || child.type === 'Material' || child.type === 'Shader') continue;
-      if (child.type !== 'Xform' && child.type !== 'Scope' && child.type !== '') continue;
+      if (child.type !== 'Xform' && child.type !== 'Scope' && child.type !== 'SkelRoot' && child.type !== '') {
+        if (GPRIMS.has(child.type)) {
+          const entry = context.skipped.get(child.type) ?? { count: 0, path: child.path };
+          entry.count++;
+          context.skipped.set(child.type, entry);
+        }
+        continue;
+      }
       context.depth++;
       object.add(instantiate(child, context));
       context.depth--;
@@ -205,14 +254,18 @@ function instantiate(prim: UsdPrim, context: Context): Object3D {
 
 /** Charge un texte usda. */
 export function loadUsda(text: string): LoadedUsd {
-  const layer = parseUsda(text);
-  const warnings: string[] = [];
+  return loadUsdLayer(parseUsda(text), []);
+}
+
+/** Construit la scène d'un calque USD, lu du texte ou du binaire. */
+function loadUsdLayer(layer: UsdLayer, warnings: string[]): LoadedUsd {
   const context: Context = {
     layer,
     materials: new Map(),
     fallback: new MeshStandardMaterial({ color: 0x737373, metalness: 0, roughness: 0.9 }),
     metadata: new Map(),
     depth: 0,
+    skipped: new Map(),
   };
   const root = new Object3D();
   root.name = 'USD';
@@ -241,6 +294,9 @@ export function loadUsda(text: string): LoadedUsd {
   root.traverse((object) => {
     if ((object as Mesh).isMesh) meshes++;
   });
+  for (const [type, { count, path }] of context.skipped) {
+    warnings.push(`${count} forme${count > 1 ? 's' : ''} « ${type} » non affichée${count > 1 ? 's' : ''} (par exemple « ${path} ») : seuls les maillages sont lus.`);
+  }
   if (meshes === 0) warnings.push('Le fichier USD ne contient aucun maillage polygonal lisible.');
 
   const source: ModelSource = {
@@ -254,14 +310,22 @@ export function loadUsda(text: string): LoadedUsd {
   return { source, metadata, warnings };
 }
 
-/** Charge un fichier .usda ou .usdz. */
-export async function loadUsdFile(file: File): Promise<LoadedUsd> {
-  const buffer = await file.arrayBuffer();
-  const head = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(8, buffer.byteLength)));
-  if (head.startsWith('PXR-USDC')) {
-    throw new Error(`« ${file.name} » est un USD binaire (usdc) : seuls le format texte (usda) et les paquets usdz contenant un usda sont pris en charge.`);
+/** Charge le contenu d'un fichier .usda, .usdc ou .usdz. */
+export async function loadUsdData(buffer: ArrayBuffer): Promise<LoadedUsd> {
+  let bytes = new Uint8Array(buffer);
+  const head = (): string => new TextDecoder().decode(bytes.subarray(0, 8));
+  if (head().startsWith('PK')) bytes = rootLayerOfUsdz(buffer);
+  if (head() === 'PXR-USDC') {
+    // Le lecteur binaire n'est chargé que pour un fichier binaire.
+    const { parseUsdc } = await import('./usdc.ts');
+    const { layer, warnings } = parseUsdc(bytes.byteLength === buffer.byteLength ? buffer : bytes.slice().buffer);
+    return loadUsdLayer(layer, warnings);
   }
-  const text = head.startsWith('PK') ? usdaFromUsdz(buffer) : new TextDecoder().decode(buffer);
-  return loadUsda(text);
+  return loadUsda(new TextDecoder().decode(bytes));
+}
+
+/** Charge un fichier .usda, .usdc ou .usdz. */
+export async function loadUsdFile(file: File): Promise<LoadedUsd> {
+  return loadUsdData(await file.arrayBuffer());
 }
 

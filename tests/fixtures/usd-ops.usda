@@ -1,0 +1,110 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 0.01
+    upAxis = "Y"
+    customLayerData = {
+        dictionary outer = {
+            dictionary inner = {
+                string deep = "profond"
+                double3 vec = (1, 2, 3)
+                int[] ints = [1, 2, 3]
+            }
+            float f = 0.5
+        }
+    }
+)
+
+def Xform "World"
+{
+    def Scope "Protos"
+    {
+        def Xform "Box" (
+            instanceable = true
+        )
+        {
+            def Mesh "Geom"
+            {
+                int[] faceVertexCounts = [4, 4]
+                int[] faceVertexIndices = [0, 1, 2, 3, 4, 5, 6, 7]
+                point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1)]
+                normal3f[] primvars:normals = [(0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, -1), (0, 0, 1), (0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+                    interpolation = "vertex"
+                )
+                rel material:binding = </World/Looks/Red>
+                def GeomSubset "first"
+                {
+                    uniform token elementType = "face"
+                    uniform token familyName = "materialBind"
+                    int[] indices = [0]
+                    rel material:binding = </World/Looks/Red>
+                }
+            }
+        }
+    }
+    def Scope "Looks"
+    {
+        def Material "Red"
+        {
+            token outputs:surface.connect = </World/Looks/Red/Shader.outputs:surface>
+            def Shader "Shader"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor = (0.8, 0.1, 0.1)
+                token outputs:surface
+            }
+        }
+    }
+    def Xform "A" (
+        customData = {
+            string id = "a"
+            dictionary properties = {
+                dictionary Pset = {
+                    dictionary Sub = {
+                        string deep = "x"
+                    }
+                    double v = 1.25
+                }
+            }
+        }
+        prepend references = </World/Protos/Box>
+        instanceable = true
+    )
+    {
+        double3 xformOp:translate = (100, 0, 0)
+        float3 xformOp:rotateXYZ = (0, 90, 0)
+        float3 xformOp:scale = (2, 2, 2)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+    def Xform "B" (
+        prepend payload = </World/Protos/Box>
+    )
+    {
+        double3 xformOp:translate = (0, 300, 0)
+        quatf xformOp:orient = (0.9238795, 0.3826834, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:orient"]
+    }
+    def Xform "C"
+    {
+        double3 xformOp:translate.timeSamples = {
+            0: (0, 0, 500),
+            10: (0, 0, 600),
+        }
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+        def Xform "Nested"
+        {
+            double3 xformOp:translate = (1.5, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+            def Mesh "Tri"
+            {
+                int[] faceVertexCounts = [3]
+                int[] faceVertexIndices = [0, 1, 2]
+                point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+            }
+        }
+    }
+    def Sphere "Ball"
+    {
+        double radius = 2
+    }
+}

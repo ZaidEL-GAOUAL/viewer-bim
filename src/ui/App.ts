@@ -38,7 +38,7 @@ import { Measure, type MeasureKind } from '../engine/Measure.ts';
 import { IfcTooLargeError, convertIfc, packageUsd, preloadIfc } from '../ifc/convertIfc.ts';
 import { rememberIfcUse, watchPreloadIntent } from '../ifc/preloadIntent.ts';
 import { describeTimings } from '../ifc/timings.ts';
-import { loadUsdFile, loadUsda, usdaFromUsdz } from '../usd/loadUsd.ts';
+import { loadUsdData, loadUsdFile } from '../usd/loadUsd.ts';
 import { REVIT_GROUPING, isMemoryFailure, readRevit, splitRevitName, type RevitRead } from '../revit/readRevit.ts';
 import { describeRevitReport } from '../revit/revitReport.ts';
 import type { ModelSource, RawInput } from '../engine/buildModel.ts';
@@ -244,7 +244,7 @@ export class App {
 
     // ------------------------------------------------------------ barre d'outils
     const fileInput = h('input', {
-      attrs: { type: 'file', multiple: '', accept: '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usd,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
+      attrs: { type: 'file', multiple: '', accept: '.ifc,.rvt,.rfa,.rte,.rft,.glb,.gltf,.usdz,.usda,.usdc,.usd,.json,.bin,.png,.jpg,.jpeg,.webp', hidden: '' },
     });
     // Un .gltf vient souvent avec un .bin et un dossier de textures : on peut ouvrir le dossier entier.
     const folderInput = h('input', { attrs: { type: 'file', webkitdirectory: '', hidden: '' } });
@@ -1291,7 +1291,7 @@ export class App {
         if (ticket === this.loadTicket) this.busy(message);
       });
       if (ticket !== this.loadTicket) return;
-      source = loadUsda(usdaFromUsdz(usdz)).source;
+      source = (await loadUsdData(usdz)).source;
       produced = { model: new Blob([usdz], { type: 'model/vnd.usdz+zip' }), extension: 'usdz' };
     } else {
       const glb = new File([result.glb], `${base}.glb`, { type: 'model/gltf-binary' });
